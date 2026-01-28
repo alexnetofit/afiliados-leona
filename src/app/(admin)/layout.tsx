@@ -1,10 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { useUser } from "@/hooks/use-user";
-import { LoadingScreen } from "@/components/ui/index";
+import { AppDataProvider, useAppData } from "@/contexts";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -28,34 +26,52 @@ const NAV_ITEMS = [
   { name: "Configurações", href: "/admin/configuracoes", icon: Settings },
 ];
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const supabase = createClient();
-  const { user, isLoading, isAdmin } = useUser();
+  const { user, isLoading, isInitialized, isAdmin, logout } = useAppData();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await logout();
     router.push("/login");
   };
 
-  if (isLoading) {
+  // Handle redirects in useEffect to avoid setState during render
+  useEffect(() => {
+    if (isInitialized && !user) {
+      router.push("/login");
+    }
+  }, [isInitialized, user, router]);
+
+  useEffect(() => {
+    if (isInitialized && user && !isAdmin) {
+      router.push("/dashboard");
+    }
+  }, [isInitialized, user, isAdmin, router]);
+
+  // Loading state
+  if (isLoading && !isInitialized) {
     return (
       <div className="h-screen w-screen bg-zinc-50 flex items-center justify-center">
-        <LoadingScreen message="Carregando painel admin..." />
+        <div className="relative">
+          <div className="h-8 w-8 rounded-full border-2 border-zinc-200" />
+          <div className="absolute top-0 left-0 h-8 w-8 rounded-full border-2 border-transparent border-t-primary-600 animate-spin" />
+        </div>
       </div>
     );
   }
 
-  if (!user) {
-    router.push("/login");
-    return null;
-  }
-
-  if (!isAdmin) {
-    router.push("/dashboard");
-    return null;
+  // Show loading while redirect is pending
+  if (!user || !isAdmin) {
+    return (
+      <div className="h-screen w-screen bg-zinc-50 flex items-center justify-center">
+        <div className="relative">
+          <div className="h-8 w-8 rounded-full border-2 border-zinc-200" />
+          <div className="absolute top-0 left-0 h-8 w-8 rounded-full border-2 border-transparent border-t-primary-600 animate-spin" />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -63,59 +79,59 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div 
-          className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm z-40 lg:hidden" 
+          className="fixed inset-0 bg-zinc-900/50 z-40 lg:hidden" 
           onClick={() => setSidebarOpen(false)} 
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - 220px width for production density */}
       <aside className={cn(
-        "fixed top-0 left-0 z-50 h-screen w-[280px]",
+        "fixed top-0 left-0 z-50 h-screen w-[220px]",
         "bg-zinc-900 text-white",
         "flex flex-col",
-        "transition-transform duration-300 ease-out",
+        "transition-transform duration-200",
         "lg:translate-x-0",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         {/* Header */}
-        <div className="h-[72px] flex items-center justify-between px-6 border-b border-zinc-800">
-          <Link href="/admin" className="flex items-center gap-3">
+        <div className="h-14 flex items-center justify-between px-4 border-b border-zinc-800">
+          <Link href="/admin" className="flex items-center">
             <Image 
               src="/logo-leona-roxa.png" 
               alt="Leona" 
-              width={100} 
-              height={32} 
+              width={80} 
+              height={26} 
               className="object-contain brightness-0 invert" 
               priority 
             />
           </Link>
           <button 
             onClick={() => setSidebarOpen(false)} 
-            className="lg:hidden p-2 rounded-xl hover:bg-zinc-800 text-zinc-400"
+            className="lg:hidden p-1.5 rounded-md hover:bg-zinc-800 text-zinc-400"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Admin Badge */}
-        <div className="mx-4 mt-6 p-4 rounded-2xl bg-gradient-to-br from-primary-500/20 to-primary-600/10 border border-primary-500/20">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-primary-500 flex items-center justify-center">
-              <Shield className="h-5 w-5 text-white" />
+        <div className="mx-3 mt-4 p-3 rounded-lg bg-primary-500/10 border border-primary-500/20">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-md bg-primary-600 flex items-center justify-center">
+              <Shield className="h-4 w-4 text-white" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-white">Admin Panel</p>
-              <p className="text-xs text-zinc-400">Acesso completo</p>
+              <p className="text-sm font-medium text-white">Admin</p>
+              <p className="text-[11px] text-zinc-400">Acesso completo</p>
             </div>
           </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 py-6 px-4 overflow-y-auto">
-          <p className="px-3 mb-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+        <nav className="flex-1 py-4 px-3 overflow-y-auto">
+          <p className="px-2 mb-2 text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
             Menu
           </p>
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href || 
                 (item.href !== "/admin" && pathname.startsWith(item.href));
@@ -125,10 +141,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   href={item.href}
                   onClick={() => setSidebarOpen(false)}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl",
+                    "flex items-center gap-2.5 px-2.5 py-2 rounded-md",
                     "text-sm font-medium",
-                    "transition-all duration-200",
-                    "group",
+                    "transition-colors duration-100",
                     isActive 
                       ? "bg-white text-zinc-900" 
                       : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
@@ -136,8 +151,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 >
                   <item.icon 
                     className={cn(
-                      "h-5 w-5 transition-transform group-hover:scale-110",
-                      isActive ? "text-primary-600" : "text-zinc-500 group-hover:text-primary-400"
+                      "h-4 w-4",
+                      isActive ? "text-primary-600" : "text-zinc-500"
                     )} 
                     strokeWidth={isActive ? 2 : 1.75} 
                   />
@@ -149,42 +164,49 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-zinc-800">
+        <div className="p-3 border-t border-zinc-800">
           <button
             onClick={handleLogout}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl",
+              "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md",
               "text-sm font-medium text-zinc-400",
-              "hover:bg-error-500/10 hover:text-error-400",
-              "transition-all duration-200",
-              "group"
+              "hover:bg-zinc-800 hover:text-zinc-200",
+              "transition-colors duration-100"
             )}
           >
-            <LogOut className="h-5 w-5 group-hover:text-error-400 transition-colors" strokeWidth={1.75} />
-            <span>Sair da conta</span>
+            <LogOut className="h-4 w-4" strokeWidth={1.75} />
+            <span>Sair</span>
           </button>
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="lg:pl-[280px] min-h-screen flex flex-col">
+      {/* Main - 220px sidebar offset */}
+      <div className="lg:pl-[220px] min-h-screen flex flex-col">
         {/* Mobile header */}
-        <header className="h-[72px] bg-white/80 backdrop-blur-xl border-b border-zinc-200/50 sticky top-0 z-30 lg:hidden">
-          <div className="h-full px-6 flex items-center gap-4">
+        <header className="h-14 bg-white border-b border-zinc-200 sticky top-0 z-30 lg:hidden">
+          <div className="h-full px-4 flex items-center gap-3">
             <button 
               onClick={() => setSidebarOpen(true)} 
-              className="p-2.5 -ml-2 rounded-xl hover:bg-zinc-100 text-zinc-600"
+              className="p-1.5 -ml-1 rounded-md hover:bg-zinc-100 text-zinc-600"
             >
-              <Menu className="h-5 w-5" />
+              <Menu className="h-4 w-4" />
             </button>
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary-600" />
-              <span className="font-semibold text-zinc-900">Admin</span>
+            <div className="flex items-center gap-1.5">
+              <Shield className="h-4 w-4 text-primary-600" />
+              <span className="text-sm font-semibold text-zinc-900">Admin</span>
             </div>
           </div>
         </header>
         {children}
       </div>
     </div>
+  );
+}
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AppDataProvider>
+      <AdminLayoutContent>{children}</AdminLayoutContent>
+    </AppDataProvider>
   );
 }

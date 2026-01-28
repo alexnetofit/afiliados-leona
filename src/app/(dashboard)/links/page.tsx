@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useUser, useAffiliateData } from "@/hooks";
+import { useAppData } from "@/contexts";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
 import { Card, Button, Badge, LoadingScreen, Alert } from "@/components/ui/index";
@@ -10,17 +10,15 @@ import { getAffiliateLink, copyToClipboard, cn } from "@/lib/utils";
 
 export default function LinksPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { affiliate, profile, isLoading: userLoading } = useUser();
-  const { links, refetch, isLoading: dataLoading } = useAffiliateData(affiliate?.id);
+  const { affiliate, profile, links, refetchLinks, isLoading, isInitialized } = useAppData();
   const [newAlias, setNewAlias] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const supabase = createClient();
 
-  const isLoading = userLoading || dataLoading;
-
-  if (isLoading) {
+  // Only show loading on first load, not on navigation
+  if (isLoading && !isInitialized) {
     return <LoadingScreen message="Carregando links..." />;
   }
 
@@ -49,7 +47,7 @@ export default function LinksPage() {
       setError(err.message.includes("unique") ? "Alias já existe" : "Erro ao criar");
     } else {
       setNewAlias("");
-      await refetch();
+      await refetchLinks();
     }
     setCreating(false);
   };
@@ -57,7 +55,7 @@ export default function LinksPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Excluir este link?")) return;
     await supabase.from("affiliate_links").delete().eq("id", id);
-    await refetch();
+    await refetchLinks();
   };
 
   const mainLink = affiliate?.affiliate_code ? getAffiliateLink(affiliate.affiliate_code) : "";

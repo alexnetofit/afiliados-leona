@@ -1,16 +1,16 @@
-// LEONA DESIGN SYSTEM v3.0
-// Premium Modern UI Components
+// LEONA DESIGN SYSTEM v4.0
+// Production Enterprise UI Components
 
 import { forwardRef, ButtonHTMLAttributes, InputHTMLAttributes, HTMLAttributes, SelectHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
 import { Loader2, LucideIcon, ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ============================================
-// BUTTON - Premium with gradient and glow
+// BUTTON - Clean, minimal with subtle hover
 // ============================================
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "ghost" | "danger" | "success";
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "xs" | "sm" | "md" | "lg";
   loading?: boolean;
   icon?: LucideIcon;
   iconPosition?: "left" | "right";
@@ -28,26 +28,22 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   ...props
 }, ref) => {
   const baseStyles = cn(
-    "relative inline-flex items-center justify-center gap-2",
-    "font-semibold tracking-tight",
-    "transition-all duration-200 ease-out",
-    "disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none",
-    "active:scale-[0.98]",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+    "relative inline-flex items-center justify-center gap-1.5",
+    "font-medium",
+    "transition-colors duration-100",
+    "disabled:opacity-50 disabled:cursor-not-allowed",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
   );
   
   const variants = {
     primary: cn(
-      "bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800",
-      "text-white",
-      "shadow-primary hover:shadow-primary-lg",
-      "hover:from-primary-500 hover:via-primary-600 hover:to-primary-700",
+      "bg-primary-600 text-white",
+      "hover:bg-primary-700",
       "focus-visible:ring-primary-500"
     ),
     secondary: cn(
-      "bg-white text-zinc-900",
+      "bg-white text-zinc-700",
       "border border-zinc-200",
-      "shadow-sm hover:shadow-md",
       "hover:bg-zinc-50 hover:border-zinc-300",
       "focus-visible:ring-zinc-400"
     ),
@@ -57,33 +53,29 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
       "focus-visible:ring-zinc-400"
     ),
     danger: cn(
-      "bg-gradient-to-r from-error-500 to-error-600",
-      "text-white",
-      "shadow-error hover:shadow-lg",
-      "hover:from-error-400 hover:to-error-500",
+      "bg-error-600 text-white",
+      "hover:bg-error-700",
       "focus-visible:ring-error-500"
     ),
     success: cn(
-      "bg-gradient-to-r from-success-500 to-success-600",
-      "text-white",
-      "shadow-success hover:shadow-lg",
-      "hover:from-success-400 hover:to-success-500",
+      "bg-success-600 text-white",
+      "hover:bg-success-700",
       "focus-visible:ring-success-500"
     ),
   };
   
   const sizes = {
-    sm: "h-8 px-3 text-xs rounded-lg",
-    md: "h-10 px-4 text-sm rounded-xl",
-    lg: "h-12 px-6 text-sm rounded-xl",
-    xl: "h-14 px-8 text-base rounded-2xl",
+    xs: "h-6 px-2 text-xs rounded",
+    sm: "h-7 px-2.5 text-xs rounded-md",
+    md: "h-8 px-3 text-sm rounded-md",
+    lg: "h-9 px-4 text-sm rounded-lg",
   };
 
   const iconSizes = {
+    xs: "h-3 w-3",
     sm: "h-3.5 w-3.5",
     md: "h-4 w-4",
-    lg: "h-5 w-5",
-    xl: "h-5 w-5",
+    lg: "h-4 w-4",
   };
 
   return (
@@ -108,7 +100,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
 Button.displayName = "Button";
 
 // ============================================
-// INPUT - Premium with focus glow
+// INPUT - Clean with subtle focus
 // ============================================
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -132,32 +124,32 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
   return (
     <div className="w-full">
       {label && (
-        <label className="block mb-2 text-sm font-medium text-zinc-700">
+        <label className="block mb-1.5 text-xs font-medium text-zinc-600">
           {label}
         </label>
       )}
-      <div className="relative group">
+      <div className="relative">
         {Icon && (
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary-600 transition-colors">
-            <Icon className="h-5 w-5" />
+          <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400">
+            <Icon className="h-4 w-4" />
           </div>
         )}
         <input
           ref={ref}
           className={cn(
-            "w-full h-12 px-4",
-            Icon && "pl-12",
-            RightIcon && "pr-12",
+            "w-full h-8 px-2.5",
+            Icon && "pl-8",
+            RightIcon && "pr-8",
             "bg-white",
-            "border-2 border-zinc-200",
-            "rounded-xl",
+            "border border-zinc-200",
+            "rounded-md",
             "text-zinc-900 text-sm",
             "placeholder:text-zinc-400",
-            "transition-all duration-200",
+            "transition-colors duration-100",
             "hover:border-zinc-300",
-            "focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10",
+            "focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20",
             "disabled:bg-zinc-50 disabled:text-zinc-500 disabled:cursor-not-allowed",
-            error && "border-error-500 focus:border-error-500 focus:ring-error-500/10",
+            error && "border-error-500 focus:border-error-500 focus:ring-error-500/20",
             className
           )}
           {...props}
@@ -166,20 +158,17 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
           <button
             type="button"
             onClick={onRightIconClick}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
           >
-            <RightIcon className="h-5 w-5" />
+            <RightIcon className="h-4 w-4" />
           </button>
         )}
       </div>
       {error && (
-        <p className="mt-2 text-sm text-error-600 flex items-center gap-1.5">
-          <span className="w-1 h-1 rounded-full bg-error-500" />
-          {error}
-        </p>
+        <p className="mt-1 text-xs text-error-600">{error}</p>
       )}
       {hint && !error && (
-        <p className="mt-2 text-sm text-zinc-500">{hint}</p>
+        <p className="mt-1 text-xs text-zinc-500">{hint}</p>
       )}
     </div>
   );
@@ -205,34 +194,34 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({
   return (
     <div className="w-full">
       {label && (
-        <label className="block mb-2 text-sm font-medium text-zinc-700">
+        <label className="block mb-1.5 text-xs font-medium text-zinc-600">
           {label}
         </label>
       )}
       <textarea
         ref={ref}
         className={cn(
-          "w-full px-4 py-3",
+          "w-full px-2.5 py-2",
           "bg-white",
-          "border-2 border-zinc-200",
-          "rounded-xl",
+          "border border-zinc-200",
+          "rounded-md",
           "text-zinc-900 text-sm font-mono",
           "placeholder:text-zinc-400",
-          "transition-all duration-200",
+          "transition-colors duration-100",
           "hover:border-zinc-300",
-          "focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10",
+          "focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20",
           "disabled:bg-zinc-50 disabled:text-zinc-500 disabled:cursor-not-allowed",
           "resize-none",
-          error && "border-error-500 focus:border-error-500 focus:ring-error-500/10",
+          error && "border-error-500 focus:border-error-500 focus:ring-error-500/20",
           className
         )}
         {...props}
       />
       {error && (
-        <p className="mt-2 text-sm text-error-600">{error}</p>
+        <p className="mt-1 text-xs text-error-600">{error}</p>
       )}
       {hint && !error && (
-        <p className="mt-2 text-sm text-zinc-500">{hint}</p>
+        <p className="mt-1 text-xs text-zinc-500">{hint}</p>
       )}
     </div>
   );
@@ -240,7 +229,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({
 Textarea.displayName = "Textarea";
 
 // ============================================
-// CARD - Premium with subtle gradient border
+// CARD - Clean with subtle border
 // ============================================
 interface CardProps {
   children?: ReactNode;
@@ -254,12 +243,11 @@ export function Card({ children, noPadding = false, className = "", hover = fals
   return (
     <div
       className={cn(
-        "relative bg-white rounded-2xl",
-        "border border-zinc-200/80",
-        "shadow-card",
-        hover && "transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5",
-        gradient && "before:absolute before:inset-0 before:rounded-2xl before:p-[1px] before:bg-gradient-to-br before:from-primary-200/50 before:via-transparent before:to-transparent before:-z-10",
-        !noPadding && "p-6",
+        "bg-white rounded-lg",
+        "border border-zinc-200",
+        hover && "transition-shadow duration-150 hover:shadow-sm",
+        gradient && "bg-gradient-to-br from-primary-50/50 to-white",
+        !noPadding && "p-4",
         className
       )}
     >
@@ -269,7 +257,7 @@ export function Card({ children, noPadding = false, className = "", hover = fals
 }
 
 // ============================================
-// BADGE - Premium with subtle gradients
+// BADGE - Clean pill
 // ============================================
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: "default" | "success" | "warning" | "error" | "primary" | "info";
@@ -286,12 +274,12 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(({
   ...props
 }, ref) => {
   const variants = {
-    default: "bg-zinc-100 text-zinc-600 border-zinc-200",
-    success: "bg-success-50 text-success-700 border-success-200",
-    warning: "bg-warning-50 text-warning-700 border-warning-200",
-    error: "bg-error-50 text-error-700 border-error-200",
-    primary: "bg-primary-50 text-primary-700 border-primary-200",
-    info: "bg-info-50 text-info-700 border-info-200",
+    default: "bg-zinc-100 text-zinc-600",
+    success: "bg-success-50 text-success-700",
+    warning: "bg-warning-50 text-warning-700",
+    error: "bg-error-50 text-error-700",
+    primary: "bg-primary-50 text-primary-700",
+    info: "bg-info-50 text-info-700",
   };
 
   const dotColors = {
@@ -304,18 +292,17 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(({
   };
 
   const sizes = {
-    sm: "px-2 py-0.5 text-[10px]",
-    md: "px-2.5 py-1 text-xs",
-    lg: "px-3 py-1.5 text-sm",
+    sm: "px-1.5 py-0.5 text-[10px]",
+    md: "px-2 py-0.5 text-xs",
+    lg: "px-2.5 py-1 text-xs",
   };
 
   return (
     <span
       ref={ref}
       className={cn(
-        "inline-flex items-center gap-1.5",
-        "font-medium rounded-full",
-        "border",
+        "inline-flex items-center gap-1",
+        "font-medium rounded-md",
         variants[variant],
         sizes[size],
         className
@@ -332,7 +319,7 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(({
 Badge.displayName = "Badge";
 
 // ============================================
-// METRIC CARD - Premium stats display
+// METRIC CARD - Compact stats
 // ============================================
 interface MetricCardProps {
   label: string;
@@ -346,34 +333,34 @@ interface MetricCardProps {
 export function MetricCard({ label, value, icon: Icon, trend, color = "primary", className }: MetricCardProps) {
   const iconColors = {
     default: "bg-zinc-100 text-zinc-600",
-    success: "bg-success-100 text-success-600",
-    warning: "bg-warning-100 text-warning-600",
-    error: "bg-error-100 text-error-600",
-    primary: "bg-primary-100 text-primary-600",
-    info: "bg-info-100 text-info-600",
+    success: "bg-success-50 text-success-600",
+    warning: "bg-warning-50 text-warning-600",
+    error: "bg-error-50 text-error-600",
+    primary: "bg-primary-50 text-primary-600",
+    info: "bg-info-50 text-info-600",
   };
 
   return (
-    <Card hover className={cn("overflow-hidden", className)}>
-      <div className="flex items-start gap-4">
+    <Card hover className={cn("", className)}>
+      <div className="flex items-start gap-3">
         {Icon && (
           <div className={cn(
-            "h-12 w-12 rounded-xl flex items-center justify-center shrink-0",
+            "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
             iconColors[color]
           )}>
-            <Icon className="h-6 w-6" strokeWidth={1.75} />
+            <Icon className="h-4.5 w-4.5" strokeWidth={2} />
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-500 truncate mb-1">{label}</p>
-          <p className="text-2xl font-bold text-zinc-900 tracking-tight truncate">{value}</p>
+          <p className="text-xs text-zinc-500 truncate mb-0.5">{label}</p>
+          <p className="text-lg font-semibold text-zinc-900 tracking-tight truncate">{value}</p>
           {trend && (
             <div className={cn(
-              "inline-flex items-center gap-1 mt-2 px-2 py-0.5 rounded-full text-xs font-medium",
-              trend.positive ? "bg-success-100 text-success-700" : "bg-error-100 text-error-700"
+              "inline-flex items-center gap-1 mt-1 text-[10px] font-medium",
+              trend.positive ? "text-success-600" : "text-error-600"
             )}>
               <span>{trend.positive ? "+" : ""}{trend.value}%</span>
-              <span className="text-[10px] opacity-70">vs mês anterior</span>
+              <span className="text-zinc-400">vs last month</span>
             </div>
           )}
         </div>
@@ -383,7 +370,7 @@ export function MetricCard({ label, value, icon: Icon, trend, color = "primary",
 }
 
 // ============================================
-// SELECT - Premium dropdown
+// SELECT - Clean dropdown
 // ============================================
 interface SelectOption {
   value: string;
@@ -406,22 +393,22 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(({
   return (
     <div className="w-full">
       {label && (
-        <label className="block mb-2 text-sm font-medium text-zinc-700">{label}</label>
+        <label className="block mb-1.5 text-xs font-medium text-zinc-600">{label}</label>
       )}
       <div className="relative">
         <select
           ref={ref}
           className={cn(
-            "w-full h-12 pl-4 pr-10",
+            "w-full h-8 pl-2.5 pr-8",
             "bg-white",
-            "border-2 border-zinc-200",
-            "rounded-xl",
+            "border border-zinc-200",
+            "rounded-md",
             "text-zinc-900 text-sm",
-            "transition-all duration-200",
+            "transition-colors duration-100",
             "appearance-none cursor-pointer",
             "hover:border-zinc-300",
-            "focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10",
-            error && "border-error-500 focus:border-error-500 focus:ring-error-500/10",
+            "focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20",
+            error && "border-error-500 focus:border-error-500 focus:ring-error-500/20",
             className
           )}
           {...props}
@@ -430,10 +417,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(({
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
-        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
+        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
       </div>
       {error && (
-        <p className="mt-2 text-sm text-error-600">{error}</p>
+        <p className="mt-1 text-xs text-error-600">{error}</p>
       )}
     </div>
   );
@@ -441,7 +428,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(({
 Select.displayName = "Select";
 
 // ============================================
-// CHECKBOX - Premium toggle
+// CHECKBOX
 // ============================================
 interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   label?: string;
@@ -454,7 +441,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(({
   ...props
 }, ref) => {
   return (
-    <label className="inline-flex items-center gap-3 cursor-pointer group">
+    <label className="inline-flex items-center gap-2 cursor-pointer group">
       <div className="relative">
         <input
           ref={ref}
@@ -464,11 +451,11 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(({
           {...props}
         />
         <div className={cn(
-          "h-5 w-5 rounded-md border-2",
+          "h-4 w-4 rounded border",
           "border-zinc-300",
-          "transition-all duration-200",
+          "transition-colors duration-100",
           "peer-checked:bg-primary-600 peer-checked:border-primary-600",
-          "peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 peer-focus-visible:ring-offset-2",
+          "peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 peer-focus-visible:ring-offset-1",
           "group-hover:border-zinc-400 peer-checked:group-hover:bg-primary-500",
           className
         )} />
@@ -481,7 +468,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(({
 Checkbox.displayName = "Checkbox";
 
 // ============================================
-// TABLE - Premium data table
+// TABLE - Compact data table
 // ============================================
 interface TableProps {
   children: ReactNode;
@@ -497,7 +484,7 @@ export function Table({ children, className = "" }: TableProps) {
 }
 
 export function TableHeader({ children }: { children: ReactNode }) {
-  return <thead className="bg-zinc-50/80">{children}</thead>;
+  return <thead className="bg-zinc-50">{children}</thead>;
 }
 
 export function TableBody({ children }: { children: ReactNode }) {
@@ -508,7 +495,7 @@ export function TableRow({ children, className = "", onClick }: { children: Reac
   return (
     <tr 
       className={cn(
-        "transition-colors",
+        "transition-colors duration-75",
         onClick && "cursor-pointer hover:bg-zinc-50",
         className
       )}
@@ -522,9 +509,8 @@ export function TableRow({ children, className = "", onClick }: { children: Reac
 export function TableHead({ children, className = "" }: { children?: ReactNode; className?: string }) {
   return (
     <th className={cn(
-      "py-3.5 px-4 text-left",
-      "text-xs font-semibold text-zinc-500 uppercase tracking-wider",
-      "first:rounded-tl-lg last:rounded-tr-lg",
+      "py-2 px-3 text-left",
+      "text-xs font-medium text-zinc-500",
       className
     )}>
       {children}
@@ -535,7 +521,7 @@ export function TableHead({ children, className = "" }: { children?: ReactNode; 
 export function TableCell({ children, className = "" }: { children?: ReactNode; className?: string }) {
   return (
     <td className={cn(
-      "py-4 px-4 text-sm text-zinc-700",
+      "py-2.5 px-3 text-sm text-zinc-700",
       className
     )}>
       {children}
@@ -544,30 +530,30 @@ export function TableCell({ children, className = "" }: { children?: ReactNode; 
 }
 
 // ============================================
-// LOADING SCREEN - Premium spinner
+// LOADING SCREEN
 // ============================================
 export function LoadingScreen({ message }: { message?: string }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] gap-4">
+    <div className="flex-1 flex flex-col items-center justify-center min-h-[300px] gap-3">
       <div className="relative">
-        <div className="h-12 w-12 rounded-full border-4 border-zinc-200" />
-        <div className="absolute top-0 left-0 h-12 w-12 rounded-full border-4 border-transparent border-t-primary-600 animate-spin" />
+        <div className="h-8 w-8 rounded-full border-2 border-zinc-200" />
+        <div className="absolute top-0 left-0 h-8 w-8 rounded-full border-2 border-transparent border-t-primary-600 animate-spin" />
       </div>
       {message && (
-        <p className="text-sm text-zinc-500 animate-pulse">{message}</p>
+        <p className="text-xs text-zinc-500">{message}</p>
       )}
     </div>
   );
 }
 
 // ============================================
-// LOADING SPINNER - Inline version
+// SPINNER
 // ============================================
 export function Spinner({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   const sizes = {
-    sm: "h-4 w-4 border-2",
-    md: "h-6 w-6 border-2",
-    lg: "h-8 w-8 border-3",
+    sm: "h-3 w-3 border",
+    md: "h-4 w-4 border-2",
+    lg: "h-6 w-6 border-2",
   };
 
   return (
@@ -579,7 +565,7 @@ export function Spinner({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
 }
 
 // ============================================
-// EMPTY STATE - Premium placeholder
+// EMPTY STATE
 // ============================================
 interface EmptyStateProps {
   icon?: LucideIcon;
@@ -593,16 +579,16 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
   return (
-    <div className="py-16 px-6 text-center">
+    <div className="py-12 px-4 text-center">
       {Icon && (
-        <div className="h-16 w-16 mx-auto rounded-2xl bg-gradient-to-br from-zinc-100 to-zinc-50 flex items-center justify-center mb-5">
-          <Icon className="h-8 w-8 text-zinc-400" strokeWidth={1.5} />
+        <div className="h-10 w-10 mx-auto rounded-lg bg-zinc-100 flex items-center justify-center mb-3">
+          <Icon className="h-5 w-5 text-zinc-400" strokeWidth={1.5} />
         </div>
       )}
-      <h3 className="text-lg font-semibold text-zinc-900 mb-1">{title}</h3>
-      {description && <p className="text-sm text-zinc-500 mb-6 max-w-sm mx-auto">{description}</p>}
+      <h3 className="text-sm font-medium text-zinc-900 mb-1">{title}</h3>
+      {description && <p className="text-xs text-zinc-500 mb-4 max-w-xs mx-auto">{description}</p>}
       {action && (
-        <Button onClick={action.onClick} size="lg">
+        <Button onClick={action.onClick} size="sm">
           {action.label}
         </Button>
       )}
@@ -611,21 +597,21 @@ export function EmptyState({ icon: Icon, title, description, action }: EmptyStat
 }
 
 // ============================================
-// AVATAR - User avatar with fallback
+// AVATAR - Smaller, less rounded
 // ============================================
 interface AvatarProps {
   src?: string | null;
   name?: string;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "xs" | "sm" | "md" | "lg";
   className?: string;
 }
 
 export function Avatar({ src, name, size = "md", className }: AvatarProps) {
   const sizes = {
-    sm: "h-8 w-8 text-xs",
-    md: "h-10 w-10 text-sm",
-    lg: "h-12 w-12 text-base",
-    xl: "h-16 w-16 text-lg",
+    xs: "h-5 w-5 text-[10px]",
+    sm: "h-6 w-6 text-xs",
+    md: "h-8 w-8 text-xs",
+    lg: "h-10 w-10 text-sm",
   };
 
   const initials = name
@@ -638,7 +624,7 @@ export function Avatar({ src, name, size = "md", className }: AvatarProps) {
         src={src}
         alt={name || "Avatar"}
         className={cn(
-          "rounded-full object-cover ring-2 ring-white shadow-md",
+          "rounded-md object-cover",
           sizes[size],
           className
         )}
@@ -648,7 +634,7 @@ export function Avatar({ src, name, size = "md", className }: AvatarProps) {
 
   return (
     <div className={cn(
-      "rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center font-semibold text-white ring-2 ring-white shadow-md",
+      "rounded-md bg-primary-100 flex items-center justify-center font-medium text-primary-700",
       sizes[size],
       className
     )}>
@@ -668,9 +654,9 @@ interface DividerProps {
 export function Divider({ label, className }: DividerProps) {
   if (label) {
     return (
-      <div className={cn("flex items-center gap-4", className)}>
+      <div className={cn("flex items-center gap-3", className)}>
         <div className="flex-1 h-px bg-zinc-200" />
-        <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{label}</span>
+        <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider">{label}</span>
         <div className="flex-1 h-px bg-zinc-200" />
       </div>
     );
@@ -680,7 +666,7 @@ export function Divider({ label, className }: DividerProps) {
 }
 
 // ============================================
-// ALERT - Notification banner
+// ALERT
 // ============================================
 interface AlertProps {
   variant?: "info" | "success" | "warning" | "error";
@@ -707,21 +693,21 @@ export function Alert({ variant = "info", title, children, icon: Icon, className
 
   return (
     <div className={cn(
-      "flex items-start gap-3 p-4 rounded-xl border",
+      "flex items-start gap-2.5 p-3 rounded-lg border",
       variants[variant],
       className
     )}>
-      {Icon && <Icon className={cn("h-5 w-5 shrink-0 mt-0.5", iconColors[variant])} />}
+      {Icon && <Icon className={cn("h-4 w-4 shrink-0 mt-0.5", iconColors[variant])} />}
       <div>
-        {title && <p className="font-semibold mb-1">{title}</p>}
-        <p className="text-sm opacity-90">{children}</p>
+        {title && <p className="text-sm font-medium mb-0.5">{title}</p>}
+        <p className="text-xs">{children}</p>
       </div>
     </div>
   );
 }
 
 // ============================================
-// SKELETON - Loading placeholder
+// SKELETON
 // ============================================
 interface SkeletonProps {
   className?: string;
@@ -730,9 +716,9 @@ interface SkeletonProps {
 
 export function Skeleton({ className, variant = "rectangular" }: SkeletonProps) {
   const variants = {
-    text: "h-4 w-full rounded",
+    text: "h-3 w-full rounded",
     circular: "rounded-full",
-    rectangular: "rounded-lg",
+    rectangular: "rounded-md",
   };
 
   return (
@@ -760,9 +746,9 @@ export function Progress({ value, max = 100, size = "md", variant = "primary", s
   const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
 
   const sizes = {
-    sm: "h-1.5",
-    md: "h-2.5",
-    lg: "h-4",
+    sm: "h-1",
+    md: "h-1.5",
+    lg: "h-2",
   };
 
   const colors = {
@@ -770,20 +756,176 @@ export function Progress({ value, max = 100, size = "md", variant = "primary", s
     success: "bg-success-500",
     warning: "bg-warning-500",
     error: "bg-error-500",
-    primary: "bg-gradient-to-r from-primary-500 to-primary-600",
+    primary: "bg-primary-600",
   };
 
   return (
     <div className={cn("w-full", className)}>
       <div className={cn("w-full bg-zinc-200 rounded-full overflow-hidden", sizes[size])}>
         <div
-          className={cn("h-full rounded-full transition-all duration-500 ease-out", colors[variant])}
+          className={cn("h-full rounded-full transition-all duration-300", colors[variant])}
           style={{ width: `${percentage}%` }}
         />
       </div>
       {showLabel && (
-        <p className="text-xs text-zinc-500 mt-1 text-right">{Math.round(percentage)}%</p>
+        <p className="text-[10px] text-zinc-500 mt-1 text-right">{Math.round(percentage)}%</p>
       )}
+    </div>
+  );
+}
+
+// ============================================
+// PAGE SKELETON
+// ============================================
+interface PageSkeletonProps {
+  variant?: "dashboard" | "list" | "detail";
+}
+
+export function PageSkeleton({ variant = "dashboard" }: PageSkeletonProps) {
+  if (variant === "dashboard") {
+    return (
+      <div className="p-5 animate-pulse">
+        <div className="max-w-[1200px] mx-auto space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <Skeleton className="h-6 w-40 mb-1.5" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="bg-white rounded-lg border border-zinc-200 p-4">
+                <div className="flex items-start gap-3">
+                  <Skeleton className="h-9 w-9 rounded-lg" />
+                  <div className="flex-1">
+                    <Skeleton className="h-3 w-20 mb-1.5" />
+                    <Skeleton className="h-5 w-24" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-lg border border-zinc-200 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <Skeleton className="h-4 w-28 mb-1" />
+                <Skeleton className="h-3 w-40" />
+              </div>
+              <Skeleton className="h-8 w-24 rounded-md" />
+            </div>
+            <Skeleton className="h-56 w-full rounded-md" />
+          </div>
+
+          <div className="bg-white rounded-lg border border-zinc-200 p-4">
+            <div className="mb-4">
+              <Skeleton className="h-4 w-32 mb-1" />
+              <Skeleton className="h-3 w-44" />
+            </div>
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex items-center justify-between p-3 rounded-md bg-zinc-50">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-8 w-8 rounded-md" />
+                    <div>
+                      <Skeleton className="h-3 w-20 mb-1" />
+                      <Skeleton className="h-2.5 w-14" />
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <Skeleton className="h-3 w-16 mb-1" />
+                    <Skeleton className="h-4 w-14 rounded-md" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === "list") {
+    return (
+      <div className="p-5 animate-pulse">
+        <div className="max-w-[1200px] mx-auto space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <Skeleton className="h-6 w-40 mb-1.5" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+            <Skeleton className="h-8 w-32 rounded-md" />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-white rounded-lg border border-zinc-200 p-4">
+                <div className="flex items-start gap-3">
+                  <Skeleton className="h-9 w-9 rounded-lg" />
+                  <div className="flex-1">
+                    <Skeleton className="h-3 w-20 mb-1.5" />
+                    <Skeleton className="h-5 w-24" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-lg border border-zinc-200 overflow-hidden">
+            <div className="bg-zinc-50 px-3 py-2 flex gap-4">
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <div className="divide-y divide-zinc-100">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <div key={i} className="px-3 py-2.5 flex items-center gap-4">
+                  <Skeleton className="h-3 w-28" />
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-4 w-16 rounded-md" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-5 animate-pulse">
+      <div className="max-w-[1200px] mx-auto space-y-5">
+        <div>
+          <Skeleton className="h-6 w-40 mb-1.5" />
+          <Skeleton className="h-3 w-52" />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {[1, 2].map((i) => (
+            <div key={i} className="bg-white rounded-lg border border-zinc-200 p-4 space-y-4">
+              <Skeleton className="h-4 w-32" />
+              <div className="space-y-3">
+                <div>
+                  <Skeleton className="h-3 w-20 mb-1.5" />
+                  <Skeleton className="h-8 w-full rounded-md" />
+                </div>
+                <div>
+                  <Skeleton className="h-3 w-20 mb-1.5" />
+                  <Skeleton className="h-8 w-full rounded-md" />
+                </div>
+                <div>
+                  <Skeleton className="h-3 w-20 mb-1.5" />
+                  <Skeleton className="h-16 w-full rounded-md" />
+                </div>
+              </div>
+              <Skeleton className="h-8 w-full rounded-md" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

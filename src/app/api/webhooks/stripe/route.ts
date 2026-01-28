@@ -34,11 +34,18 @@ async function getAffiliateForCustomer(
   }
 
   // 2. If no First Touch, check metadata for affiliate code
-  const affiliateCode = metadata?.via || metadata?.affiliate_code || metadata?.ref;
+  // Support multiple metadata keys: referral, via, affiliate_code, ref
+  const affiliateCode = 
+    metadata?.referral || 
+    metadata?.via || 
+    metadata?.affiliate_code || 
+    metadata?.ref;
   
   if (!affiliateCode) {
     return null;
   }
+  
+  console.log(`Found affiliate code in metadata: ${affiliateCode} for customer ${customerId}`);
 
   // Find affiliate by code or alias
   const { data: affiliate } = await supabase

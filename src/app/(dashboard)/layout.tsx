@@ -1,64 +1,79 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { useUser } from "@/hooks/use-user";
+import { AppDataProvider, useAppData } from "@/contexts";
 import { Sidebar } from "@/components/layout/sidebar";
 import { cn } from "@/lib/utils";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const supabase = createClient();
-  const { user, profile, isLoading, isAdmin } = useUser();
+  const { user, profile, isAdmin, isLoading, isInitialized, logout } = useAppData();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await logout();
     router.push("/login");
   };
 
-  // Loading state
-  if (isLoading) {
+  // Handle redirects in useEffect to avoid setState during render
+  useEffect(() => {
+    if (isInitialized && !user) {
+      router.push("/login");
+    }
+  }, [isInitialized, user, router]);
+
+  useEffect(() => {
+    if (isInitialized && isAdmin) {
+      router.push("/admin");
+    }
+  }, [isInitialized, isAdmin, router]);
+
+  // Loading state - only show on first load
+  if (isLoading && !isInitialized) {
     return (
       <div className="h-screen w-screen bg-zinc-50 flex items-center justify-center">
         <div className="relative">
-          <div className="h-12 w-12 rounded-full border-4 border-zinc-200" />
-          <div className="absolute top-0 left-0 h-12 w-12 rounded-full border-4 border-transparent border-t-primary-600 animate-spin" />
+          <div className="h-8 w-8 rounded-full border-2 border-zinc-200" />
+          <div className="absolute top-0 left-0 h-8 w-8 rounded-full border-2 border-transparent border-t-primary-600 animate-spin" />
         </div>
       </div>
     );
   }
 
-  // Redirect if not logged in
-  if (!user) {
-    router.push("/login");
-    return null;
-  }
-
-  // Redirect admin
-  if (isAdmin) {
-    router.push("/admin");
-    return null;
+  // Show loading while redirect is pending
+  if (!user || isAdmin) {
+    return (
+      <div className="h-screen w-screen bg-zinc-50 flex items-center justify-center">
+        <div className="relative">
+          <div className="h-8 w-8 rounded-full border-2 border-zinc-200" />
+          <div className="absolute top-0 left-0 h-8 w-8 rounded-full border-2 border-transparent border-t-primary-600 animate-spin" />
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-zinc-50">
       {/* Sidebar */}
-      <Sidebar 
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+      <Sidebar
+        open={false}
+        onClose={() => {}}
         onLogout={handleLogout}
-        user={profile ? { name: profile.full_name || "", email: user.email } : undefined}
+        user={profile ? { name: profile.full_name || "", email: user?.email } : undefined}
       />
-      
-      {/* Main area */}
-      <div className={cn(
-        "lg:pl-[280px] min-h-screen flex flex-col",
-        "transition-all duration-300"
-      )}>
+
+      {/* Main area - 220px sidebar width */}
+      <div className={cn("lg:pl-[220px] min-h-screen flex flex-col")}>
         {children}
       </div>
     </div>
+  );
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AppDataProvider>
+      <DashboardLayoutContent>{children}</DashboardLayoutContent>
+    </AppDataProvider>
   );
 }

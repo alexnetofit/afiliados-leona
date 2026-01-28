@@ -11,7 +11,6 @@ import {
   User,
   LogOut,
   X,
-  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +41,7 @@ export function Sidebar({ open, onClose, onLogout, user }: SidebarProps) {
       {/* Overlay mobile */}
       {open && (
         <div 
-          className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm z-40 lg:hidden transition-opacity"
+          className="fixed inset-0 bg-zinc-900/50 z-40 lg:hidden"
           onClick={onClose}
         />
       )}
@@ -50,45 +49,45 @@ export function Sidebar({ open, onClose, onLogout, user }: SidebarProps) {
       {/* Sidebar */}
       <aside 
         className={cn(
-          "fixed top-0 left-0 z-50 h-screen w-[280px]",
+          "fixed top-0 left-0 z-50 h-screen w-[220px]",
           "bg-white border-r border-zinc-200",
           "flex flex-col",
-          "transition-transform duration-300 ease-out",
+          "transition-transform duration-200",
           "lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Header */}
-        <div className="h-[72px] flex items-center justify-between px-6 border-b border-zinc-100">
-          <Link href="/dashboard" className="flex items-center gap-2">
+        <div className="h-14 flex items-center justify-between px-4 border-b border-zinc-100">
+          <Link href="/dashboard" className="flex items-center">
             <Image
               src="/logo-leona-roxa.png"
               alt="Leona"
-              width={100}
-              height={32}
+              width={80}
+              height={26}
               className="object-contain"
               priority
             />
           </Link>
           <button 
             onClick={onClose}
-            className="lg:hidden p-2 rounded-xl hover:bg-zinc-100 text-zinc-500 transition-colors"
+            className="lg:hidden p-1.5 rounded-md hover:bg-zinc-100 text-zinc-500 transition-colors"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* User Card */}
         {user && (
-          <div className="mx-4 mt-6 p-4 rounded-2xl bg-gradient-to-br from-primary-50 to-primary-100/50 border border-primary-100">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-primary">
-                <span className="text-sm font-semibold text-white">{initials}</span>
+          <div className="mx-3 mt-4 p-3 rounded-lg bg-zinc-50 border border-zinc-100">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-md bg-primary-100 flex items-center justify-center">
+                <span className="text-xs font-medium text-primary-700">{initials}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-zinc-900 truncate">{user.name}</p>
+                <p className="text-sm font-medium text-zinc-900 truncate">{user.name}</p>
                 {user.email && (
-                  <p className="text-xs text-zinc-500 truncate">{user.email}</p>
+                  <p className="text-[11px] text-zinc-500 truncate">{user.email}</p>
                 )}
               </div>
             </div>
@@ -96,11 +95,11 @@ export function Sidebar({ open, onClose, onLogout, user }: SidebarProps) {
         )}
 
         {/* Nav */}
-        <nav className="flex-1 py-6 px-4 overflow-y-auto">
-          <p className="px-3 mb-3 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+        <nav className="flex-1 py-4 px-3 overflow-y-auto">
+          <p className="px-2 mb-2 text-[10px] font-medium text-zinc-400 uppercase tracking-wider">
             Menu
           </p>
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href;
               return (
@@ -109,26 +108,22 @@ export function Sidebar({ open, onClose, onLogout, user }: SidebarProps) {
                   href={item.href}
                   onClick={onClose}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl",
+                    "flex items-center gap-2.5 px-2.5 py-2 rounded-md",
                     "text-sm font-medium",
-                    "transition-all duration-200",
-                    "group relative overflow-hidden",
+                    "transition-colors duration-100",
                     isActive 
-                      ? "bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-primary" 
-                      : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                      ? "bg-primary-50 text-primary-700" 
+                      : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
                   )}
                 >
                   <item.icon 
                     className={cn(
-                      "h-5 w-5 transition-transform group-hover:scale-110",
-                      isActive ? "text-white" : "text-zinc-400 group-hover:text-primary-500"
+                      "h-4 w-4",
+                      isActive ? "text-primary-600" : "text-zinc-400"
                     )} 
                     strokeWidth={isActive ? 2 : 1.75} 
                   />
                   <span>{item.name}</span>
-                  {isActive && (
-                    <Sparkles className="h-3.5 w-3.5 absolute right-4 animate-pulse" />
-                  )}
                 </Link>
               );
             })}
@@ -136,19 +131,18 @@ export function Sidebar({ open, onClose, onLogout, user }: SidebarProps) {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-zinc-100">
+        <div className="p-3 border-t border-zinc-100">
           <button
             onClick={onLogout}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl",
+              "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md",
               "text-sm font-medium text-zinc-500",
-              "hover:bg-error-50 hover:text-error-600",
-              "transition-all duration-200",
-              "group"
+              "hover:bg-zinc-50 hover:text-zinc-700",
+              "transition-colors duration-100"
             )}
           >
-            <LogOut className="h-5 w-5 group-hover:text-error-500 transition-colors" strokeWidth={1.75} />
-            <span>Sair da conta</span>
+            <LogOut className="h-4 w-4" strokeWidth={1.75} />
+            <span>Sair</span>
           </button>
         </div>
       </aside>

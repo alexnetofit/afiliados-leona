@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-12-15.clover",
 });
 
-const supabase = createClient(
+const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
@@ -19,8 +20,96 @@ function getCommissionPercent(tier: number): number {
   }
 }
 
+// Helper: Find or create affiliate relationship from customer metadata
+async function getOrCreateAffiliateForCustomer(
+  customerId: string,
+  customerMetadata?: Stripe.Metadata | null
+): Promise<string | null> {
+  // 1. Check if customer already has an affiliate (First Touch)
+  const { data: existing } = await supabaseAdmin
+    .from("customer_affiliates")
+    .select("affiliate_id")
+    .eq("stripe_customer_id", customerId)
+    .single();
+
+  if (existing) {
+    return existing.affiliate_id;
+  }
+
+  // 2. Check metadata for affiliate code
+  // Support multiple metadata keys: referral, via, affiliate_code, ref
+  const affiliateCode = 
+    customerMetadata?.referral || 
+    customerMetadata?.via || 
+    customerMetadata?.affiliate_code || 
+    customerMetadata?.ref;
+
+  if (!affiliateCode) {
+    return null;
+  }
+
+  console.log(`Found affiliate code in metadata: ${affiliateCode} for customer ${customerId}`);
+
+  // 3. Find affiliate by code
+  const { data: affiliate } = await supabaseAdmin
+    .from("affiliates")
+    .select("id")
+    .eq("affiliate_code", affiliateCode)
+    .single();
+
+  if (affiliate) {
+    // Create First Touch relationship
+    await supabaseAdmin.from("customer_affiliates").insert({
+      stripe_customer_id: customerId,
+      affiliate_id: affiliate.id,
+    });
+    console.log(`Created customer_affiliate: ${customerId} -> ${affiliate.id}`);
+    return affiliate.id;
+  }
+
+  // 4. Try finding by link alias
+  const { data: link } = await supabaseAdmin
+    .from("affiliate_links")
+    .select("affiliate_id")
+    .eq("alias", affiliateCode)
+    .single();
+
+  if (link) {
+    // Create First Touch relationship
+    await supabaseAdmin.from("customer_affiliates").insert({
+      stripe_customer_id: customerId,
+      affiliate_id: link.affiliate_id,
+    });
+    console.log(`Created customer_affiliate via link: ${customerId} -> ${link.affiliate_id}`);
+    return link.affiliate_id;
+  }
+
+  console.log(`No affiliate found for code: ${affiliateCode}`);
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
+    // 1. Verify admin authentication
+    const supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    // Check if user is admin
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.role !== "admin") {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+
+    // 2. Get request parameters
     const { days = 30 } = await request.json();
 
     // Calculate date range
@@ -29,8 +118,29 @@ export async function POST(request: NextRequest) {
     const startTimestamp = Math.floor(startDate.getTime() / 1000);
 
     let processed = 0;
+    let customersLinked = 0;
 
-    // 1. Sync Subscriptions
+    // 3. First pass: Scan all customers and link by metadata
+    console.log("Scanning customers for referral metadata...");
+    for await (const customer of stripe.customers.list({
+      created: { gte: startTimestamp },
+      limit: 100,
+    })) {
+      if (customer.deleted) continue;
+
+      const affiliateId = await getOrCreateAffiliateForCustomer(
+        customer.id,
+        customer.metadata
+      );
+
+      if (affiliateId) {
+        customersLinked++;
+      }
+    }
+
+    console.log(`Linked ${customersLinked} customers to affiliates`);
+
+    // 4. Sync Subscriptions
     console.log("Syncing subscriptions...");
     for await (const subscription of stripe.subscriptions.list({
       created: { gte: startTimestamp },
@@ -42,28 +152,28 @@ export async function POST(request: NextRequest) {
         ? subscription.customer 
         : subscription.customer.id;
 
-      // Check if customer has affiliate
-      const { data: customerAffiliate } = await supabase
-        .from("customer_affiliates")
-        .select("affiliate_id")
-        .eq("stripe_customer_id", customerId)
-        .single();
+      // Try to get/create affiliate relationship
+      const customerObj = customer.deleted ? null : customer;
+      const affiliateId = await getOrCreateAffiliateForCustomer(
+        customerId,
+        customerObj?.metadata
+      );
 
-      if (!customerAffiliate) continue;
+      if (!affiliateId) continue;
 
       // Get customer name
-      const customerName = customer.deleted ? null : customer.name || customer.email;
+      const customerName = customerObj?.name || customerObj?.email || null;
 
       // Get price info
       const item = subscription.items.data[0];
       
-      // Cast to any for flexible property access (Stripe API version compatibility)
+      // Cast to any for flexible property access
       const sub = subscription as any;
       const currentPeriodEnd = sub.current_period_end || item?.current_period_end;
 
       // Upsert subscription
-      await supabase.from("subscriptions").upsert({
-        affiliate_id: customerAffiliate.affiliate_id,
+      await supabaseAdmin.from("subscriptions").upsert({
+        affiliate_id: affiliateId,
         stripe_subscription_id: subscription.id,
         stripe_customer_id: customerId,
         customer_name: customerName,
@@ -91,31 +201,33 @@ export async function POST(request: NextRequest) {
       processed++;
     }
 
-    // 2. Sync Invoices (paid only)
+    // 5. Sync Invoices (paid only)
     console.log("Syncing invoices...");
     for await (const invoice of stripe.invoices.list({
       created: { gte: startTimestamp },
       status: "paid",
+      expand: ["data.customer"],
       limit: 100,
     })) {
-      // Cast to any for flexible property access (Stripe API version compatibility)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const inv = invoice as any;
       if (!inv.subscription || !inv.amount_paid) continue;
 
-      const customerId = inv.customer as string;
+      const customerId = inv.customer?.id || inv.customer as string;
 
-      // Check affiliate
-      const { data: customerAffiliate } = await supabase
-        .from("customer_affiliates")
-        .select("affiliate_id")
-        .eq("stripe_customer_id", customerId)
-        .single();
+      // Try to get/create affiliate relationship
+      const customerObj = typeof inv.customer === 'object' && !inv.customer?.deleted 
+        ? inv.customer 
+        : null;
+      
+      const affiliateId = await getOrCreateAffiliateForCustomer(
+        customerId,
+        customerObj?.metadata
+      );
 
-      if (!customerAffiliate) continue;
+      if (!affiliateId) continue;
 
       // Check if transaction exists
-      const { data: existingTx } = await supabase
+      const { data: existingTx } = await supabaseAdmin
         .from("transactions")
         .select("id")
         .eq("stripe_invoice_id", invoice.id)
@@ -124,10 +236,10 @@ export async function POST(request: NextRequest) {
       if (existingTx) continue;
 
       // Get affiliate tier
-      const { data: affiliate } = await supabase
+      const { data: affiliate } = await supabaseAdmin
         .from("affiliates")
         .select("commission_tier")
-        .eq("id", customerAffiliate.affiliate_id)
+        .eq("id", affiliateId)
         .single();
 
       if (!affiliate) continue;
@@ -142,14 +254,14 @@ export async function POST(request: NextRequest) {
       availableAt.setDate(availableAt.getDate() + 15);
 
       // Get subscription ID
-      const { data: subRecord } = await supabase
+      const { data: subRecord } = await supabaseAdmin
         .from("subscriptions")
         .select("id")
         .eq("stripe_subscription_id", inv.subscription)
         .single();
 
-      await supabase.from("transactions").insert({
-        affiliate_id: customerAffiliate.affiliate_id,
+      await supabaseAdmin.from("transactions").insert({
+        affiliate_id: affiliateId,
         subscription_id: subRecord?.id || null,
         stripe_invoice_id: invoice.id,
         stripe_charge_id: inv.charge as string,
@@ -165,7 +277,7 @@ export async function POST(request: NextRequest) {
       processed++;
     }
 
-    // 3. Sync Refunds
+    // 6. Sync Refunds
     console.log("Syncing refunds...");
     for await (const refund of stripe.refunds.list({
       created: { gte: startTimestamp },
@@ -180,7 +292,7 @@ export async function POST(request: NextRequest) {
       if (!customerId) continue;
 
       // Check affiliate
-      const { data: customerAffiliate } = await supabase
+      const { data: customerAffiliate } = await supabaseAdmin
         .from("customer_affiliates")
         .select("affiliate_id")
         .eq("stripe_customer_id", customerId)
@@ -189,7 +301,7 @@ export async function POST(request: NextRequest) {
       if (!customerAffiliate) continue;
 
       // Find original transaction
-      const { data: originalTx } = await supabase
+      const { data: originalTx } = await supabaseAdmin
         .from("transactions")
         .select("commission_percent, subscription_id")
         .eq("stripe_charge_id", refund.charge)
@@ -199,7 +311,7 @@ export async function POST(request: NextRequest) {
       if (!originalTx) continue;
 
       // Check if refund transaction exists
-      const { data: existingRefund } = await supabase
+      const { data: existingRefund } = await supabaseAdmin
         .from("transactions")
         .select("id")
         .eq("stripe_charge_id", refund.charge)
@@ -210,7 +322,7 @@ export async function POST(request: NextRequest) {
 
       const refundAmount = -Math.round(refund.amount * originalTx.commission_percent / 100);
 
-      await supabase.from("transactions").insert({
+      await supabaseAdmin.from("transactions").insert({
         affiliate_id: customerAffiliate.affiliate_id,
         subscription_id: originalTx.subscription_id,
         stripe_charge_id: refund.charge as string,
@@ -226,7 +338,12 @@ export async function POST(request: NextRequest) {
       processed++;
     }
 
-    return NextResponse.json({ success: true, processed });
+    return NextResponse.json({ 
+      success: true, 
+      processed,
+      customersLinked,
+      message: `Resync concluído: ${processed} registros processados, ${customersLinked} clientes vinculados`
+    });
   } catch (error) {
     console.error("Resync error:", error);
     return NextResponse.json(
