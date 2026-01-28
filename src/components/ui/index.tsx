@@ -1,7 +1,7 @@
 // LEONA DESIGN SYSTEM v2.0
 // Componentes Base - Construídos do zero
 
-import { forwardRef, ButtonHTMLAttributes, InputHTMLAttributes, HTMLAttributes } from "react";
+import { forwardRef, ButtonHTMLAttributes, InputHTMLAttributes, HTMLAttributes, SelectHTMLAttributes, ReactNode } from "react";
 import { Loader2, LucideIcon } from "lucide-react";
 
 // ============================================
@@ -213,5 +213,155 @@ export function MetricCard({ label, value, icon: Icon, trend }: MetricCardProps)
         )}
       </div>
     </Card>
+  );
+}
+
+// ============================================
+// SELECT
+// ============================================
+interface SelectOption {
+  value: string;
+  label: string;
+}
+
+interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  options: SelectOption[];
+  label?: string;
+}
+
+export const Select = forwardRef<HTMLSelectElement, SelectProps>(({
+  options,
+  label,
+  className = "",
+  ...props
+}, ref) => {
+  return (
+    <div className="w-full">
+      {label && (
+        <label className="block mb-2 text-sm font-medium text-[#111827]">{label}</label>
+      )}
+      <select
+        ref={ref}
+        className={`
+          w-full h-11 px-4
+          bg-white border border-[#E8EAF0] rounded-xl
+          text-[#111827] text-sm
+          focus:outline-none focus:border-[#5B21B6] focus:ring-4 focus:ring-[#5B21B6]/10
+          transition-all cursor-pointer
+          ${className}
+        `}
+        {...props}
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+});
+Select.displayName = "Select";
+
+// ============================================
+// CHECKBOX
+// ============================================
+interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
+  label?: string;
+}
+
+export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(({
+  label,
+  className = "",
+  ...props
+}, ref) => {
+  return (
+    <label className="inline-flex items-center gap-2 cursor-pointer">
+      <input
+        ref={ref}
+        type="checkbox"
+        className={`
+          h-4 w-4 rounded border-[#E8EAF0]
+          text-[#5B21B6] focus:ring-[#5B21B6]/20
+          cursor-pointer
+          ${className}
+        `}
+        {...props}
+      />
+      {label && <span className="text-sm text-[#111827]">{label}</span>}
+    </label>
+  );
+});
+Checkbox.displayName = "Checkbox";
+
+// ============================================
+// TABLE
+// ============================================
+export function Table({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <table className={`w-full ${className}`}>{children}</table>;
+}
+
+export function TableHeader({ children }: { children: ReactNode }) {
+  return <thead>{children}</thead>;
+}
+
+export function TableBody({ children }: { children: ReactNode }) {
+  return <tbody>{children}</tbody>;
+}
+
+export function TableRow({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <tr className={`border-b border-[#F1F3F7] last:border-0 ${className}`}>{children}</tr>;
+}
+
+export function TableHead({ children, className = "" }: { children?: ReactNode; className?: string }) {
+  return (
+    <th className={`py-3 px-4 text-left text-xs font-medium text-[#6B7280] uppercase tracking-wide ${className}`}>
+      {children}
+    </th>
+  );
+}
+
+export function TableCell({ children, className = "" }: { children?: ReactNode; className?: string }) {
+  return <td className={`py-4 px-4 text-sm text-[#111827] ${className}`}>{children}</td>;
+}
+
+// ============================================
+// LOADING SCREEN
+// ============================================
+export function LoadingScreen() {
+  return (
+    <div className="flex-1 flex items-center justify-center min-h-[400px]">
+      <Loader2 className="h-8 w-8 animate-spin text-[#5B21B6]" />
+    </div>
+  );
+}
+
+// ============================================
+// EMPTY STATE
+// ============================================
+interface EmptyStateProps {
+  icon?: LucideIcon;
+  title: string;
+  description?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
+}
+
+export function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
+  return (
+    <div className="py-16 text-center">
+      {Icon && (
+        <div className="h-12 w-12 mx-auto rounded-xl bg-[#F8F9FC] flex items-center justify-center mb-4">
+          <Icon className="h-6 w-6 text-[#9CA3AF]" />
+        </div>
+      )}
+      <p className="text-[#111827] font-medium">{title}</p>
+      {description && <p className="text-sm text-[#6B7280] mt-1">{description}</p>}
+      {action && (
+        <Button onClick={action.onClick} className="mt-4">
+          {action.label}
+        </Button>
+      )}
+    </div>
   );
 }
