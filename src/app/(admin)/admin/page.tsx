@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Card, LoadingScreen } from "@/components/ui/index";
-import { Users, DollarSign, CreditCard, TrendingUp, AlertTriangle } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { Card, MetricCard, LoadingScreen } from "@/components/ui/index";
+import { Users, DollarSign, CreditCard, TrendingUp, AlertTriangle, ArrowRight, UserCheck, Receipt, Wallet } from "lucide-react";
+import { formatCurrency, cn } from "@/lib/utils";
 import Link from "next/link";
 
 interface AdminStats {
@@ -62,76 +62,109 @@ export default function AdminDashboardPage() {
     fetchStats();
   }, []);
 
-  if (isLoading) return <LoadingScreen />;
+  if (isLoading) return <LoadingScreen message="Carregando estatísticas..." />;
 
   return (
     <div className="flex-1 p-6 lg:p-8">
-      <div className="max-w-[1320px] mx-auto space-y-6">
+      <div className="max-w-[1400px] mx-auto space-y-8 animate-fade-in-up">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-[#111827]">Admin Dashboard</h1>
-          <p className="text-[#6B7280]">Visão geral do programa de afiliados</p>
+        <div>
+          <h1 className="text-3xl font-bold text-zinc-900 tracking-tight">Admin Dashboard</h1>
+          <p className="text-zinc-500 mt-1">Visão geral do programa de afiliados</p>
         </div>
 
         {/* Main Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard icon={Users} label="Total de Afiliados" value={stats?.totalAffiliates || 0} color="primary" />
-          <StatCard icon={Users} label="Afiliados Ativos" value={stats?.activeAffiliates || 0} color="default" />
-          <StatCard icon={CreditCard} label="Assinaturas Ativas" value={stats?.activeSubscriptions || 0} color="success" />
-          <StatCard icon={CreditCard} label="Total de Assinaturas" value={stats?.totalSubscriptions || 0} color="default" />
+          <MetricCard 
+            icon={Users} 
+            label="Total de Afiliados" 
+            value={stats?.totalAffiliates?.toString() || "0"} 
+            color="primary" 
+          />
+          <MetricCard 
+            icon={UserCheck} 
+            label="Afiliados Ativos" 
+            value={stats?.activeAffiliates?.toString() || "0"} 
+            color="success" 
+          />
+          <MetricCard 
+            icon={CreditCard} 
+            label="Assinaturas Ativas" 
+            value={stats?.activeSubscriptions?.toString() || "0"} 
+            color="info" 
+          />
+          <MetricCard 
+            icon={Receipt} 
+            label="Total de Assinaturas" 
+            value={stats?.totalSubscriptions?.toString() || "0"} 
+            color="default" 
+          />
         </div>
 
         {/* Financial Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard icon={DollarSign} label="Total Comissões" value={formatCurrency((stats?.totalCommissions || 0) / 100)} color="success" />
-          <StatCard icon={TrendingUp} label="Pagamentos Pendentes" value={formatCurrency((stats?.pendingPayouts || 0) / 100)} color="warning" />
-          <StatCard icon={AlertTriangle} label="Total Estornos" value={formatCurrency((stats?.totalRefunds || 0) / 100)} color="default" />
-          <StatCard icon={AlertTriangle} label="Total Disputas" value={formatCurrency((stats?.totalDisputes || 0) / 100)} color="default" />
+          <MetricCard 
+            icon={DollarSign} 
+            label="Total Comissões" 
+            value={formatCurrency((stats?.totalCommissions || 0) / 100)} 
+            color="success" 
+          />
+          <MetricCard 
+            icon={Wallet} 
+            label="Pagamentos Pendentes" 
+            value={formatCurrency((stats?.pendingPayouts || 0) / 100)} 
+            color="warning" 
+          />
+          <MetricCard 
+            icon={TrendingUp} 
+            label="Total Estornos" 
+            value={formatCurrency((stats?.totalRefunds || 0) / 100)} 
+            color="error" 
+          />
+          <MetricCard 
+            icon={AlertTriangle} 
+            label="Total Disputas" 
+            value={formatCurrency((stats?.totalDisputes || 0) / 100)} 
+            color="error" 
+          />
         </div>
 
         {/* Quick Actions */}
         <Card>
-          <h3 className="font-semibold text-[#111827] mb-6">Ações Rápidas</h3>
+          <h3 className="text-lg font-bold text-zinc-900 mb-6">Ações Rápidas</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link href="/admin/afiliados" className="p-4 rounded-xl border border-[#E8EAF0] hover:border-[#5B21B6] hover:bg-[#EDE9FE]/20 transition-colors">
-              <Users className="h-8 w-8 text-[#5B21B6] mb-2" />
-              <h4 className="font-semibold text-[#111827]">Gerenciar Afiliados</h4>
-              <p className="text-sm text-[#6B7280]">Ver e editar afiliados</p>
-            </Link>
-            <Link href="/admin/relatorios" className="p-4 rounded-xl border border-[#E8EAF0] hover:border-[#5B21B6] hover:bg-[#EDE9FE]/20 transition-colors">
-              <TrendingUp className="h-8 w-8 text-[#5B21B6] mb-2" />
-              <h4 className="font-semibold text-[#111827]">Relatórios</h4>
-              <p className="text-sm text-[#6B7280]">Análise de desempenho</p>
-            </Link>
-            <Link href="/admin/pagamentos" className="p-4 rounded-xl border border-[#E8EAF0] hover:border-[#5B21B6] hover:bg-[#EDE9FE]/20 transition-colors">
-              <DollarSign className="h-8 w-8 text-[#5B21B6] mb-2" />
-              <h4 className="font-semibold text-[#111827]">Pagamentos</h4>
-              <p className="text-sm text-[#6B7280]">Gerenciar payouts mensais</p>
-            </Link>
+            {[
+              { href: "/admin/afiliados", icon: Users, title: "Gerenciar Afiliados", desc: "Ver e editar afiliados", color: "primary" },
+              { href: "/admin/relatorios", icon: TrendingUp, title: "Relatórios", desc: "Análise de desempenho", color: "info" },
+              { href: "/admin/pagamentos", icon: DollarSign, title: "Pagamentos", desc: "Gerenciar payouts mensais", color: "success" },
+            ].map((action) => (
+              <Link 
+                key={action.href}
+                href={action.href} 
+                className={cn(
+                  "group p-6 rounded-2xl border-2 border-zinc-100",
+                  "hover:border-primary-200 hover:bg-primary-50/50",
+                  "transition-all duration-200"
+                )}
+              >
+                <div className={cn(
+                  "h-12 w-12 rounded-xl flex items-center justify-center mb-4",
+                  action.color === "primary" ? "bg-primary-100 text-primary-600" :
+                  action.color === "info" ? "bg-info-100 text-info-600" :
+                  "bg-success-100 text-success-600"
+                )}>
+                  <action.icon className="h-6 w-6" />
+                </div>
+                <h4 className="font-bold text-zinc-900 group-hover:text-primary-700 transition-colors">{action.title}</h4>
+                <p className="text-sm text-zinc-500 mt-1">{action.desc}</p>
+                <div className="flex items-center gap-1 mt-4 text-sm font-medium text-primary-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                  Acessar <ArrowRight className="h-4 w-4" />
+                </div>
+              </Link>
+            ))}
           </div>
         </Card>
       </div>
     </div>
-  );
-}
-
-function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: string | number; color: "default" | "primary" | "success" | "warning" }) {
-  const colors = {
-    default: "bg-[#F8F9FC] text-[#6B7280]",
-    primary: "bg-[#EDE9FE] text-[#5B21B6]",
-    success: "bg-[#D1FAE5] text-[#059669]",
-    warning: "bg-[#FEF3C7] text-[#D97706]",
-  };
-
-  return (
-    <Card className="flex items-center gap-4">
-      <div className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0 ${colors[color]}`}>
-        <Icon className="h-6 w-6" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-sm text-[#6B7280] truncate">{label}</p>
-        <p className="text-xl font-semibold text-[#111827] truncate">{value}</p>
-      </div>
-    </Card>
   );
 }

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Card, Badge, LoadingScreen, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/index";
-import { Search, Users } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { Card, Badge, LoadingScreen, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Input, MetricCard } from "@/components/ui/index";
+import { Search, Users, UserCheck, DollarSign } from "lucide-react";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { COMMISSION_TIERS } from "@/types";
 
 interface AffiliateWithStats {
@@ -74,82 +74,95 @@ export default function AfiliadosPage() {
     return a.affiliate_code.toLowerCase().includes(query) || a.profile.full_name?.toLowerCase().includes(query) || a.user.email.toLowerCase().includes(query);
   });
 
-  if (isLoading) return <LoadingScreen />;
+  const totalCommissions = affiliates.reduce((sum, a) => sum + a.totalCommissions, 0);
+
+  if (isLoading) return <LoadingScreen message="Carregando afiliados..." />;
 
   return (
     <div className="flex-1 p-6 lg:p-8">
-      <div className="max-w-[1320px] mx-auto space-y-6">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-[#111827]">Afiliados</h1>
-          <p className="text-[#6B7280]">Gerencie todos os afiliados do programa</p>
+      <div className="max-w-[1400px] mx-auto space-y-8 animate-fade-in-up">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-zinc-900 tracking-tight">Afiliados</h1>
+          <p className="text-zinc-500 mt-1">Gerencie todos os afiliados do programa</p>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="flex items-center gap-4">
-            <div className="h-10 w-10 rounded-xl bg-[#EDE9FE] flex items-center justify-center"><Users className="h-5 w-5 text-[#5B21B6]" /></div>
-            <div><p className="text-sm text-[#6B7280]">Total</p><p className="text-xl font-semibold text-[#111827]">{affiliates.length}</p></div>
-          </Card>
-          <Card className="flex items-center gap-4">
-            <div className="h-10 w-10 rounded-xl bg-[#D1FAE5] flex items-center justify-center"><Users className="h-5 w-5 text-[#059669]" /></div>
-            <div><p className="text-sm text-[#6B7280]">Ativos</p><p className="text-xl font-semibold text-[#111827]">{affiliates.filter((a) => a.is_active).length}</p></div>
-          </Card>
-          <Card className="flex items-center gap-4">
-            <div className="h-10 w-10 rounded-xl bg-[#FEF3C7] flex items-center justify-center"><Users className="h-5 w-5 text-[#D97706]" /></div>
-            <div><p className="text-sm text-[#6B7280]">Total Comissões</p><p className="text-xl font-semibold text-[#111827]">{formatCurrency(affiliates.reduce((sum, a) => sum + a.totalCommissions, 0) / 100)}</p></div>
-          </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <MetricCard icon={Users} label="Total" value={affiliates.length.toString()} color="primary" />
+          <MetricCard icon={UserCheck} label="Ativos" value={affiliates.filter((a) => a.is_active).length.toString()} color="success" />
+          <MetricCard icon={DollarSign} label="Total Comissões" value={formatCurrency(totalCommissions / 100)} color="info" />
         </div>
 
-        {/* Search & Table */}
+        {/* Table */}
         <Card noPadding>
-          <div className="p-6 border-b border-[#F1F3F7] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <h3 className="font-semibold text-[#111827]">Lista de Afiliados</h3>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
-              <input
-                placeholder="Buscar afiliado..."
+          <div className="p-6 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-zinc-900">Lista de Afiliados</h3>
+              <p className="text-sm text-zinc-500">{filteredAffiliates.length} afiliados encontrados</p>
+            </div>
+            <div className="w-full sm:w-72">
+              <Input
+                placeholder="Buscar por nome, código ou email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-10 pl-10 pr-4 bg-white border border-[#E8EAF0] rounded-xl text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:border-[#5B21B6]"
+                icon={Search}
               />
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-[#F8F9FC]">
-                  <TableHead>Afiliado</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Tier</TableHead>
-                  <TableHead>Vendas</TableHead>
-                  <TableHead>Ativas</TableHead>
-                  <TableHead>Comissões</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Criado em</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredAffiliates.map((affiliate, i) => (
-                  <TableRow key={affiliate.id} className={i % 2 === 1 ? "bg-[#F8F9FC]" : ""}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-[#111827]">{affiliate.profile.full_name || "Sem nome"}</p>
-                        <p className="text-xs text-[#6B7280]">{affiliate.user.email}</p>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Afiliado</TableHead>
+                <TableHead>Código</TableHead>
+                <TableHead>Tier</TableHead>
+                <TableHead>Vendas</TableHead>
+                <TableHead>Ativas</TableHead>
+                <TableHead>Comissões</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Criado em</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredAffiliates.map((affiliate) => (
+                <TableRow key={affiliate.id} className="hover:bg-zinc-50">
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-200 flex items-center justify-center">
+                        <span className="text-sm font-bold text-zinc-500">
+                          {(affiliate.profile.full_name || "?")[0].toUpperCase()}
+                        </span>
                       </div>
-                    </TableCell>
-                    <TableCell><span className="font-mono text-sm">{affiliate.affiliate_code}</span></TableCell>
-                    <TableCell><Badge variant="primary">Tier {affiliate.commission_tier} - {COMMISSION_TIERS[affiliate.commission_tier as 1 | 2 | 3].percent}%</Badge></TableCell>
-                    <TableCell className="font-semibold">{affiliate.paid_subscriptions_count}</TableCell>
-                    <TableCell>{affiliate.activeSubscriptions}</TableCell>
-                    <TableCell className="font-semibold text-[#059669]">{formatCurrency(affiliate.totalCommissions / 100)}</TableCell>
-                    <TableCell><Badge variant={affiliate.is_active ? "success" : "default"}>{affiliate.is_active ? "Ativo" : "Inativo"}</Badge></TableCell>
-                    <TableCell className="text-[#6B7280]">{formatDate(affiliate.created_at)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                      <div>
+                        <p className="font-semibold text-zinc-900">{affiliate.profile.full_name || "Sem nome"}</p>
+                        <p className="text-xs text-zinc-500">{affiliate.user.email}</p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <code className="px-2 py-1 bg-zinc-100 rounded-md text-sm font-mono">
+                      {affiliate.affiliate_code}
+                    </code>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="primary">
+                      Tier {affiliate.commission_tier} • {COMMISSION_TIERS[affiliate.commission_tier as 1 | 2 | 3].percent}%
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-bold text-zinc-900">{affiliate.paid_subscriptions_count}</TableCell>
+                  <TableCell className="text-zinc-600">{affiliate.activeSubscriptions}</TableCell>
+                  <TableCell className="font-bold text-success-600">{formatCurrency(affiliate.totalCommissions / 100)}</TableCell>
+                  <TableCell>
+                    <Badge variant={affiliate.is_active ? "success" : "default"} dot>
+                      {affiliate.is_active ? "Ativo" : "Inativo"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-zinc-500">{formatDate(affiliate.created_at)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </Card>
       </div>
     </div>

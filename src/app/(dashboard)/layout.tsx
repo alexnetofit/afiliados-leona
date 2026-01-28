@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/hooks/use-user";
 import { Sidebar } from "@/components/layout/sidebar";
-import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
   const supabase = createClient();
-  const { user, isLoading, isAdmin } = useUser();
+  const { user, profile, isLoading, isAdmin } = useUser();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -21,8 +21,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Loading state
   if (isLoading) {
     return (
-      <div className="h-screen w-screen bg-[#F8F9FC] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#5B21B6]" />
+      <div className="h-screen w-screen bg-zinc-50 flex items-center justify-center">
+        <div className="relative">
+          <div className="h-12 w-12 rounded-full border-4 border-zinc-200" />
+          <div className="absolute top-0 left-0 h-12 w-12 rounded-full border-4 border-transparent border-t-primary-600 animate-spin" />
+        </div>
       </div>
     );
   }
@@ -40,16 +43,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FC]">
-      {/* Sidebar - largura fixa 240px */}
+    <div className="min-h-screen bg-zinc-50">
+      {/* Sidebar */}
       <Sidebar 
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onLogout={handleLogout}
+        user={profile ? { name: profile.full_name || "", email: user.email } : undefined}
       />
       
-      {/* Main area - offset pelo sidebar */}
-      <div className="lg:pl-[240px] min-h-screen flex flex-col">
+      {/* Main area */}
+      <div className={cn(
+        "lg:pl-[280px] min-h-screen flex flex-col",
+        "transition-all duration-300"
+      )}>
         {children}
       </div>
     </div>

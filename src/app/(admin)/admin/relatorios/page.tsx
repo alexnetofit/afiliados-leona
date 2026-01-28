@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Card, Button, Select, LoadingScreen, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/index";
+import { Card, Button, Select, LoadingScreen, MetricCard, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/index";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Download, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
-import { formatCurrency, formatMonth } from "@/lib/utils";
+import { Download, TrendingUp, TrendingDown, DollarSign, Users } from "lucide-react";
+import { formatCurrency, formatMonth, cn } from "@/lib/utils";
 
 interface MonthlyReport {
   month: string;
@@ -72,8 +72,19 @@ export default function RelatoriosPage() {
     }
   }
 
-  const chartData = reports.map((r) => ({ month: formatMonth(r.month).split(" ")[0].slice(0, 3), value: r.netCommissions / 100 })).reverse();
-  const totals = useMemo(() => reports.reduce((acc, r) => ({ commissions: acc.commissions + r.totalCommissions, refunds: acc.refunds + r.totalRefunds, disputes: acc.disputes + r.totalDisputes, net: acc.net + r.netCommissions, newSubs: acc.newSubs + r.newSubscriptions, canceledSubs: acc.canceledSubs + r.canceledSubscriptions }), { commissions: 0, refunds: 0, disputes: 0, net: 0, newSubs: 0, canceledSubs: 0 }), [reports]);
+  const chartData = reports.map((r) => ({ 
+    month: formatMonth(r.month).split(" ")[0].slice(0, 3), 
+    value: r.netCommissions / 100 
+  })).reverse();
+  
+  const totals = useMemo(() => reports.reduce((acc, r) => ({ 
+    commissions: acc.commissions + r.totalCommissions, 
+    refunds: acc.refunds + r.totalRefunds, 
+    disputes: acc.disputes + r.totalDisputes, 
+    net: acc.net + r.netCommissions, 
+    newSubs: acc.newSubs + r.newSubscriptions, 
+    canceledSubs: acc.canceledSubs + r.canceledSubscriptions 
+  }), { commissions: 0, refunds: 0, disputes: 0, net: 0, newSubs: 0, canceledSubs: 0 }), [reports]);
 
   const handleExportCSV = () => {
     const headers = ["Mês", "Comissões", "Estornos", "Disputas", "Líquido", "Novas", "Cancelamentos"];
@@ -86,15 +97,16 @@ export default function RelatoriosPage() {
     link.click();
   };
 
-  if (isLoading) return <LoadingScreen />;
+  if (isLoading) return <LoadingScreen message="Carregando relatórios..." />;
 
   return (
     <div className="flex-1 p-6 lg:p-8">
-      <div className="max-w-[1320px] mx-auto space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+      <div className="max-w-[1400px] mx-auto space-y-8 animate-fade-in-up">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-[#111827]">Relatórios</h1>
-            <p className="text-[#6B7280]">Análise de desempenho do programa</p>
+            <h1 className="text-3xl font-bold text-zinc-900 tracking-tight">Relatórios</h1>
+            <p className="text-zinc-500 mt-1">Análise de desempenho do programa</p>
           </div>
           <div className="flex gap-3">
             <Select options={yearOptions} value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="w-32" />
@@ -102,43 +114,40 @@ export default function RelatoriosPage() {
           </div>
         </div>
 
-        {/* Summary */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="flex items-center justify-between">
-            <div><p className="text-sm text-[#6B7280]">Total Comissões</p><p className="text-2xl font-semibold text-[#059669]">{formatCurrency(totals.commissions / 100)}</p></div>
-            <TrendingUp className="h-8 w-8 text-[#059669]" />
-          </Card>
-          <Card className="flex items-center justify-between">
-            <div><p className="text-sm text-[#6B7280]">Total Estornos</p><p className="text-2xl font-semibold text-[#DC2626]">{formatCurrency((totals.refunds + totals.disputes) / 100)}</p></div>
-            <TrendingDown className="h-8 w-8 text-[#DC2626]" />
-          </Card>
-          <Card className="flex items-center justify-between">
-            <div><p className="text-sm text-[#6B7280]">Líquido</p><p className="text-2xl font-semibold text-[#5B21B6]">{formatCurrency(totals.net / 100)}</p></div>
-            <DollarSign className="h-8 w-8 text-[#5B21B6]" />
-          </Card>
-          <Card className="flex items-center justify-between">
-            <div><p className="text-sm text-[#6B7280]">Novas Assinaturas</p><p className="text-2xl font-semibold text-[#111827]">{totals.newSubs}</p></div>
-            <TrendingUp className="h-8 w-8 text-[#3B82F6]" />
-          </Card>
+        {/* Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <MetricCard icon={TrendingUp} label="Total Comissões" value={formatCurrency(totals.commissions / 100)} color="success" />
+          <MetricCard icon={TrendingDown} label="Total Estornos" value={formatCurrency((totals.refunds + totals.disputes) / 100)} color="error" />
+          <MetricCard icon={DollarSign} label="Líquido" value={formatCurrency(totals.net / 100)} color="primary" />
+          <MetricCard icon={Users} label="Novas Assinaturas" value={totals.newSubs.toString()} color="info" />
         </div>
 
         {/* Chart */}
         <Card>
-          <h3 className="font-semibold text-[#111827] mb-6">Comissões Líquidas {selectedYear}</h3>
-          <div className="h-72">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+            <div>
+              <h3 className="text-lg font-bold text-zinc-900">Comissões Líquidas {selectedYear}</h3>
+              <p className="text-sm text-zinc-500">Evolução mensal</p>
+            </div>
+          </div>
+          <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorComm" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#5B21B6" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#5B21B6" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#9333EA" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#9333EA" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F1F3F7" vertical={false} />
-                <XAxis dataKey="month" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
-                <Tooltip contentStyle={{ background: "#fff", border: "1px solid #E8EAF0", borderRadius: "12px" }} formatter={(value) => [formatCurrency(value as number), "Comissão"]} />
-                <Area type="monotone" dataKey="value" stroke="#5B21B6" strokeWidth={2} fill="url(#colorComm)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" vertical={false} />
+                <XAxis dataKey="month" stroke="#71717A" fontSize={12} tickLine={false} axisLine={false} dy={10} />
+                <YAxis stroke="#71717A" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} dx={-10} />
+                <Tooltip 
+                  contentStyle={{ background: "#fff", border: "1px solid #E4E4E7", borderRadius: "16px", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }} 
+                  formatter={(value) => [formatCurrency(value as number), "Comissão"]} 
+                  labelStyle={{ color: "#18181B", fontWeight: 600 }}
+                />
+                <Area type="monotone" dataKey="value" stroke="#9333EA" strokeWidth={3} fill="url(#colorComm)" dot={{ fill: "#9333EA", strokeWidth: 0, r: 4 }} activeDot={{ fill: "#9333EA", strokeWidth: 2, stroke: "#fff", r: 6 }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -146,37 +155,36 @@ export default function RelatoriosPage() {
 
         {/* Table */}
         <Card noPadding>
-          <div className="p-6 border-b border-[#F1F3F7]">
-            <h3 className="font-semibold text-[#111827]">Detalhamento Mensal</h3>
+          <div className="p-6 border-b border-zinc-100">
+            <h3 className="text-lg font-bold text-zinc-900">Detalhamento Mensal</h3>
+            <p className="text-sm text-zinc-500">Dados completos por mês</p>
           </div>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-[#F8F9FC]">
-                  <TableHead>Mês</TableHead>
-                  <TableHead className="text-right">Comissões</TableHead>
-                  <TableHead className="text-right">Estornos</TableHead>
-                  <TableHead className="text-right">Disputas</TableHead>
-                  <TableHead className="text-right">Líquido</TableHead>
-                  <TableHead className="text-right">Novas</TableHead>
-                  <TableHead className="text-right">Cancelamentos</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Mês</TableHead>
+                <TableHead className="text-right">Comissões</TableHead>
+                <TableHead className="text-right">Estornos</TableHead>
+                <TableHead className="text-right">Disputas</TableHead>
+                <TableHead className="text-right">Líquido</TableHead>
+                <TableHead className="text-right">Novas</TableHead>
+                <TableHead className="text-right">Cancelamentos</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {reports.map((report) => (
+                <TableRow key={report.month} className="hover:bg-zinc-50">
+                  <TableCell className="font-semibold">{formatMonth(report.month)}</TableCell>
+                  <TableCell className="text-right text-success-600 font-medium">{formatCurrency(report.totalCommissions / 100)}</TableCell>
+                  <TableCell className="text-right text-warning-600">{formatCurrency(report.totalRefunds / 100)}</TableCell>
+                  <TableCell className="text-right text-error-600">{formatCurrency(report.totalDisputes / 100)}</TableCell>
+                  <TableCell className="text-right font-bold text-zinc-900">{formatCurrency(report.netCommissions / 100)}</TableCell>
+                  <TableCell className="text-right text-success-600">{report.newSubscriptions}</TableCell>
+                  <TableCell className="text-right text-error-600">{report.canceledSubscriptions}</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {reports.map((report, i) => (
-                  <TableRow key={report.month} className={i % 2 === 1 ? "bg-[#F8F9FC]" : ""}>
-                    <TableCell className="font-medium">{formatMonth(report.month)}</TableCell>
-                    <TableCell className="text-right text-[#059669]">{formatCurrency(report.totalCommissions / 100)}</TableCell>
-                    <TableCell className="text-right text-[#D97706]">{formatCurrency(report.totalRefunds / 100)}</TableCell>
-                    <TableCell className="text-right text-[#DC2626]">{formatCurrency(report.totalDisputes / 100)}</TableCell>
-                    <TableCell className="text-right font-semibold">{formatCurrency(report.netCommissions / 100)}</TableCell>
-                    <TableCell className="text-right">{report.newSubscriptions}</TableCell>
-                    <TableCell className="text-right">{report.canceledSubscriptions}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+              ))}
+            </TableBody>
+          </Table>
         </Card>
       </div>
     </div>

@@ -3,9 +3,9 @@
 import { useState, useMemo } from "react";
 import { useUser, useAffiliateData } from "@/hooks";
 import { Header } from "@/components/layout/header";
-import { Card, Badge } from "@/components/ui/index";
-import { DollarSign, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
-import { formatCurrency, formatDateTime, isDateAvailable } from "@/lib/utils";
+import { Card, Badge, MetricCard, LoadingScreen, Select, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyState } from "@/components/ui/index";
+import { DollarSign, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Receipt } from "lucide-react";
+import { formatCurrency, formatDateTime, isDateAvailable, cn } from "@/lib/utils";
 
 export default function VendasPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -23,125 +23,127 @@ export default function VendasPage() {
   const totalRef = Math.abs((transactions || []).filter(t => t.type === "refund" || t.type === "dispute").reduce((s, t) => s + t.commission_amount_cents, 0));
 
   if (isLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#5B21B6]" />
-      </div>
-    );
+    return <LoadingScreen message="Carregando vendas..." />;
   }
 
   return (
     <>
       <Header
         title="Vendas"
-        description="Histórico de comissões"
+        description="Histórico de comissões e transações"
         user={profile ? { name: profile.full_name || "" } : undefined}
         onMenuClick={() => setSidebarOpen(!sidebarOpen)}
       />
 
       <div className="flex-1 p-6 lg:p-8">
-        <div className="max-w-[1320px] mx-auto space-y-6">
+        <div className="max-w-[1400px] mx-auto space-y-8 animate-fade-in-up">
           
           {/* Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <Card className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-[#D1FAE5] flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-[#059669]" />
-              </div>
-              <div>
-                <p className="text-sm text-[#6B7280]">Total em comissões</p>
-                <p className="text-xl font-semibold text-[#111827]">{formatCurrency(totalComm / 100)}</p>
-              </div>
-            </Card>
-            <Card className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-[#FEE2E2] flex items-center justify-center">
-                <TrendingDown className="h-6 w-6 text-[#DC2626]" />
-              </div>
-              <div>
-                <p className="text-sm text-[#6B7280]">Estornos</p>
-                <p className="text-xl font-semibold text-[#111827]">{formatCurrency(totalRef / 100)}</p>
-              </div>
-            </Card>
-            <Card className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-[#EDE9FE] flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-[#5B21B6]" />
-              </div>
-              <div>
-                <p className="text-sm text-[#6B7280]">Saldo líquido</p>
-                <p className="text-xl font-semibold text-[#111827]">
-                  {formatCurrency(((summary?.pending_cents || 0) + (summary?.available_cents || 0)) / 100)}
-                </p>
-              </div>
-            </Card>
+            <MetricCard
+              icon={TrendingUp}
+              label="Total em comissões"
+              value={formatCurrency(totalComm / 100)}
+              color="success"
+            />
+            <MetricCard
+              icon={TrendingDown}
+              label="Estornos e disputas"
+              value={formatCurrency(totalRef / 100)}
+              color="error"
+            />
+            <MetricCard
+              icon={DollarSign}
+              label="Saldo líquido"
+              value={formatCurrency(((summary?.pending_cents || 0) + (summary?.available_cents || 0)) / 100)}
+              color="primary"
+            />
           </div>
 
-          {/* Tabela */}
+          {/* Table */}
           <Card noPadding>
-            <div className="p-6 border-b border-[#F1F3F7] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <h3 className="font-semibold text-[#111827]">Transações</h3>
-              <select
+            <div className="p-6 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-zinc-900">Transações</h3>
+                <p className="text-sm text-zinc-500">Todas as suas movimentações</p>
+              </div>
+              <Select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="h-10 px-3 bg-white border border-[#E8EAF0] rounded-xl text-sm text-[#111827] focus:outline-none focus:border-[#5B21B6]"
-              >
-                <option value="all">Todos os tipos</option>
-                <option value="commission">Comissões</option>
-                <option value="refund">Estornos</option>
-                <option value="dispute">Disputas</option>
-              </select>
+                options={[
+                  { value: "all", label: "Todos os tipos" },
+                  { value: "commission", label: "Comissões" },
+                  { value: "refund", label: "Estornos" },
+                  { value: "dispute", label: "Disputas" },
+                ]}
+                className="w-full sm:w-48"
+              />
             </div>
 
             {filtered.length === 0 ? (
-              <div className="py-16 text-center">
-                <p className="text-[#6B7280]">Nenhuma transação</p>
-              </div>
+              <EmptyState
+                icon={Receipt}
+                title="Nenhuma transação"
+                description="Suas transações aparecerão aqui quando você começar a vender"
+              />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-[#F8F9FC]">
-                      <th className="text-left py-3 px-6 text-xs font-medium text-[#6B7280] uppercase">Data</th>
-                      <th className="text-left py-3 px-6 text-xs font-medium text-[#6B7280] uppercase">Tipo</th>
-                      <th className="text-left py-3 px-6 text-xs font-medium text-[#6B7280] uppercase">Valor bruto</th>
-                      <th className="text-left py-3 px-6 text-xs font-medium text-[#6B7280] uppercase">Comissão</th>
-                      <th className="text-left py-3 px-6 text-xs font-medium text-[#6B7280] uppercase">Valor</th>
-                      <th className="text-left py-3 px-6 text-xs font-medium text-[#6B7280] uppercase">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((tx, i) => {
-                      const neg = tx.commission_amount_cents < 0;
-                      const avail = tx.available_at ? isDateAvailable(tx.available_at) : false;
-                      return (
-                        <tr key={tx.id} className={i % 2 === 1 ? "bg-[#F8F9FC]" : ""}>
-                          <td className="py-4 px-6 text-sm text-[#111827]">{tx.paid_at ? formatDateTime(tx.paid_at) : "-"}</td>
-                          <td className="py-4 px-6">
-                            <Badge variant={tx.type === "commission" ? "success" : tx.type === "refund" ? "error" : "warning"}>
-                              {tx.type === "commission" ? "Comissão" : tx.type === "refund" ? "Estorno" : "Disputa"}
-                            </Badge>
-                          </td>
-                          <td className="py-4 px-6 text-sm text-[#6B7280]">{formatCurrency(Math.abs(tx.amount_gross_cents) / 100)}</td>
-                          <td className="py-4 px-6 text-sm text-[#6B7280]">{tx.commission_percent}%</td>
-                          <td className="py-4 px-6">
-                            <span className={`text-sm font-medium ${neg ? "text-[#DC2626]" : "text-[#059669]"}`}>
-                              {neg ? "-" : "+"}{formatCurrency(Math.abs(tx.commission_amount_cents) / 100)}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6">
-                            {neg ? (
-                              <Badge variant="error">Debitado</Badge>
-                            ) : avail ? (
-                              <Badge variant="success">Disponível</Badge>
-                            ) : (
-                              <Badge variant="warning">Pendente</Badge>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Valor bruto</TableHead>
+                    <TableHead>Comissão</TableHead>
+                    <TableHead>Valor</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((tx) => {
+                    const neg = tx.commission_amount_cents < 0;
+                    const avail = tx.available_at ? isDateAvailable(tx.available_at) : false;
+                    return (
+                      <TableRow key={tx.id} className="hover:bg-zinc-50">
+                        <TableCell className="font-medium">
+                          {tx.paid_at ? formatDateTime(tx.paid_at) : "-"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant={tx.type === "commission" ? "success" : tx.type === "refund" ? "error" : "warning"}
+                            dot
+                          >
+                            {tx.type === "commission" ? "Comissão" : tx.type === "refund" ? "Estorno" : "Disputa"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-zinc-500">
+                          {formatCurrency(Math.abs(tx.amount_gross_cents) / 100)}
+                        </TableCell>
+                        <TableCell className="text-zinc-500">
+                          {tx.commission_percent}%
+                        </TableCell>
+                        <TableCell>
+                          <div className={cn(
+                            "inline-flex items-center gap-1 font-semibold",
+                            neg ? "text-error-600" : "text-success-600"
+                          )}>
+                            {neg ? <ArrowDownRight className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                            {neg ? "-" : "+"}{formatCurrency(Math.abs(tx.commission_amount_cents) / 100)}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {neg ? (
+                            <Badge variant="error" size="sm">Debitado</Badge>
+                          ) : avail ? (
+                            <Badge variant="success" size="sm">Disponível</Badge>
+                          ) : (
+                            <Badge variant="warning" size="sm">Pendente</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             )}
           </Card>
         </div>
