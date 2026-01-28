@@ -1,3 +1,5 @@
+"use client";
+
 import { cn, formatCurrency } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 
@@ -10,30 +12,30 @@ interface StatCardProps {
     value: number;
     isPositive: boolean;
   };
-  variant?: "default" | "primary" | "success" | "warning";
+  variant?: "default" | "primary" | "success" | "warning" | "info";
   className?: string;
 }
 
 const variantStyles = {
   default: {
-    bg: "bg-surface",
-    iconBg: "bg-background",
-    iconColor: "text-text-secondary",
+    iconBg: "bg-gray-100",
+    iconColor: "text-gray-500",
   },
   primary: {
-    bg: "bg-gradient-leona",
-    iconBg: "bg-white/20",
-    iconColor: "text-white",
+    iconBg: "bg-[#EDE9FE]",
+    iconColor: "text-[#5B3FA6]",
   },
   success: {
-    bg: "bg-surface",
-    iconBg: "bg-success-light",
-    iconColor: "text-success",
+    iconBg: "bg-emerald-100",
+    iconColor: "text-emerald-600",
   },
   warning: {
-    bg: "bg-surface",
-    iconBg: "bg-warning-light",
-    iconColor: "text-warning",
+    iconBg: "bg-amber-100",
+    iconColor: "text-amber-600",
+  },
+  info: {
+    iconBg: "bg-blue-100",
+    iconColor: "text-blue-600",
   },
 };
 
@@ -47,64 +49,43 @@ export function StatCard({
   className,
 }: StatCardProps) {
   const styles = variantStyles[variant];
-  const isPrimary = variant === "primary";
 
   return (
     <div
       className={cn(
-        "rounded-xl p-6 shadow-card transition-shadow hover:shadow-card-hover",
-        styles.bg,
+        "bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300",
         className
       )}
     >
       <div className="flex items-start justify-between">
-        <div>
-          <p
-            className={cn(
-              "text-sm font-medium",
-              isPrimary ? "text-white/80" : "text-text-secondary"
-            )}
-          >
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-gray-500">
             {title}
           </p>
-          <p
-            className={cn(
-              "mt-2 text-3xl font-bold",
-              isPrimary ? "text-white" : "text-text-primary"
-            )}
-          >
+          <p className="text-3xl font-bold text-gray-900">
             {isCurrency ? formatCurrency(value) : value.toLocaleString("pt-BR")}
           </p>
           {trend && (
-            <div className="mt-2 flex items-center gap-1">
+            <div className="flex items-center gap-1.5 mt-2">
               <span
                 className={cn(
-                  "text-xs font-medium",
+                  "text-xs font-semibold px-2 py-0.5 rounded-full",
                   trend.isPositive
-                    ? isPrimary
-                      ? "text-white"
-                      : "text-success"
-                    : isPrimary
-                    ? "text-white/80"
-                    : "text-error"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-red-100 text-red-700"
                 )}
               >
                 {trend.isPositive ? "+" : ""}
                 {trend.value}%
               </span>
-              <span
-                className={cn(
-                  "text-xs",
-                  isPrimary ? "text-white/60" : "text-text-secondary"
-                )}
-              >
+              <span className="text-xs text-gray-400">
                 vs mês anterior
               </span>
             </div>
           )}
         </div>
         {Icon && (
-          <div className={cn("rounded-lg p-3", styles.iconBg)}>
+          <div className={cn("rounded-xl p-3", styles.iconBg)}>
             <Icon className={cn("h-6 w-6", styles.iconColor)} />
           </div>
         )}

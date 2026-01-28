@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -15,8 +16,10 @@ import {
   Settings,
   LogOut,
   TrendingUp,
+  Award,
+  Zap,
+  X,
 } from "lucide-react";
-import Image from "next/image";
 
 interface SidebarItem {
   name: string;
@@ -43,83 +46,159 @@ const adminNavItems: SidebarItem[] = [
 interface SidebarProps {
   isAdmin?: boolean;
   onLogout?: () => void;
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
+  tierData?: {
+    tier: number;
+    percent: number;
+    subscriptions: number;
+    nextTierSubs: number;
+  };
 }
 
-export function Sidebar({ isAdmin = false, onLogout }: SidebarProps) {
+const tierConfig = {
+  1: { name: "Bronze", icon: TrendingUp, color: "#CD7F32" },
+  2: { name: "Prata", icon: Award, color: "#C0C0C0" },
+  3: { name: "Ouro", icon: Zap, color: "#FFD700" },
+};
+
+export function Sidebar({ 
+  isAdmin = false, 
+  onLogout, 
+  isMobileOpen = false,
+  onMobileClose,
+  tierData = { tier: 1, percent: 30, subscriptions: 0, nextTierSubs: 20 }
+}: SidebarProps) {
   const pathname = usePathname();
   const navItems = isAdmin ? adminNavItems : affiliateNavItems;
+  const currentTier = tierConfig[tierData.tier as keyof typeof tierConfig] || tierConfig[1];
+  const TierIcon = currentTier.icon;
+  const progress = tierData.tier < 3 
+    ? Math.min((tierData.subscriptions / tierData.nextTierSubs) * 100, 100)
+    : 100;
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-surface border-r border-border">
-      <div className="flex h-full flex-col">
-        {/* Logo */}
-        <div className="flex h-16 items-center justify-center border-b border-border px-6">
-          <Link href={isAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2">
-            <div className="relative h-8 w-8">
+    <>
+      {/* Mobile Overlay */}
+      {isMobileOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={onMobileClose}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside 
+        className={cn(
+          "fixed left-0 top-0 z-50 h-screen w-[260px] bg-white border-r border-gray-200 transition-transform duration-300 ease-in-out",
+          "lg:translate-x-0",
+          isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        )}
+      >
+        <div className="flex h-full flex-col">
+          {/* Logo */}
+          <div className="flex h-16 items-center justify-between px-5 border-b border-gray-100">
+            <Link href={isAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2">
               <Image
-                src="/assets/brand/leona-logo.png"
+                src="/logo-leona-roxa.png"
                 alt="Leona"
-                fill
+                width={120}
+                height={40}
                 className="object-contain"
                 priority
               />
-            </div>
-            <span className="text-xl font-bold bg-gradient-leona bg-clip-text text-transparent">
-              Leona
-            </span>
-          </Link>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href || 
-              (item.href !== "/dashboard" && item.href !== "/admin" && pathname.startsWith(item.href));
-            
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-primary text-white"
-                    : "text-text-secondary hover:bg-background hover:text-text-primary"
-                )}
-              >
-                <item.icon className="h-5 w-5" />
-                {item.name}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Tier Progress (only for affiliates) */}
-        {!isAdmin && (
-          <div className="mx-3 mb-4 rounded-lg bg-gradient-leona p-4">
-            <div className="flex items-center gap-2 text-white">
-              <TrendingUp className="h-5 w-5" />
-              <span className="text-sm font-medium">Seu Tier</span>
-            </div>
-            <p className="mt-1 text-2xl font-bold text-white">30%</p>
-            <p className="text-xs text-white/80">Próximo: 35% (20 assinaturas)</p>
-            <div className="mt-2 h-2 w-full rounded-full bg-white/20">
-              <div className="h-full w-1/4 rounded-full bg-white" />
-            </div>
+            </Link>
+            {/* Mobile Close Button */}
+            <button 
+              onClick={onMobileClose}
+              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <X className="h-5 w-5 text-gray-500" />
+            </button>
           </div>
-        )}
 
-        {/* Logout */}
-        <div className="border-t border-border p-3">
-          <button
-            onClick={onLogout}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-text-secondary hover:bg-background hover:text-error transition-colors"
-          >
-            <LogOut className="h-5 w-5" />
-            Sair
-          </button>
+          {/* Navigation */}
+          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+              Menu
+            </p>
+            {navItems.map((item) => {
+              const isActive = pathname === item.href || 
+                (item.href !== "/dashboard" && item.href !== "/admin" && pathname.startsWith(item.href));
+              
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={onMobileClose}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                    isActive
+                      ? "bg-gradient-to-r from-[#3A1D7A] to-[#5B3FA6] text-white shadow-md shadow-[#3A1D7A]/20"
+                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  )}
+                >
+                  <item.icon className={cn(
+                    "h-5 w-5 transition-colors",
+                    isActive ? "text-white" : "text-gray-400"
+                  )} />
+                  {item.name}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Tier Progress Card (only for affiliates) */}
+          {!isAdmin && (
+            <div className="mx-3 mb-4">
+              <div className="rounded-xl bg-gradient-to-br from-[#3A1D7A] via-[#5B3FA6] to-[#8E7EEA] p-4 shadow-lg">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 rounded-lg bg-white/20">
+                    <TierIcon className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-white/70 font-medium">Seu Tier</p>
+                    <p className="text-lg font-bold text-white">
+                      {currentTier.name} - {tierData.percent}%
+                    </p>
+                  </div>
+                </div>
+                
+                {tierData.tier < 3 && (
+                  <>
+                    <div className="h-2 w-full rounded-full bg-white/20 overflow-hidden">
+                      <div 
+                        className="h-full rounded-full bg-white transition-all duration-500"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-white/80">
+                      {tierData.subscriptions}/{tierData.nextTierSubs} para próximo tier
+                    </p>
+                  </>
+                )}
+                
+                {tierData.tier === 3 && (
+                  <p className="text-xs text-white/80 mt-1">
+                    Tier máximo atingido!
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Logout */}
+          <div className="border-t border-gray-100 p-3">
+            <button
+              onClick={onLogout}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all duration-200"
+            >
+              <LogOut className="h-5 w-5" />
+              Sair
+            </button>
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }

@@ -1,15 +1,12 @@
 "use client";
 
-import { Bell, Search, Menu } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Bell, Menu } from "lucide-react";
 
 interface HeaderProps {
   title: string;
   subtitle?: string;
   userName?: string;
   onMenuClick?: () => void;
-  showSearch?: boolean;
 }
 
 export function Header({
@@ -17,61 +14,54 @@ export function Header({
   subtitle,
   userName,
   onMenuClick,
-  showSearch = false,
 }: HeaderProps) {
-  return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-surface px-6">
-      <div className="flex items-center gap-4">
-        {/* Mobile menu button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="lg:hidden"
-          onClick={onMenuClick}
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
+  const initials = userName
+    ? userName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+    : "U";
 
-        {/* Title */}
-        <div>
-          <h1 className="text-lg font-semibold text-text-primary">{title}</h1>
-          {subtitle && (
-            <p className="text-sm text-text-secondary">{subtitle}</p>
+  return (
+    <header className="sticky top-0 z-30 bg-white border-b border-gray-100">
+      <div className="flex h-16 items-center justify-between px-4 lg:px-8">
+        <div className="flex items-center gap-4">
+          {/* Mobile menu button */}
+          <button
+            onClick={onMenuClick}
+            className="lg:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors"
+          >
+            <Menu className="h-5 w-5 text-gray-600" />
+          </button>
+
+          {/* Title */}
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">{title}</h1>
+            {subtitle && (
+              <p className="text-sm text-gray-500">{subtitle}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Notifications */}
+          <button className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors">
+            <Bell className="h-5 w-5 text-gray-500" />
+            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+          </button>
+
+          {/* User */}
+          {userName && (
+            <div className="flex items-center gap-3 pl-3 border-l border-gray-200">
+              <div className="hidden sm:block text-right">
+                <p className="text-sm font-semibold text-gray-900">{userName}</p>
+                <p className="text-xs text-gray-500">Parceiro</p>
+              </div>
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#3A1D7A] to-[#5B3FA6] flex items-center justify-center shadow-md shadow-[#3A1D7A]/20">
+                <span className="text-sm font-bold text-white">
+                  {initials}
+                </span>
+              </div>
+            </div>
           )}
         </div>
-      </div>
-
-      <div className="flex items-center gap-4">
-        {/* Search */}
-        {showSearch && (
-          <div className="relative hidden md:block">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
-            <Input
-              placeholder="Buscar..."
-              className="w-64 pl-9"
-            />
-          </div>
-        )}
-
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-error" />
-        </Button>
-
-        {/* User */}
-        {userName && (
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-gradient-leona flex items-center justify-center">
-              <span className="text-sm font-medium text-white">
-                {userName.charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <div className="hidden sm:block">
-              <p className="text-sm font-medium text-text-primary">{userName}</p>
-            </div>
-          </div>
-        )}
       </div>
     </header>
   );

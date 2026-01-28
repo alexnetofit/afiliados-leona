@@ -1,20 +1,27 @@
 "use client";
 
+import { useState } from "react";
 import { useUser, useAffiliateData } from "@/hooks";
 import { Header } from "@/components/layout/header";
 import { StatCard, TierProgress, CommissionChart, RecentSales } from "@/components/dashboard";
-import { LoadingScreen } from "@/components/ui/spinner";
-import { Clock, CheckCircle, Wallet, Users, CreditCard, TrendingUp } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { Clock, CheckCircle, Wallet, Users, CreditCard, TrendingUp, Loader2 } from "lucide-react";
 
 export default function DashboardPage() {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { profile, affiliate, isLoading: userLoading } = useUser();
   const { summary, transactions, isLoading: dataLoading } = useAffiliateData(affiliate?.id);
 
   const isLoading = userLoading || dataLoading;
 
   if (isLoading) {
-    return <LoadingScreen />;
+    return (
+      <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-[#5B3FA6]" />
+          <p className="text-gray-500 text-sm">Carregando dados...</p>
+        </div>
+      </div>
+    );
   }
 
   // Generate chart data from transactions (last 6 months)
@@ -34,16 +41,17 @@ export default function DashboardPage() {
     }));
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-[#F8F9FC]">
       <Header
         title="Dashboard"
-        subtitle={`Bem-vindo, ${profile?.full_name || "Parceiro"}!`}
+        subtitle={`Bem-vindo de volta, ${profile?.full_name?.split(" ")[0] || "Parceiro"}!`}
         userName={profile?.full_name || undefined}
+        onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
 
-      <div className="p-6 space-y-6">
-        {/* Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="p-4 lg:p-8 space-y-6">
+        {/* Balance Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
           <StatCard
             title="Saldo Pendente"
             value={summary?.pending_cents || 0}
@@ -68,21 +76,24 @@ export default function DashboardPage() {
         </div>
 
         {/* Secondary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6">
           <StatCard
             title="Trials Iniciados"
             value={summary?.total_trials || 0}
             icon={Users}
+            variant="info"
           />
           <StatCard
             title="Assinaturas Ativas"
             value={summary?.active_subscriptions || 0}
             icon={CreditCard}
+            variant="success"
           />
           <StatCard
             title="Total de Assinaturas"
             value={summary?.total_subscriptions || 0}
             icon={TrendingUp}
+            variant="primary"
           />
         </div>
 
@@ -93,7 +104,7 @@ export default function DashboardPage() {
         />
 
         {/* Charts and Recent Activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <CommissionChart data={chartData} />
           <RecentSales sales={recentSales} />
         </div>
