@@ -289,7 +289,7 @@ export default function ConfiguracoesPage() {
                       >
                         {log.status === "completed" ? "Concluído" : log.status === "error" ? "Erro" : "Executando"}
                       </Badge>
-                      <Badge variant="secondary" size="sm">
+                      <Badge variant="default" size="sm">
                         {log.triggered_by === "cron" ? "Automático" : "Manual"}
                       </Badge>
                     </div>
