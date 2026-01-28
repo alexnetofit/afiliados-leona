@@ -150,9 +150,17 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-zinc-700 mb-2">
-                Senha
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-semibold text-zinc-700">
+                  Senha
+                </label>
+                <Link 
+                  href="/forgot-password"
+                  className="text-sm text-primary-600 hover:text-primary-700 font-medium transition-colors"
+                >
+                  Esqueceu a senha?
+                </Link>
+              </div>
               <div className="relative group">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400 group-focus-within:text-primary-500 transition-colors" />
                 <input

@@ -5,7 +5,7 @@ import { useAppData } from "@/contexts";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
 import { Card, Button, Badge, Input, LoadingScreen, Alert, Progress } from "@/components/ui/index";
-import { User, Key, CreditCard, Save, Check, Trophy, Star, ExternalLink } from "lucide-react";
+import { User, Key, CreditCard, Save, Check, Trophy, Star, ExternalLink, Lock, Eye, EyeOff } from "lucide-react";
 import { COMMISSION_TIERS } from "@/types";
 
 export default function PerfilPage() {
@@ -18,6 +18,15 @@ export default function PerfilPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  
+  // Password change states
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordSaved, setPasswordSaved] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
 
   const supabase = createClient();
 
@@ -61,6 +70,58 @@ export default function PerfilPage() {
       setError("Erro ao salvar");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError("");
+    setPasswordSaved(false);
+
+    if (newPassword.length < 6) {
+      setPasswordError("A nova senha deve ter pelo menos 6 caracteres");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("As senhas não coincidem");
+      return;
+    }
+
+    setSavingPassword(true);
+
+    try {
+      // First, verify current password by re-authenticating
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user?.email || "",
+        password: currentPassword,
+      });
+
+      if (signInError) {
+        setPasswordError("Senha atual incorreta");
+        setSavingPassword(false);
+        return;
+      }
+
+      // Update to new password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) {
+        setPasswordError(updateError.message);
+        setSavingPassword(false);
+        return;
+      }
+
+      setPasswordSaved(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => setPasswordSaved(false), 3000);
+    } catch {
+      setPasswordError("Erro ao alterar senha");
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -164,6 +225,80 @@ export default function PerfilPage() {
                 </div>
               </div>
             )}
+          </Card>
+
+          {/* Change Password */}
+          <Card>
+            <div className="flex items-center gap-4 mb-8">
+              <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-zinc-100 to-zinc-50 flex items-center justify-center">
+                <Lock className="h-7 w-7 text-zinc-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-zinc-900">Alterar senha</h3>
+                <p className="text-sm text-zinc-500">Atualize sua senha de acesso</p>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div className="relative">
+                <Input
+                  label="Senha atual"
+                  type={showPasswords ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+              </div>
+              
+              <div className="relative">
+                <Input
+                  label="Nova senha"
+                  type={showPasswords ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  hint="Mínimo de 6 caracteres"
+                />
+              </div>
+              
+              <div className="relative">
+                <Input
+                  label="Confirmar nova senha"
+                  type={showPasswords ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowPasswords(!showPasswords)}
+                className="flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-700 transition-colors"
+              >
+                {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPasswords ? "Ocultar senhas" : "Mostrar senhas"}
+              </button>
+
+              {passwordError && (
+                <Alert variant="error">{passwordError}</Alert>
+              )}
+
+              {passwordSaved && (
+                <Alert variant="success" icon={Check}>
+                  Senha alterada com sucesso!
+                </Alert>
+              )}
+
+              <Button 
+                onClick={handleChangePassword} 
+                loading={savingPassword}
+                variant="secondary"
+                disabled={!currentPassword || !newPassword || !confirmPassword}
+              >
+                Alterar senha
+              </Button>
+            </div>
           </Card>
 
           {/* Payment Settings */}
