@@ -59,7 +59,7 @@ export function CommissionChart({ data, title = "Comissões por Mês" }: Commiss
                 borderRadius: "8px",
                 boxShadow: "0 6px 18px rgba(90, 63, 166, 0.08)",
               }}
-              formatter={(value: number) => [formatCurrency(value), "Comissão"]}
+              formatter={(value) => [formatCurrency(value as number), "Comissão"]}
               labelStyle={{ color: "#1F1F2E", fontWeight: 600 }}
             />
             <Area

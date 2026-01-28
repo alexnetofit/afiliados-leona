@@ -54,29 +54,29 @@ export function useAffiliateData(affiliateId?: string): UseAffiliateDataReturn {
         supabase.from("monthly_payouts").select("*").eq("affiliate_id", affiliateId).order("month", { ascending: false }),
       ]);
 
-      setAffiliate(affiliateRes.data);
-      setLinks(linksRes.data || []);
-      setSubscriptions(subscriptionsRes.data || []);
-      setTransactions(transactionsRes.data || []);
-      setPayouts(payoutsRes.data || []);
+      setAffiliate(affiliateRes.data as Affiliate | null);
+      setLinks((linksRes.data || []) as AffiliateLink[]);
+      setSubscriptions((subscriptionsRes.data || []) as Subscription[]);
+      setTransactions((transactionsRes.data || []) as Transaction[]);
+      setPayouts((payoutsRes.data || []) as MonthlyPayout[]);
 
       // Calculate summary
       const now = new Date();
-      const txs = transactionsRes.data || [];
+      const txs = (transactionsRes.data || []) as Transaction[];
       
       const pendingCents = txs
-        .filter(t => t.type === 'commission' && new Date(t.available_at) > now)
+        .filter(t => t.type === 'commission' && t.available_at && new Date(t.available_at) > now)
         .reduce((sum, t) => sum + t.commission_amount_cents, 0);
 
       const availableCents = txs
-        .filter(t => new Date(t.available_at) <= now)
+        .filter(t => t.available_at && new Date(t.available_at) <= now)
         .reduce((sum, t) => sum + t.commission_amount_cents, 0);
 
-      const paidCents = (payoutsRes.data || [])
+      const paidCents = ((payoutsRes.data || []) as MonthlyPayout[])
         .filter(p => p.status === 'paid')
         .reduce((sum, p) => sum + p.total_payable_cents, 0);
 
-      const subs = subscriptionsRes.data || [];
+      const subs = (subscriptionsRes.data || []) as Subscription[];
       
       setSummary({
         pending_cents: pendingCents,

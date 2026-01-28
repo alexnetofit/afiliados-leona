@@ -43,17 +43,18 @@ export function useUser(): UseUserReturn {
         .eq("id", user.id)
         .single();
 
-      setProfile(profileData);
+      const typedProfile = profileData as Profile | null;
+      setProfile(typedProfile);
 
       // Fetch affiliate if not admin
-      if (profileData?.role !== "admin") {
+      if (typedProfile?.role !== "admin") {
         const { data: affiliateData } = await supabase
           .from("affiliates")
           .select("*")
           .eq("user_id", user.id)
           .single();
 
-        setAffiliate(affiliateData);
+        setAffiliate(affiliateData as Affiliate | null);
       }
     } catch (error) {
       console.error("Error fetching user data:", error);

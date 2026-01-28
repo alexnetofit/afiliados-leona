@@ -132,6 +132,11 @@ async function handleSubscriptionCreatedOrUpdated(subscription: Stripe.Subscript
   const status = subscription.status;
   const isTrial = status === "trialing";
   
+  // Cast to any for flexible property access (Stripe API version compatibility)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sub = subscription as any;
+  const currentPeriodEnd = sub.current_period_end || item?.current_period_end;
+  
   // Upsert subscription
   await supabase.from("subscriptions").upsert({
     affiliate_id: affiliateId,
@@ -142,18 +147,20 @@ async function handleSubscriptionCreatedOrUpdated(subscription: Stripe.Subscript
     amount_cents: amountCents,
     status: status,
     is_trial: isTrial,
-    trial_start: subscription.trial_start 
-      ? new Date(subscription.trial_start * 1000).toISOString() 
+    trial_start: sub.trial_start 
+      ? new Date(sub.trial_start * 1000).toISOString() 
       : null,
-    trial_end: subscription.trial_end 
-      ? new Date(subscription.trial_end * 1000).toISOString() 
+    trial_end: sub.trial_end 
+      ? new Date(sub.trial_end * 1000).toISOString() 
       : null,
-    started_at: subscription.start_date 
-      ? new Date(subscription.start_date * 1000).toISOString() 
+    started_at: sub.start_date 
+      ? new Date(sub.start_date * 1000).toISOString() 
       : null,
-    current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-    canceled_at: subscription.canceled_at 
-      ? new Date(subscription.canceled_at * 1000).toISOString() 
+    current_period_end: currentPeriodEnd 
+      ? new Date(currentPeriodEnd * 1000).toISOString() 
+      : null,
+    canceled_at: sub.canceled_at 
+      ? new Date(sub.canceled_at * 1000).toISOString() 
       : null,
     last_event_at: new Date().toISOString(),
   }, {
@@ -173,12 +180,16 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
+  // Cast to any for flexible property access (Stripe API version compatibility)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const inv = invoice as any;
+  
   // Skip if no subscription or no amount
-  if (!invoice.subscription || !invoice.amount_paid || invoice.amount_paid <= 0) {
+  if (!inv.subscription || !inv.amount_paid || inv.amount_paid <= 0) {
     return;
   }
 
-  const customerId = invoice.customer as string;
+  const customerId = inv.customer as string;
   const affiliateId = await getAffiliateForCustomer(customerId);
   
   if (!affiliateId) return;
@@ -202,26 +213,26 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   if (!affiliate) return;
 
   const commissionPercent = getCommissionPercent(affiliate.commission_tier);
-  const commissionAmount = Math.round(invoice.amount_paid * commissionPercent / 100);
+  const commissionAmount = Math.round(inv.amount_paid * commissionPercent / 100);
 
   // Calculate available_at (+15 days)
-  const paidAt = invoice.status_transitions?.paid_at 
-    ? new Date(invoice.status_transitions.paid_at * 1000) 
+  const paidAt = inv.status_transitions?.paid_at 
+    ? new Date(inv.status_transitions.paid_at * 1000) 
     : new Date();
   const availableAt = new Date(paidAt);
   availableAt.setDate(availableAt.getDate() + 15);
 
   // Get subscription ID from our database
-  const subscriptionRecord = await getSubscriptionByStripeId(invoice.subscription as string);
+  const subscriptionRecord = await getSubscriptionByStripeId(inv.subscription as string);
 
   // Create transaction
   await supabase.from("transactions").insert({
     affiliate_id: affiliateId,
     subscription_id: subscriptionRecord?.id || null,
     stripe_invoice_id: invoice.id,
-    stripe_charge_id: invoice.charge as string,
+    stripe_charge_id: inv.charge as string,
     type: "commission",
-    amount_gross_cents: invoice.amount_paid,
+    amount_gross_cents: inv.amount_paid,
     commission_percent: commissionPercent,
     commission_amount_cents: commissionAmount,
     paid_at: paidAt.toISOString(),
@@ -336,16 +347,20 @@ async function handleDisputeCreated(dispute: Stripe.Dispute) {
 }
 
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+  // Cast to any for flexible property access (Stripe API version compatibility)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const inv = invoice as any;
+  
   // We don't show failed payments to affiliates (as per spec)
   // Just update subscription status if needed
-  if (invoice.subscription) {
+  if (inv.subscription) {
     await supabase
       .from("subscriptions")
       .update({
         status: "past_due",
         last_event_at: new Date().toISOString(),
       })
-      .eq("stripe_subscription_id", invoice.subscription);
+      .eq("stripe_subscription_id", inv.subscription);
   }
 }
 
@@ -398,7 +413,7 @@ export async function POST(request: NextRequest) {
     stripe_event_id: event.id,
     type: event.type,
     status: "pending",
-    payload: event.data.object as Record<string, unknown>,
+    payload: event.data.object as unknown as Record<string, unknown>,
   }, {
     onConflict: "stripe_event_id",
   });
