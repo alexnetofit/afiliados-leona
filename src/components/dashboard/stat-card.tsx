@@ -8,30 +8,26 @@ interface StatCardProps {
   value: number;
   isCurrency?: boolean;
   icon?: LucideIcon;
-  variant?: "default" | "primary" | "success" | "warning" | "info";
+  variant?: "default" | "primary" | "success" | "warning";
   className?: string;
 }
 
 const variantStyles = {
   default: {
-    iconBg: "bg-gray-100",
-    iconColor: "text-gray-500",
+    iconBg: "bg-[#EEF0F6]",
+    iconColor: "text-[#6B6F8D]",
   },
   primary: {
-    iconBg: "bg-violet-100",
-    iconColor: "text-violet-600",
+    iconBg: "bg-[#3A1D7A]/10",
+    iconColor: "text-[#3A1D7A]",
   },
   success: {
-    iconBg: "bg-emerald-100",
+    iconBg: "bg-emerald-50",
     iconColor: "text-emerald-600",
   },
   warning: {
-    iconBg: "bg-amber-100",
+    iconBg: "bg-amber-50",
     iconColor: "text-amber-600",
-  },
-  info: {
-    iconBg: "bg-blue-100",
-    iconColor: "text-blue-600",
   },
 };
 
@@ -51,19 +47,19 @@ export function StatCard({
 
   return (
     <div className={cn(
-      "bg-white rounded-2xl p-6 border border-gray-100 shadow-sm",
+      "bg-white rounded-2xl p-6 border border-[#E5E7F2] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_8px_24px_rgba(58,29,122,0.06)] transition-all hover:shadow-[0_1px_3px_rgba(0,0,0,0.04),0_12px_32px_rgba(58,29,122,0.10)]",
       className
     )}>
-      <div className="flex items-start justify-between">
+      <div className="flex items-center gap-4">
         {Icon && (
-          <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", styles.iconBg)}>
-            <Icon className={cn("h-6 w-6", styles.iconColor)} />
+          <div className={cn("h-11 w-11 rounded-xl flex items-center justify-center", styles.iconBg)}>
+            <Icon className={cn("h-5 w-5", styles.iconColor)} strokeWidth={1.75} />
           </div>
         )}
-      </div>
-      <div className="mt-4">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{title}</p>
-        <p className="text-2xl font-bold text-gray-900 mt-1">{formattedValue}</p>
+        <div>
+          <p className="text-sm text-[#6B6F8D]">{title}</p>
+          <p className="text-2xl font-semibold text-[#1F1F2E] tracking-tight">{formattedValue}</p>
+        </div>
       </div>
     </div>
   );

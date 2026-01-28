@@ -3,15 +3,15 @@
 import { useState, useMemo } from "react";
 import { useUser, useAffiliateData } from "@/hooks";
 import { Header } from "@/components/layout/header";
-import { CreditCard, AlertTriangle, RefreshCcw, Loader2, Sparkles, Check, Clock, X, AlertCircle } from "lucide-react";
+import { CreditCard, AlertTriangle, RefreshCcw, Loader2 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 const statusConfig = {
-  trialing: { label: "Trial", bg: "bg-blue-100", text: "text-blue-700", icon: Sparkles },
-  active: { label: "Ativa", bg: "bg-emerald-100", text: "text-emerald-700", icon: Check },
-  past_due: { label: "Atrasada", bg: "bg-amber-100", text: "text-amber-700", icon: Clock },
-  canceled: { label: "Cancelada", bg: "bg-gray-100", text: "text-gray-700", icon: X },
-  unpaid: { label: "Não Paga", bg: "bg-red-100", text: "text-red-700", icon: AlertCircle },
+  trialing: { label: "Trial", bg: "bg-blue-50", text: "text-blue-700" },
+  active: { label: "Ativa", bg: "bg-emerald-50", text: "text-emerald-700" },
+  past_due: { label: "Atrasada", bg: "bg-amber-50", text: "text-amber-700" },
+  canceled: { label: "Cancelada", bg: "bg-gray-100", text: "text-gray-700" },
+  unpaid: { label: "Não paga", bg: "bg-red-50", text: "text-red-700" },
 };
 
 export default function AssinaturasPage() {
@@ -22,7 +22,6 @@ export default function AssinaturasPage() {
 
   const isLoading = userLoading || dataLoading;
 
-  // Filter subscriptions
   const filteredSubscriptions = useMemo(() => {
     return (subscriptions || []).filter((s) => {
       if (statusFilter !== "all" && s.status !== statusFilter) return false;
@@ -30,7 +29,6 @@ export default function AssinaturasPage() {
     });
   }, [subscriptions, statusFilter]);
 
-  // Calculate stats
   const stats = useMemo(() => {
     const subs = subscriptions || [];
     return {
@@ -44,146 +42,126 @@ export default function AssinaturasPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-[#5B3FA6]" />
-          <p className="text-gray-500 text-sm">Carregando...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#3A1D7A]" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FC]">
+    <>
       <Header 
         title="Assinaturas" 
-        subtitle="Acompanhe as assinaturas dos seus indicados"
+        subtitle="Clientes dos seus indicados"
         userName={profile?.full_name || undefined}
         onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
 
-      <div className="p-4 lg:p-8 space-y-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Trial</p>
-            <p className="text-2xl font-bold text-blue-600 mt-1">{stats.trialing}</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Ativas</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{stats.active}</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Canceladas</p>
-            <p className="text-2xl font-bold text-gray-600 mt-1">{stats.canceled}</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Com Refund</p>
-            <p className="text-2xl font-bold text-amber-600 mt-1">{stats.withRefund}</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Com Disputa</p>
-            <p className="text-2xl font-bold text-red-600 mt-1">{stats.withDispute}</p>
-          </div>
+      <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          {[
+            { label: "Trial", value: stats.trialing, color: "text-blue-600" },
+            { label: "Ativas", value: stats.active, color: "text-emerald-600" },
+            { label: "Canceladas", value: stats.canceled, color: "text-gray-600" },
+            { label: "Com refund", value: stats.withRefund, color: "text-amber-600" },
+            { label: "Com disputa", value: stats.withDispute, color: "text-red-600" },
+          ].map((stat) => (
+            <div key={stat.label} className="bg-white rounded-xl p-4 border border-[#E5E7F2] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_8px_24px_rgba(58,29,122,0.06)]">
+              <p className="text-xs text-[#6B6F8D] uppercase tracking-wider">{stat.label}</p>
+              <p className={`text-2xl font-semibold mt-1 ${stat.color}`}>{stat.value}</p>
+            </div>
+          ))}
         </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6 border-b border-gray-100">
+        {/* Tabela */}
+        <div className="bg-white rounded-2xl border border-[#E5E7F2] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_8px_24px_rgba(58,29,122,0.06)] overflow-hidden">
+          <div className="p-5 border-b border-[#E5E7F2]">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <h2 className="text-lg font-semibold text-gray-900">Lista de Assinaturas</h2>
+              <h2 className="text-base font-semibold text-[#1F1F2E]">Lista de assinaturas</h2>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:border-[#5B3FA6] focus:ring-2 focus:ring-[#5B3FA6]/20 outline-none"
+                className="h-10 px-3 rounded-xl border border-[#E5E7F2] bg-white text-sm text-[#1F1F2E] focus:outline-none focus:border-[#3A1D7A] focus:ring-4 focus:ring-[#3A1D7A]/10"
               >
                 <option value="all">Todos os status</option>
                 <option value="trialing">Trial</option>
                 <option value="active">Ativa</option>
                 <option value="past_due">Atrasada</option>
                 <option value="canceled">Cancelada</option>
-                <option value="unpaid">Não Paga</option>
+                <option value="unpaid">Não paga</option>
               </select>
             </div>
           </div>
 
           {filteredSubscriptions.length === 0 ? (
             <div className="text-center py-16">
-              <div className="w-16 h-16 mx-auto rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-                <CreditCard className="h-8 w-8 text-gray-400" />
+              <div className="h-12 w-12 mx-auto rounded-xl bg-[#F8F9FC] flex items-center justify-center mb-3">
+                <CreditCard className="h-6 w-6 text-[#6B6F8D]" />
               </div>
-              <p className="text-gray-600 font-medium">Nenhuma assinatura encontrada</p>
-              <p className="text-gray-400 text-sm mt-1">Quando seus indicados assinarem, elas aparecerão aqui</p>
+              <p className="text-sm font-medium text-[#1F1F2E]">Nenhuma assinatura encontrada</p>
+              <p className="text-xs text-[#6B6F8D] mt-1">Assinaturas dos seus indicados aparecerão aqui</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Valor</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Início</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Próx. Cobrança</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Trial</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Flags</th>
+                <thead>
+                  <tr className="bg-[#F8F9FC]">
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-[#6B6F8D] uppercase tracking-wider">Cliente</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-[#6B6F8D] uppercase tracking-wider">Status</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-[#6B6F8D] uppercase tracking-wider">Valor</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-[#6B6F8D] uppercase tracking-wider">Início</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-[#6B6F8D] uppercase tracking-wider">Próxima cobrança</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-[#6B6F8D] uppercase tracking-wider">Trial</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-[#6B6F8D] uppercase tracking-wider">Flags</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredSubscriptions.map((subscription) => {
+                <tbody className="divide-y divide-[#E5E7F2]">
+                  {filteredSubscriptions.map((subscription, idx) => {
                     const status = statusConfig[subscription.status as keyof typeof statusConfig] || statusConfig.active;
-                    const StatusIcon = status.icon;
                     
                     return (
-                      <tr key={subscription.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      <tr key={subscription.id} className={idx % 2 === 1 ? "bg-[#F8F9FC]/50" : ""}>
+                        <td className="px-5 py-4 text-sm font-medium text-[#1F1F2E]">
                           {subscription.customer_name || "Cliente"}
                         </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold ${status.bg} ${status.text}`}>
-                            <StatusIcon className="h-3 w-3" />
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-medium ${status.bg} ${status.text}`}>
                             {status.label}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-700">
-                          {subscription.amount_cents
-                            ? formatCurrency(subscription.amount_cents)
-                            : "-"}
+                        <td className="px-5 py-4 text-sm text-[#6B6F8D]">
+                          {subscription.amount_cents ? formatCurrency(subscription.amount_cents) : "-"}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-700">
-                          {subscription.started_at
-                            ? formatDate(subscription.started_at)
-                            : "-"}
+                        <td className="px-5 py-4 text-sm text-[#6B6F8D]">
+                          {subscription.started_at ? formatDate(subscription.started_at) : "-"}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-700">
-                          {subscription.current_period_end
-                            ? formatDate(subscription.current_period_end)
-                            : "-"}
+                        <td className="px-5 py-4 text-sm text-[#6B6F8D]">
+                          {subscription.current_period_end ? formatDate(subscription.current_period_end) : "-"}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-5 py-4">
                           {subscription.is_trial || subscription.status === "trialing" ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-100 text-blue-700">
-                              <Sparkles className="h-3 w-3" />
+                            <span className="inline-flex px-2 py-0.5 rounded-md text-xs font-medium bg-blue-50 text-blue-700">
                               Sim
                             </span>
                           ) : (
-                            <span className="text-gray-400 text-sm">Não</span>
+                            <span className="text-sm text-[#6B6F8D]">Não</span>
                           )}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-5 py-4">
                           <div className="flex gap-2">
                             {subscription.has_refund && (
-                              <span title="Teve refund" className="p-1.5 rounded-lg bg-amber-100">
-                                <RefreshCcw className="h-4 w-4 text-amber-600" />
+                              <span title="Teve refund" className="p-1.5 rounded-md bg-amber-50">
+                                <RefreshCcw className="h-3.5 w-3.5 text-amber-600" />
                               </span>
                             )}
                             {subscription.has_dispute && (
-                              <span title="Teve disputa" className="p-1.5 rounded-lg bg-red-100">
-                                <AlertTriangle className="h-4 w-4 text-red-600" />
+                              <span title="Teve disputa" className="p-1.5 rounded-md bg-red-50">
+                                <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
                               </span>
                             )}
                             {!subscription.has_refund && !subscription.has_dispute && (
-                              <span className="text-gray-400 text-sm">-</span>
+                              <span className="text-sm text-[#6B6F8D]">-</span>
                             )}
                           </div>
                         </td>
@@ -196,6 +174,6 @@ export default function AssinaturasPage() {
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }

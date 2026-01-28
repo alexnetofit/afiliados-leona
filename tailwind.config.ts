@@ -9,78 +9,54 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+      },
       colors: {
-        // Paleta Leona - Primária
+        // Primary - usado apenas como acento
         primary: {
-          DEFAULT: "#3A1D7A",
-          light: "#5B3FA6",
-          lighter: "#8E7EEA",
-          lightest: "#C6BEF5",
-          foreground: "#FFFFFF",
+          DEFAULT: '#3A1D7A',
+          light: '#5B3FA6',
+          lighter: '#8E7EEA',
+          lightest: '#C6BEF5',
         },
         // Neutros
-        background: "#F8F9FC",
-        surface: "#FFFFFF",
-        border: "#E5E7F2",
-        text: {
-          primary: "#1F1F2E",
-          secondary: "#6B6F8D",
-        },
-        // Cores de status
-        success: {
-          DEFAULT: "#10B981",
-          light: "#D1FAE5",
-        },
-        warning: {
-          DEFAULT: "#F59E0B",
-          light: "#FEF3C7",
-        },
-        error: {
-          DEFAULT: "#EF4444",
-          light: "#FEE2E2",
-        },
-        info: {
-          DEFAULT: "#3B82F6",
-          light: "#DBEAFE",
-        },
-      },
-      boxShadow: {
-        card: "0 6px 18px rgba(90, 63, 166, 0.08)",
-        "card-hover": "0 8px 24px rgba(90, 63, 166, 0.12)",
-        button: "0 4px 12px rgba(58, 29, 122, 0.25)",
-      },
-      backgroundImage: {
-        "gradient-leona": "linear-gradient(135deg, #3A1D7A, #5B3FA6, #8E7EEA)",
-        "gradient-leona-subtle": "linear-gradient(135deg, #C6BEF5, #8E7EEA)",
+        surface: '#FFFFFF',
+        background: '#F8F9FC',
+        muted: '#EEF0F6',
+        border: '#E5E7F2',
+        // Texto
+        foreground: '#1F1F2E',
+        'foreground-muted': '#6B6F8D',
+        // Status
+        success: '#10B981',
+        warning: '#F59E0B',
+        error: '#EF4444',
+        info: '#3B82F6',
       },
       borderRadius: {
-        lg: "12px",
-        md: "8px",
-        sm: "6px",
+        'sm': '8px',
+        'md': '12px',
+        'lg': '16px',
+        'xl': '20px',
+        '2xl': '24px',
       },
-      fontFamily: {
-        sans: ["var(--font-geist-sans)", "Inter", "system-ui", "sans-serif"],
-        mono: ["var(--font-geist-mono)", "monospace"],
+      boxShadow: {
+        'card': '0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(58,29,122,0.06)',
+        'card-hover': '0 1px 3px rgba(0,0,0,0.04), 0 12px 32px rgba(58,29,122,0.10)',
+        'button': '0 1px 2px rgba(0,0,0,0.05)',
+        'input': '0 1px 2px rgba(0,0,0,0.04)',
+        'dropdown': '0 4px 24px rgba(0,0,0,0.12)',
       },
-      animation: {
-        "fade-in": "fadeIn 0.2s ease-in-out",
-        "slide-up": "slideUp 0.3s ease-out",
-        "slide-down": "slideDown 0.3s ease-out",
-        spin: "spin 1s linear infinite",
-      },
-      keyframes: {
-        fadeIn: {
-          "0%": { opacity: "0" },
-          "100%": { opacity: "1" },
-        },
-        slideUp: {
-          "0%": { transform: "translateY(10px)", opacity: "0" },
-          "100%": { transform: "translateY(0)", opacity: "1" },
-        },
-        slideDown: {
-          "0%": { transform: "translateY(-10px)", opacity: "0" },
-          "100%": { transform: "translateY(0)", opacity: "1" },
-        },
+      fontSize: {
+        'xs': ['0.75rem', { lineHeight: '1rem', letterSpacing: '0.01em' }],
+        'sm': ['0.875rem', { lineHeight: '1.25rem', letterSpacing: '0' }],
+        'base': ['1rem', { lineHeight: '1.5rem', letterSpacing: '-0.01em' }],
+        'lg': ['1.125rem', { lineHeight: '1.75rem', letterSpacing: '-0.01em' }],
+        'xl': ['1.25rem', { lineHeight: '1.75rem', letterSpacing: '-0.02em' }],
+        '2xl': ['1.5rem', { lineHeight: '2rem', letterSpacing: '-0.02em' }],
+        '3xl': ['1.875rem', { lineHeight: '2.25rem', letterSpacing: '-0.02em' }],
+        '4xl': ['2.25rem', { lineHeight: '2.5rem', letterSpacing: '-0.03em' }],
       },
     },
   },

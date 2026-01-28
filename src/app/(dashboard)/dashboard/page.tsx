@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useUser, useAffiliateData } from "@/hooks";
 import { Header } from "@/components/layout/header";
 import { StatCard, TierProgress, CommissionChart, RecentSales } from "@/components/dashboard";
-import { Clock, CheckCircle, Wallet, Users, CreditCard, TrendingUp, Loader2 } from "lucide-react";
+import { Clock, CheckCircle, Wallet, Loader2 } from "lucide-react";
 
 export default function DashboardPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -16,10 +16,7 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-10 w-10 animate-spin text-[#3A1D7A]" />
-          <p className="text-gray-500 text-sm font-medium">Carregando...</p>
-        </div>
+        <Loader2 className="h-8 w-8 animate-spin text-[#3A1D7A]" />
       </div>
     );
   }
@@ -47,25 +44,25 @@ export default function DashboardPage() {
         onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
 
-      <div className="p-6 lg:p-8">
-        {/* Saldos - 3 colunas */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+        {/* Saldos */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
-            title="Saldo Pendente"
+            title="Saldo pendente"
             value={(summary?.pending_cents || 0) / 100}
             isCurrency
             icon={Clock}
             variant="warning"
           />
           <StatCard
-            title="Saldo Disponível"
+            title="Saldo disponível"
             value={(summary?.available_cents || 0) / 100}
             isCurrency
             icon={CheckCircle}
             variant="success"
           />
           <StatCard
-            title="Total Recebido"
+            title="Total recebido"
             value={(summary?.paid_cents || 0) / 100}
             isCurrency
             icon={Wallet}
@@ -73,52 +70,13 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Stats secundários - 3 colunas */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-blue-50 flex items-center justify-center">
-                <Users className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Trials</p>
-                <p className="text-2xl font-bold text-gray-900">{summary?.total_trials || 0}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-emerald-50 flex items-center justify-center">
-                <CreditCard className="h-6 w-6 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Ativas</p>
-                <p className="text-2xl font-bold text-gray-900">{summary?.active_subscriptions || 0}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-violet-50 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-violet-600" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Total</p>
-                <p className="text-2xl font-bold text-gray-900">{summary?.total_subscriptions || 0}</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Tier Progress */}
+        <TierProgress
+          currentTier={affiliate?.commission_tier || 1}
+          paidSubscriptions={affiliate?.paid_subscriptions_count || 0}
+        />
 
-        {/* Tier Progress - largura total */}
-        <div className="mb-8">
-          <TierProgress
-            currentTier={affiliate?.commission_tier || 1}
-            paidSubscriptions={affiliate?.paid_subscriptions_count || 0}
-          />
-        </div>
-
-        {/* Gráfico e Vendas Recentes - 2 colunas */}
+        {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <CommissionChart data={chartData} />
           <RecentSales sales={recentSales} />

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/hooks/use-user";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -16,7 +15,7 @@ export default function DashboardLayout({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const router = useRouter();
   const supabase = createClient();
-  const { user, profile, affiliate, isLoading, isAdmin } = useUser();
+  const { user, affiliate, isLoading, isAdmin } = useUser();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -26,11 +25,8 @@ export default function DashboardLayout({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-[#3A1D7A]" />
-          <p className="text-gray-500 text-sm">Carregando...</p>
-        </div>
+      <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#3A1D7A]" />
       </div>
     );
   }
@@ -53,7 +49,7 @@ export default function DashboardLayout({
   } : undefined;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F8F9FC]">
       <Sidebar 
         onLogout={handleLogout}
         isMobileOpen={isMobileMenuOpen}
@@ -61,8 +57,7 @@ export default function DashboardLayout({
         tierData={tierData}
       />
       
-      {/* Main Content */}
-      <main className="lg:ml-64 min-h-screen">
+      <main className="lg:pl-[260px] min-h-screen">
         {children}
       </main>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 
 interface HeaderProps {
   title: string;
@@ -20,46 +20,38 @@ export function Header({
     : "U";
 
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-gray-100">
-      <div className="flex h-16 items-center justify-between px-6">
+    <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-sm border-b border-[#E5E7F2]">
+      <div className="flex h-16 items-center justify-between px-6 lg:px-8">
         <div className="flex items-center gap-4">
           {/* Mobile menu button */}
           <button
             onClick={onMenuClick}
-            className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
+            className="lg:hidden p-2 -ml-2 rounded-lg hover:bg-[#F8F9FC] transition-colors"
           >
-            <Menu className="h-5 w-5 text-gray-600" />
+            <Menu className="h-5 w-5 text-[#6B6F8D]" />
           </button>
 
           {/* Title */}
           <div>
-            <h1 className="text-lg font-bold text-gray-900">{title}</h1>
+            <h1 className="text-lg font-semibold text-[#1F1F2E] tracking-tight">{title}</h1>
             {subtitle && (
-              <p className="text-sm text-gray-500">{subtitle}</p>
+              <p className="text-sm text-[#6B6F8D]">{subtitle}</p>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* Notifications */}
-          <button className="relative p-2 rounded-lg hover:bg-gray-100">
-            <Bell className="h-5 w-5 text-gray-500" />
-            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
-          </button>
-
-          {/* User */}
-          {userName && (
-            <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-              <div className="hidden sm:block text-right">
-                <p className="text-sm font-semibold text-gray-900">{userName}</p>
-                <p className="text-xs text-gray-500">Parceiro</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-[#3A1D7A] flex items-center justify-center">
-                <span className="text-sm font-bold text-white">{initials}</span>
-              </div>
+        {/* User */}
+        {userName && (
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:block text-right">
+              <p className="text-sm font-medium text-[#1F1F2E]">{userName}</p>
+              <p className="text-xs text-[#6B6F8D]">Parceiro</p>
             </div>
-          )}
-        </div>
+            <div className="h-9 w-9 rounded-full bg-[#3A1D7A] flex items-center justify-center">
+              <span className="text-sm font-medium text-white">{initials}</span>
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );

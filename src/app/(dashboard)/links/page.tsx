@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useUser, useAffiliateData } from "@/hooks";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
-import { Link2, Copy, Check, Plus, Trash2, ExternalLink, Loader2, Lightbulb } from "lucide-react";
+import { Link2, Copy, Check, Plus, Trash2, ExternalLink, Loader2 } from "lucide-react";
 import { getAffiliateLink, copyToClipboard } from "@/lib/utils";
 
 export default function LinksPage() {
@@ -21,11 +21,8 @@ export default function LinksPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-[#5B3FA6]" />
-          <p className="text-gray-500 text-sm">Carregando...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#3A1D7A]" />
       </div>
     );
   }
@@ -93,119 +90,103 @@ export default function LinksPage() {
   const mainLink = affiliate?.affiliate_code ? getAffiliateLink(affiliate.affiliate_code) : "";
 
   return (
-    <div className="min-h-screen bg-[#F8F9FC]">
+    <>
       <Header 
-        title="Meus Links" 
+        title="Links" 
         subtitle="Gerencie seus links de afiliado"
         userName={profile?.full_name || undefined}
         onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
 
-      <div className="p-4 lg:p-8 space-y-6">
-        {/* Main Link Card */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+      <div className="p-6 lg:p-8 space-y-6 max-w-4xl mx-auto">
+        {/* Link Principal */}
+        <div className="bg-white rounded-2xl p-6 border border-[#E5E7F2] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_8px_24px_rgba(58,29,122,0.06)]">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-xl bg-[#EDE9FE]">
-              <Link2 className="h-5 w-5 text-[#5B3FA6]" />
+            <div className="h-9 w-9 rounded-lg bg-[#3A1D7A]/10 flex items-center justify-center">
+              <Link2 className="h-4 w-4 text-[#3A1D7A]" strokeWidth={1.75} />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Link Principal</h2>
-              <p className="text-sm text-gray-500">Compartilhe para ganhar comissões</p>
+              <h3 className="text-base font-semibold text-[#1F1F2E]">Link principal</h3>
+              <p className="text-xs text-[#6B6F8D]">Compartilhe para ganhar comissões</p>
             </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200">
-              <span className="text-sm text-gray-700 truncate flex-1">{mainLink}</span>
-              <span className="shrink-0 text-xs font-semibold px-2 py-1 rounded-lg bg-[#EDE9FE] text-[#5B3FA6]">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1 flex items-center gap-2 bg-[#F8F9FC] rounded-xl px-4 py-3 border border-[#E5E7F2]">
+              <span className="text-sm text-[#1F1F2E] truncate flex-1">{mainLink}</span>
+              <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-md bg-[#3A1D7A]/10 text-[#3A1D7A]">
                 Principal
               </span>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => handleCopy(mainLink, "main")}
-                className="flex-1 sm:flex-none px-4 py-3 rounded-xl bg-[#5B3FA6] text-white font-medium hover:bg-[#3A1D7A] transition-colors flex items-center justify-center gap-2"
+                className="px-4 py-2.5 rounded-xl bg-[#3A1D7A] text-white text-sm font-medium hover:bg-[#5B3FA6] transition-colors flex items-center gap-2"
               >
-                {copiedId === "main" ? (
-                  <>
-                    <Check className="h-4 w-4" />
-                    Copiado!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4" />
-                    Copiar
-                  </>
-                )}
+                {copiedId === "main" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copiedId === "main" ? "Copiado" : "Copiar"}
               </button>
               <button
                 onClick={() => window.open(mainLink, "_blank")}
-                className="px-4 py-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                className="p-2.5 rounded-xl border border-[#E5E7F2] text-[#6B6F8D] hover:bg-[#F8F9FC] transition-colors"
               >
                 <ExternalLink className="h-4 w-4" />
               </button>
             </div>
           </div>
-          <p className="mt-4 text-xs text-gray-500">
-            Código: <span className="font-mono font-semibold text-[#5B3FA6]">{affiliate?.affiliate_code}</span>
+          <p className="mt-4 text-xs text-[#6B6F8D]">
+            Código: <span className="font-mono font-medium text-[#3A1D7A]">{affiliate?.affiliate_code}</span>
           </p>
         </div>
 
-        {/* Custom Links */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        {/* Links Personalizados */}
+        <div className="bg-white rounded-2xl p-6 border border-[#E5E7F2] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_8px_24px_rgba(58,29,122,0.06)]">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Links Personalizados</h2>
-              <p className="text-sm text-gray-500">Crie até 3 aliases personalizados</p>
+              <h3 className="text-base font-semibold text-[#1F1F2E]">Links personalizados</h3>
+              <p className="text-xs text-[#6B6F8D]">Crie até 3 aliases</p>
             </div>
-            <span className="text-sm font-semibold px-3 py-1 rounded-full bg-gray-100 text-gray-600">
+            <span className="text-sm font-medium px-2.5 py-1 rounded-lg bg-[#F8F9FC] text-[#6B6F8D]">
               {links.length}/3
             </span>
           </div>
 
-          {/* Create new link */}
+          {/* Criar novo */}
           {links.length < 3 && (
             <div className="flex flex-col sm:flex-row gap-3 mb-6">
-              <div className="flex-1">
-                <input
-                  type="text"
-                  placeholder="meu-link-personalizado"
-                  value={newAlias}
-                  onChange={(e) => {
-                    setNewAlias(e.target.value);
-                    setError("");
-                  }}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-[#5B3FA6] focus:ring-2 focus:ring-[#5B3FA6]/20 outline-none transition-all text-gray-900 placeholder:text-gray-400"
-                />
-                {error && (
-                  <p className="mt-2 text-sm text-red-600">{error}</p>
-                )}
-              </div>
+              <input
+                type="text"
+                placeholder="meu-link-personalizado"
+                value={newAlias}
+                onChange={(e) => {
+                  setNewAlias(e.target.value);
+                  setError("");
+                }}
+                className="flex-1 h-11 px-4 bg-[#F8F9FC] border border-[#E5E7F2] rounded-xl text-[#1F1F2E] placeholder:text-[#6B6F8D]/60 focus:outline-none focus:border-[#3A1D7A] focus:ring-4 focus:ring-[#3A1D7A]/10 transition-all text-sm"
+              />
               <button 
                 onClick={handleCreate} 
                 disabled={isCreating}
-                className="px-6 py-3 rounded-xl bg-[#5B3FA6] text-white font-medium hover:bg-[#3A1D7A] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                className="h-11 px-5 rounded-xl bg-[#3A1D7A] text-white text-sm font-medium hover:bg-[#5B3FA6] transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                {isCreating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <Plus className="h-4 w-4" />
-                    Criar
-                  </>
-                )}
+                {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Criar
               </button>
             </div>
           )}
 
-          {/* Links list */}
+          {error && (
+            <p className="mb-4 text-sm text-red-600">{error}</p>
+          )}
+
+          {/* Lista */}
           {links.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-                <Link2 className="h-7 w-7 text-gray-400" />
+            <div className="text-center py-10 bg-[#F8F9FC] rounded-xl border border-dashed border-[#E5E7F2]">
+              <div className="h-10 w-10 mx-auto rounded-lg bg-[#EEF0F6] flex items-center justify-center mb-3">
+                <Link2 className="h-5 w-5 text-[#6B6F8D]" />
               </div>
-              <p className="text-gray-600 font-medium">Nenhum link personalizado</p>
-              <p className="text-gray-400 text-sm mt-1">Crie aliases para facilitar o compartilhamento</p>
+              <p className="text-sm font-medium text-[#1F1F2E]">Nenhum link personalizado</p>
+              <p className="text-xs text-[#6B6F8D] mt-1">Crie aliases para rastrear campanhas</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -214,30 +195,24 @@ export default function LinksPage() {
                 return (
                   <div
                     key={link.id}
-                    className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100"
+                    className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl bg-[#F8F9FC] border border-[#E5E7F2]"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {fullLink}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Alias: <span className="font-mono font-semibold text-[#5B3FA6]">{link.alias}</span>
+                      <p className="text-sm font-medium text-[#1F1F2E] truncate">{fullLink}</p>
+                      <p className="text-xs text-[#6B6F8D] mt-0.5">
+                        Alias: <span className="font-mono text-[#3A1D7A]">{link.alias}</span>
                       </p>
                     </div>
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleCopy(fullLink, link.id)}
-                        className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+                        className="p-2 rounded-lg border border-[#E5E7F2] bg-white text-[#6B6F8D] hover:text-[#3A1D7A] hover:border-[#3A1D7A]/30 transition-colors"
                       >
-                        {copiedId === link.id ? (
-                          <Check className="h-4 w-4 text-emerald-500" />
-                        ) : (
-                          <Copy className="h-4 w-4" />
-                        )}
+                        {copiedId === link.id ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
                       </button>
                       <button
                         onClick={() => handleDelete(link.id)}
-                        className="px-4 py-2 rounded-lg bg-white border border-gray-200 text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors"
+                        className="p-2 rounded-lg border border-[#E5E7F2] bg-white text-[#6B6F8D] hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -248,32 +223,7 @@ export default function LinksPage() {
             </div>
           )}
         </div>
-
-        {/* Tips */}
-        <div className="bg-gradient-to-br from-[#EDE9FE] to-[#DDD6FE] rounded-2xl p-6 border border-[#C4B5FD]">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-xl bg-white/60">
-              <Lightbulb className="h-5 w-5 text-[#5B3FA6]" />
-            </div>
-            <h2 className="text-lg font-semibold text-[#3A1D7A]">Dicas de Uso</h2>
-          </div>
-          <ul className="space-y-3">
-            {[
-              "Compartilhe seu link em redes sociais, e-mail ou mensagens",
-              "Use aliases personalizados para rastrear diferentes campanhas",
-              "Você ganha comissão em todas as compras feitas através do seu link",
-              "Você pode comprar pelo seu próprio link e receber comissão",
-            ].map((tip, i) => (
-              <li key={i} className="flex items-start gap-3 text-sm text-[#4C1D95]">
-                <span className="w-5 h-5 rounded-full bg-[#5B3FA6] text-white text-xs flex items-center justify-center shrink-0 mt-0.5">
-                  {i + 1}
-                </span>
-                {tip}
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
-    </div>
+    </>
   );
 }

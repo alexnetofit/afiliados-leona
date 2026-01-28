@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useUser, useAffiliateData } from "@/hooks";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
-import { User, CreditCard, Key, Save, Check, Loader2, Award } from "lucide-react";
+import { User, CreditCard, Key, Save, Check, Loader2 } from "lucide-react";
 import { COMMISSION_TIERS } from "@/types";
 
 export default function PerfilPage() {
@@ -22,7 +22,6 @@ export default function PerfilPage() {
   const supabase = createClient();
   const isLoading = userLoading || dataLoading;
 
-  // Update state when data loads
   useEffect(() => {
     if (profile?.full_name) setFullName(profile.full_name);
     if (affiliate?.payout_pix_key) setPixKey(affiliate.payout_pix_key);
@@ -33,11 +32,8 @@ export default function PerfilPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-[#5B3FA6]" />
-          <p className="text-gray-500 text-sm">Carregando...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#3A1D7A]" />
       </div>
     );
   }
@@ -48,7 +44,6 @@ export default function PerfilPage() {
     setSaved(false);
 
     try {
-      // Update profile
       if (fullName !== profile?.full_name) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error: profileError } = await (supabase.from("profiles") as any)
@@ -58,7 +53,6 @@ export default function PerfilPage() {
         if (profileError) throw profileError;
       }
 
-      // Update affiliate
       let wiseDetailsJson = null;
       if (wiseDetails.trim()) {
         try {
@@ -99,134 +93,121 @@ export default function PerfilPage() {
   const tierName = tierNames[affiliate?.commission_tier as keyof typeof tierNames] || "Bronze";
 
   return (
-    <div className="min-h-screen bg-[#F8F9FC]">
+    <>
       <Header 
-        title="Meu Perfil" 
-        subtitle="Gerencie suas informações e dados de pagamento"
+        title="Perfil" 
+        subtitle="Suas informações"
         userName={profile?.full_name || undefined}
         onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
 
-      <div className="p-4 lg:p-8 max-w-3xl space-y-6">
+      <div className="p-6 lg:p-8 max-w-2xl mx-auto space-y-6">
         {/* Dados Pessoais */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6 border-b border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-[#EDE9FE]">
-                <User className="h-5 w-5 text-[#5B3FA6]" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Dados Pessoais</h2>
-                <p className="text-sm text-gray-500">Suas informações básicas</p>
-              </div>
+        <div className="bg-white rounded-2xl border border-[#E5E7F2] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_8px_24px_rgba(58,29,122,0.06)] overflow-hidden">
+          <div className="p-5 border-b border-[#E5E7F2] flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-[#3A1D7A]/10 flex items-center justify-center">
+              <User className="h-4 w-4 text-[#3A1D7A]" strokeWidth={1.75} />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-[#1F1F2E]">Dados pessoais</h3>
+              <p className="text-xs text-[#6B6F8D]">Suas informações básicas</p>
             </div>
           </div>
-          <div className="p-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo</label>
+          <div className="p-5 space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-[#1F1F2E]">Nome completo</label>
               <input
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-[#5B3FA6] focus:ring-2 focus:ring-[#5B3FA6]/20 outline-none transition-all text-gray-900"
+                className="w-full h-11 px-4 bg-[#F8F9FC] border border-[#E5E7F2] rounded-xl text-[#1F1F2E] focus:outline-none focus:border-[#3A1D7A] focus:ring-4 focus:ring-[#3A1D7A]/10 transition-all text-sm"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-[#1F1F2E]">E-mail</label>
               <input
                 type="email"
                 value={user?.email || ""}
                 disabled
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed"
+                className="w-full h-11 px-4 bg-[#EEF0F6] border border-[#E5E7F2] rounded-xl text-[#6B6F8D] text-sm cursor-not-allowed"
               />
-              <p className="mt-1.5 text-xs text-gray-400">O email não pode ser alterado</p>
+              <p className="text-xs text-[#6B6F8D]">O e-mail não pode ser alterado</p>
             </div>
           </div>
         </div>
 
-        {/* Código de Afiliado */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6 border-b border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-[#EDE9FE]">
-                <Key className="h-5 w-5 text-[#5B3FA6]" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Código de Afiliado</h2>
-                <p className="text-sm text-gray-500">Seu identificador único</p>
-              </div>
+        {/* Código */}
+        <div className="bg-white rounded-2xl border border-[#E5E7F2] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_8px_24px_rgba(58,29,122,0.06)] overflow-hidden">
+          <div className="p-5 border-b border-[#E5E7F2] flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-[#3A1D7A]/10 flex items-center justify-center">
+              <Key className="h-4 w-4 text-[#3A1D7A]" strokeWidth={1.75} />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-[#1F1F2E]">Código de afiliado</h3>
+              <p className="text-xs text-[#6B6F8D]">Seu identificador único</p>
             </div>
           </div>
-          <div className="p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="flex-1 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200">
-                <span className="font-mono text-lg font-bold text-[#5B3FA6]">
+          <div className="p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 bg-[#F8F9FC] rounded-xl px-4 py-3 border border-[#E5E7F2]">
+                <span className="font-mono text-lg font-semibold text-[#3A1D7A]">
                   {affiliate?.affiliate_code}
                 </span>
               </div>
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-[#3A1D7A] to-[#5B3FA6] text-white">
-                <Award className="h-4 w-4" />
-                <span className="font-semibold">{tierName} - {tierConfig.percent}%</span>
+              <div className="px-3 py-1.5 rounded-lg bg-[#3A1D7A] text-white text-sm font-medium">
+                {tierName} • {tierConfig.percent}%
               </div>
             </div>
-            <p className="mt-4 text-sm text-gray-500">
-              Assinaturas pagas: <span className="font-bold text-gray-900">{affiliate?.paid_subscriptions_count || 0}</span>
+            <p className="mt-4 text-sm text-[#6B6F8D]">
+              Vendas: <span className="font-semibold text-[#1F1F2E]">{affiliate?.paid_subscriptions_count || 0}</span>
               {affiliate?.commission_tier && affiliate.commission_tier < 3 && (
-                <span className="text-gray-400">
-                  {" "}(próximo tier: {COMMISSION_TIERS[(affiliate.commission_tier + 1) as 2 | 3].minSubscriptions} assinaturas)
+                <span className="text-[#6B6F8D]">
+                  {" "}• Próximo nível em {COMMISSION_TIERS[(affiliate.commission_tier + 1) as 2 | 3].minSubscriptions} vendas
                 </span>
               )}
             </p>
           </div>
         </div>
 
-        {/* Dados de Pagamento */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6 border-b border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-emerald-100">
-                <CreditCard className="h-5 w-5 text-emerald-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Dados de Pagamento</h2>
-                <p className="text-sm text-gray-500">Configure como deseja receber seus pagamentos</p>
-              </div>
+        {/* Pagamento */}
+        <div className="bg-white rounded-2xl border border-[#E5E7F2] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_8px_24px_rgba(58,29,122,0.06)] overflow-hidden">
+          <div className="p-5 border-b border-[#E5E7F2] flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-emerald-50 flex items-center justify-center">
+              <CreditCard className="h-4 w-4 text-emerald-600" strokeWidth={1.75} />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-[#1F1F2E]">Dados de pagamento</h3>
+              <p className="text-xs text-[#6B6F8D]">Como você deseja receber</p>
             </div>
           </div>
-          <div className="p-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Chave PIX</label>
+          <div className="p-5 space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-[#1F1F2E]">Chave PIX</label>
               <input
                 type="text"
-                placeholder="CPF, email, telefone ou chave aleatória"
+                placeholder="CPF, e-mail, telefone ou chave aleatória"
                 value={pixKey}
                 onChange={(e) => setPixKey(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-[#5B3FA6] focus:ring-2 focus:ring-[#5B3FA6]/20 outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                className="w-full h-11 px-4 bg-[#F8F9FC] border border-[#E5E7F2] rounded-xl text-[#1F1F2E] placeholder:text-[#6B6F8D]/60 focus:outline-none focus:border-[#3A1D7A] focus:ring-4 focus:ring-[#3A1D7A]/10 transition-all text-sm"
               />
-              <p className="mt-1.5 text-xs text-gray-400">Insira sua chave PIX para receber pagamentos</p>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Dados Wise (JSON)</label>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-[#1F1F2E]">Dados Wise (JSON)</label>
               <textarea
-                placeholder={`{
-  "email": "seu@email.com",
-  "account_holder_name": "Seu Nome",
-  "currency": "USD"
-}`}
+                placeholder={`{\n  "email": "seu@email.com",\n  "currency": "USD"\n}`}
                 value={wiseDetails}
                 onChange={(e) => setWiseDetails(e.target.value)}
-                rows={6}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-[#5B3FA6] focus:ring-2 focus:ring-[#5B3FA6]/20 outline-none transition-all text-gray-900 font-mono text-sm placeholder:text-gray-400 resize-none"
+                rows={5}
+                className="w-full px-4 py-3 bg-[#F8F9FC] border border-[#E5E7F2] rounded-xl text-[#1F1F2E] placeholder:text-[#6B6F8D]/60 focus:outline-none focus:border-[#3A1D7A] focus:ring-4 focus:ring-[#3A1D7A]/10 transition-all text-sm font-mono resize-none"
               />
-              <p className="mt-1.5 text-xs text-gray-400">Opcional. Insira seus dados Wise no formato JSON</p>
+              <p className="text-xs text-[#6B6F8D]">Opcional. Para recebimentos internacionais.</p>
             </div>
           </div>
         </div>
 
-        {/* Error & Save Button */}
+        {/* Erro e botão */}
         {error && (
-          <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700">
+          <div className="rounded-xl bg-red-50 border border-red-100 p-4 text-sm text-red-600">
             {error}
           </div>
         )}
@@ -235,24 +216,24 @@ export default function PerfilPage() {
           <button 
             onClick={handleSave} 
             disabled={isSaving}
-            className="px-6 py-3 rounded-xl bg-[#5B3FA6] text-white font-medium hover:bg-[#3A1D7A] transition-colors flex items-center gap-2 disabled:opacity-50 shadow-md hover:shadow-lg"
+            className="h-11 px-6 rounded-xl bg-[#3A1D7A] text-white text-sm font-medium hover:bg-[#5B3FA6] transition-colors flex items-center gap-2 disabled:opacity-60"
           >
             {isSaving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : saved ? (
               <>
                 <Check className="h-4 w-4" />
-                Salvo!
+                Salvo
               </>
             ) : (
               <>
                 <Save className="h-4 w-4" />
-                Salvar Alterações
+                Salvar alterações
               </>
             )}
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 }
