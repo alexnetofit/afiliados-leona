@@ -145,7 +145,7 @@ export default function RelatoriosPage() {
         </Card>
 
         {/* Table */}
-        <Card padding="none">
+        <Card noPadding>
           <div className="p-6 border-b border-[#F1F3F7]">
             <h3 className="font-semibold text-[#111827]">Detalhamento Mensal</h3>
           </div>

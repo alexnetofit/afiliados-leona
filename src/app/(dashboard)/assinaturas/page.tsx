@@ -75,7 +75,7 @@ export default function AssinaturasPage() {
           </div>
 
           {/* Tabela */}
-          <Card padding="none">
+          <Card noPadding>
             <div className="p-6 border-b border-[#F1F3F7] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <h3 className="font-semibold text-[#111827]">Lista de assinaturas</h3>
               <select

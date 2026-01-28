@@ -113,39 +113,26 @@ Input.displayName = "Input";
 // ============================================
 // CARD
 // ============================================
-interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  padding?: "none" | "sm" | "md" | "lg";
+interface CardProps {
+  children?: ReactNode;
+  noPadding?: boolean;
+  className?: string;
 }
 
-export const Card = forwardRef<HTMLDivElement, CardProps>(({
-  children,
-  padding = "md",
-  className = "",
-  ...props
-}, ref) => {
-  const paddings = {
-    none: "",
-    sm: "p-4",
-    md: "p-6",
-    lg: "p-8",
-  };
-
+export function Card({ children, noPadding = false, className = "" }: CardProps) {
   return (
     <div
-      ref={ref}
       className={`
         bg-white rounded-2xl border border-[#E8EAF0]
         shadow-[0_1px_3px_0_rgb(0_0_0/0.04),0_4px_16px_0_rgb(0_0_0/0.04)]
-        ${paddings[padding]}
+        ${noPadding ? "" : "p-6"}
         ${className}
       `}
-      {...props}
     >
       {children}
     </div>
   );
-});
-Card.displayName = "Card";
+}
 
 // ============================================
 // BADGE
