@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { TrendingUp, Award, Zap, Trophy } from "lucide-react";
+import { TrendingUp, Award, Zap, Trophy, Sparkles } from "lucide-react";
 import { COMMISSION_TIERS, type CommissionTier } from "@/types";
 
 interface TierProgressProps {
@@ -11,9 +11,9 @@ interface TierProgressProps {
 }
 
 const tierConfig = {
-  1: { name: "Bronze", icon: TrendingUp, color: "from-amber-600 to-amber-500", bg: "bg-amber-100", text: "text-amber-700" },
-  2: { name: "Prata", icon: Award, color: "from-gray-500 to-gray-400", bg: "bg-gray-100", text: "text-gray-600" },
-  3: { name: "Ouro", icon: Zap, color: "from-yellow-500 to-yellow-400", bg: "bg-yellow-100", text: "text-yellow-700" },
+  1: { name: "Bronze", icon: TrendingUp, color: "from-amber-500 to-amber-600", bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-100" },
+  2: { name: "Prata", icon: Award, color: "from-slate-400 to-slate-500", bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200" },
+  3: { name: "Ouro", icon: Zap, color: "from-yellow-400 to-yellow-500", bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200" },
 };
 
 export function TierProgress({
@@ -41,83 +41,80 @@ export function TierProgress({
   return (
     <div
       className={cn(
-        "bg-white rounded-2xl p-6 shadow-sm border border-gray-100",
+        "bg-white rounded-[32px] p-8 shadow-[0_2px_12px_-3px_rgba(0,0,0,0.04)] border border-slate-100 relative overflow-hidden group",
         className
       )}
     >
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-        {/* Current Tier Info */}
-        <div className="flex items-center gap-4">
-          <div className={cn("rounded-2xl p-4 bg-gradient-to-br", tierStyle.color)}>
-            <TierIcon className="h-8 w-8 text-white" />
+      {/* Background decoration */}
+      <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform duration-500">
+        <TierIcon className="h-32 w-32" />
+      </div>
+
+      <div className="relative z-10 flex flex-col gap-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className={cn("rounded-2xl p-4 bg-gradient-to-br shadow-lg", tierStyle.color)}>
+              <TierIcon className="h-7 w-7 text-white" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Nível de Comissões</p>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                Plano {tierStyle.name}
+              </h3>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Seu Tier Atual</p>
-            <p className="text-2xl font-bold text-gray-900">
-              {tierStyle.name}
-              <span className={cn("ml-2 text-lg font-semibold", tierStyle.text)}>
-                {currentTierConfig.percent}%
-              </span>
-            </p>
+          <div className={cn("px-4 py-2 rounded-2xl border-2 font-black text-lg", tierStyle.bg, tierStyle.text, tierStyle.border)}>
+            {currentTierConfig.percent}%
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="flex gap-8">
-          <div className="text-center">
-            <p className="text-3xl font-bold text-[#5B3FA6]">
-              {paidSubscriptions}
-            </p>
-            <p className="text-sm text-gray-500">Assinaturas pagas</p>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Assinaturas Pagas</p>
+            <p className="text-2xl font-black text-slate-900">{paidSubscriptions}</p>
           </div>
-          
-          {nextTierConfig && (
-            <div className="text-center">
-              <p className="text-3xl font-bold text-gray-900">
-                {subscriptionsToNext}
-              </p>
-              <p className="text-sm text-gray-500">Para próximo tier</p>
+          {nextTierConfig ? (
+            <div className="p-5 rounded-2xl bg-[#EDE9FE] border border-indigo-100">
+              <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Faltam para Próximo</p>
+              <p className="text-2xl font-black text-[#3A1D7A]">{subscriptionsToNext}</p>
+            </div>
+          ) : (
+            <div className="p-5 rounded-2xl bg-yellow-50 border border-yellow-100 flex items-center justify-center">
+              <Sparkles className="h-6 w-6 text-yellow-500 animate-pulse" />
             </div>
           )}
         </div>
+
+        {/* Progress Section */}
+        {nextTierConfig ? (
+          <div className="space-y-3">
+            <div className="flex justify-between items-end">
+              <div>
+                <p className="text-sm font-bold text-slate-900">Evolução do Nível</p>
+                <p className="text-xs font-medium text-slate-400">Rumo ao nível {tierConfig[nextTier!].name}</p>
+              </div>
+              <p className="text-lg font-black text-[#3A1D7A]">{Math.round(progress)}%</p>
+            </div>
+            <div className="h-3 w-full rounded-full bg-slate-100 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[#3A1D7A] via-[#5B3FA6] to-[#8E7EEA] transition-all duration-1000 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-gradient-to-r from-yellow-400 to-amber-500 p-6 flex items-center gap-4 shadow-lg shadow-yellow-200">
+            <div className="h-12 w-12 rounded-xl bg-white/20 flex items-center justify-center">
+              <Trophy className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <p className="font-black text-white tracking-tight">Status Lendário</p>
+              <p className="text-xs font-bold text-white/80 uppercase tracking-wider">Comissão máxima de 40% ativa</p>
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Progress Bar */}
-      {nextTierConfig && (
-        <div className="mt-6">
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-gray-500">
-              Progresso para <span className="font-semibold text-gray-700">{tierConfig[nextTier!].name}</span> ({nextTierConfig.percent}%)
-            </span>
-            <span className="font-semibold text-[#5B3FA6]">
-              {Math.round(progress)}%
-            </span>
-          </div>
-          <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-[#3A1D7A] to-[#8E7EEA] transition-all duration-700 ease-out"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <div className="flex justify-between mt-2 text-xs text-gray-400">
-            <span>0 assinaturas</span>
-            <span>{nextTierConfig.minSubscriptions} assinaturas</span>
-          </div>
-        </div>
-      )}
-
-      {/* Max Tier Reached */}
-      {!nextTierConfig && (
-        <div className="mt-6 rounded-xl bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 p-4 flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-yellow-100">
-            <Trophy className="h-5 w-5 text-yellow-600" />
-          </div>
-          <div>
-            <p className="font-semibold text-yellow-800">Parabéns!</p>
-            <p className="text-sm text-yellow-700">Você atingiu o tier máximo de comissões!</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,195 +1,213 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Loader2, Mail, Lock, ArrowRight } from "lucide-react";
+import { Mail, Lock, Loader2, ArrowRight, ShieldCheck, Sparkles, TrendingUp } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
   const router = useRouter();
   const supabase = createClient();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     setIsLoading(true);
+    setError("");
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error: loginError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) {
-        setError("Email ou senha inválidos");
+      if (loginError) {
+        setError(loginError.message === "Invalid login credentials" 
+          ? "E-mail ou senha incorretos." 
+          : loginError.message);
         return;
       }
 
-      if (data.user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", data.user.id)
-          .single();
-
-        const profileData = profile as { role: string } | null;
-        if (profileData?.role === "admin") {
-          router.push("/admin");
-        } else {
-          router.push("/dashboard");
-        }
-        router.refresh();
-      }
-    } catch {
-      setError("Ocorreu um erro. Tente novamente.");
+      router.push("/dashboard");
+      router.refresh();
+    } catch (err) {
+      setError("Ocorreu um erro ao entrar. Tente novamente.");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left Side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#3A1D7A] via-[#5B3FA6] to-[#8E7EEA] p-12 flex-col justify-between relative overflow-hidden">
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-20 left-20 w-64 h-64 bg-white rounded-full blur-3xl"></div>
-          <div className="absolute bottom-20 right-20 w-96 h-96 bg-white rounded-full blur-3xl"></div>
+    <div className="min-h-screen bg-white flex flex-col lg:flex-row">
+      {/* Left Side: Brand & Social Proof */}
+      <div className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-[#1a0b3b] via-[#3A1D7A] to-[#5B3FA6] p-16 flex-col justify-between relative overflow-hidden">
+        {/* Animated Background Elements */}
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-20">
+          <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-white rounded-full blur-[120px] animate-pulse" />
+          <div className="absolute top-[60%] left-[70%] w-[50%] h-[50%] bg-[#8E7EEA] rounded-full blur-[100px] animate-bounce duration-[10s]" />
         </div>
-        
+
         <div className="relative z-10">
-          <Image
-            src="/logo-leona-roxa.png"
-            alt="Leona"
-            width={180}
-            height={60}
-            className="brightness-0 invert"
-          />
-        </div>
-        
-        <div className="relative z-10 space-y-6">
-          <h1 className="text-4xl font-bold text-white leading-tight">
-            Programa de Parceiros
-          </h1>
-          <p className="text-xl text-white/80 max-w-md">
-            Ganhe comissões de até 40% indicando novos clientes para a Leona.
-          </p>
-          <div className="flex gap-8 pt-4">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-white">30%</div>
-              <div className="text-sm text-white/70">Comissão inicial</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-white">40%</div>
-              <div className="text-sm text-white/70">Comissão máxima</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-white">15</div>
-              <div className="text-sm text-white/70">Dias para saque</div>
-            </div>
+          <Link href="/">
+            <Image
+              src="/logo-leona-roxa.png"
+              alt="Leona"
+              width={160}
+              height={50}
+              className="brightness-0 invert object-contain"
+            />
+          </Link>
+
+          <div className="mt-24 space-y-8">
+            <h1 className="text-5xl font-black text-white leading-[1.1] tracking-tight">
+              Aumente sua renda com o <span className="text-[#C6BEF5]">Programa de Parceiros</span>
+            </h1>
+            <p className="text-xl text-white/70 max-w-md font-medium leading-relaxed">
+              Junte-se à maior plataforma de soluções digitais e ganhe comissões recorrentes de até 40%.
+            </p>
           </div>
         </div>
-        
-        <div className="relative z-10 text-white/60 text-sm">
-          © 2024 Leona. Todos os direitos reservados.
+
+        <div className="relative z-10 grid grid-cols-3 gap-8">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-[#C6BEF5]">
+              <TrendingUp className="h-5 w-5" />
+              <span className="text-2xl font-black text-white">30%</span>
+            </div>
+            <p className="text-xs font-bold text-white/50 uppercase tracking-widest">Comissão Inicial</p>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-[#C6BEF5]">
+              <Sparkles className="h-5 w-5" />
+              <span className="text-2xl font-black text-white">40%</span>
+            </div>
+            <p className="text-xs font-bold text-white/50 uppercase tracking-widest">Comissão Máxima</p>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-[#C6BEF5]">
+              <ShieldCheck className="h-5 w-5" />
+              <span className="text-2xl font-black text-white">15d</span>
+            </div>
+            <p className="text-xs font-bold text-white/50 uppercase tracking-widest">Saque Rápido</p>
+          </div>
+        </div>
+
+        <div className="relative z-10 pt-10 border-t border-white/10">
+          <p className="text-xs text-white/40 font-medium">
+            © 2026 Leona Flow. Todos os direitos reservados.
+          </p>
         </div>
       </div>
 
-      {/* Right Side - Form */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-[#F8F9FC]">
-        <div className="w-full max-w-md">
-          {/* Mobile Logo */}
+      {/* Right Side: Form */}
+      <div className="flex-1 flex items-center justify-center p-8 bg-slate-50 lg:bg-white">
+        <div className="w-full max-w-md space-y-10">
           <div className="lg:hidden flex justify-center mb-8">
             <Image
               src="/logo-leona-roxa.png"
               alt="Leona"
-              width={150}
-              height={50}
+              width={120}
+              height={40}
+              className="object-contain"
             />
           </div>
 
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-gray-900">Bem-vindo de volta</h2>
-              <p className="text-gray-500 mt-2">Entre na sua conta de parceiro</p>
-            </div>
+          <div className="space-y-3">
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Bem-vindo de volta</h2>
+            <p className="text-slate-500 font-medium">Acesse seu painel de controle de parceiro.</p>
+          </div>
 
-            <form onSubmit={handleLogin} className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1" htmlFor="email">
+                  E-mail do Parceiro
                 </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-[#3A1D7A] text-slate-400">
+                    <Mail className="h-5 w-5" />
+                  </div>
                   <input
+                    id="email"
                     type="email"
-                    placeholder="seu@email.com"
+                    required
+                    placeholder="parceiro@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:border-[#5B3FA6] focus:ring-2 focus:ring-[#5B3FA6]/20 outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                    className="block w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent focus:border-[#3A1D7A] focus:bg-white rounded-[18px] outline-none transition-all font-medium text-slate-900 placeholder:text-slate-400"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Senha
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between ml-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest" htmlFor="password">
+                    Sua Senha
+                  </label>
+                  <Link 
+                    href="/forgot-password" 
+                    className="text-xs font-bold text-[#3A1D7A] hover:text-[#5B3FA6] uppercase tracking-wider"
+                  >
+                    Esqueceu?
+                  </Link>
+                </div>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-[#3A1D7A] text-slate-400">
+                    <Lock className="h-5 w-5" />
+                  </div>
                   <input
+                    id="password"
                     type="password"
+                    required
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:border-[#5B3FA6] focus:ring-2 focus:ring-[#5B3FA6]/20 outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                    className="block w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent focus:border-[#3A1D7A] focus:bg-white rounded-[18px] outline-none transition-all font-medium text-slate-900 placeholder:text-slate-400"
                   />
                 </div>
               </div>
-
-              {error && (
-                <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
-                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-[#3A1D7A] to-[#5B3FA6] text-white py-3.5 rounded-xl font-semibold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-[#3A1D7A]/25"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <>
-                    Entrar
-                    <ArrowRight className="h-5 w-5" />
-                  </>
-                )}
-              </button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <span className="text-gray-500">Não tem uma conta? </span>
-              <Link href="/register" className="text-[#5B3FA6] font-semibold hover:underline">
-                Cadastre-se
-              </Link>
             </div>
-          </div>
 
-          <p className="mt-8 text-center text-xs text-gray-400">
-            Ao entrar, você concorda com nossos{" "}
-            <a href="#" className="text-[#5B3FA6] hover:underline">Termos de Uso</a> e{" "}
-            <a href="#" className="text-[#5B3FA6] hover:underline">Política de Privacidade</a>
+            {error && (
+              <div className="p-4 rounded-2xl bg-red-50 border border-red-100 flex items-center gap-3 text-red-600 text-sm font-bold">
+                <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full flex items-center justify-center gap-3 py-4 bg-[#3A1D7A] hover:bg-[#2e1761] text-white rounded-[18px] font-black tracking-tight shadow-xl shadow-[#3A1D7A]/20 transition-all hover:-translate-y-1 active:scale-[0.98] disabled:opacity-70 disabled:hover:translate-y-0"
+            >
+              {isLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  Entrar no Painel
+                  <ArrowRight className="h-5 w-5" />
+                </>
+              )}
+            </button>
+          </form>
+
+          <p className="text-center text-slate-500 font-bold">
+            Não tem uma conta?{" "}
+            <Link 
+              href="/register" 
+              className="text-[#3A1D7A] hover:text-[#5B3FA6] underline underline-offset-4 decoration-2"
+            >
+              Cadastre-se como parceiro
+            </Link>
+          </p>
+
+          <p className="text-center text-[10px] text-slate-400 font-medium leading-relaxed px-8">
+            Ao entrar, você concorda com nossos <Link href="#" className="underline">Termos de Uso</Link> e <Link href="#" className="underline">Política de Privacidade</Link>
           </p>
         </div>
       </div>

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useUser, useAffiliateData } from "@/hooks";
 import { Header } from "@/components/layout/header";
 import { StatCard, TierProgress, CommissionChart, RecentSales } from "@/components/dashboard";
-import { Clock, CheckCircle, Wallet, Users, CreditCard, TrendingUp, Loader2 } from "lucide-react";
+import { Clock, CheckCircle, Wallet, Users, CreditCard, TrendingUp, Loader2, Sparkles } from "lucide-react";
 
 export default function DashboardPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -16,9 +16,12 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-[#5B3FA6]" />
-          <p className="text-gray-500 text-sm">Carregando dados...</p>
+        <div className="flex flex-col items-center gap-6">
+          <div className="relative">
+            <Loader2 className="h-12 w-12 animate-spin text-[#3A1D7A]" />
+            <Sparkles className="h-5 w-5 text-indigo-400 absolute -top-1 -right-1 animate-pulse" />
+          </div>
+          <p className="text-slate-500 font-bold text-sm uppercase tracking-[2px]">Preparando seu Painel...</p>
         </div>
       </div>
     );
@@ -33,7 +36,7 @@ export default function DashboardPage() {
     .slice(0, 5)
     .map(t => ({
       id: t.id,
-      customerName: "Cliente",
+      customerName: "Cliente Individual",
       amount: t.amount_gross_cents,
       commission: t.commission_amount_cents,
       date: t.paid_at || t.created_at,
@@ -44,14 +47,14 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-[#F8F9FC]">
       <Header
         title="Dashboard"
-        subtitle={`Bem-vindo de volta, ${profile?.full_name?.split(" ")[0] || "Parceiro"}!`}
+        subtitle={`Olá, ${profile?.full_name?.split(" ")[0] || "Parceiro"}`}
         userName={profile?.full_name || undefined}
         onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
 
-      <div className="p-4 lg:p-8 space-y-6">
-        {/* Balance Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
+      <div className="p-6 lg:p-10 max-w-[1600px] mx-auto space-y-8">
+        {/* Main Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
           <StatCard
             title="Saldo Pendente"
             value={summary?.pending_cents || 0}
@@ -67,7 +70,7 @@ export default function DashboardPage() {
             variant="success"
           />
           <StatCard
-            title="Total Pago"
+            title="Total Recebido"
             value={summary?.paid_cents || 0}
             isCurrency
             icon={Wallet}
@@ -75,38 +78,49 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Secondary Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6">
-          <StatCard
-            title="Trials Iniciados"
-            value={summary?.total_trials || 0}
-            icon={Users}
-            variant="info"
-          />
-          <StatCard
-            title="Assinaturas Ativas"
-            value={summary?.active_subscriptions || 0}
-            icon={CreditCard}
-            variant="success"
-          />
-          <StatCard
-            title="Total de Assinaturas"
-            value={summary?.total_subscriptions || 0}
-            icon={TrendingUp}
-            variant="primary"
-          />
-        </div>
+        {/* Secondary Stats & Tier */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="lg:col-span-8 space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-[24px] border border-slate-100 flex items-center gap-4 shadow-sm">
+                <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center">
+                  <Users className="h-6 w-6 text-indigo-600" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase">Trials</p>
+                  <p className="text-xl font-black text-slate-900">{summary?.total_trials || 0}</p>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-[24px] border border-slate-100 flex items-center gap-4 shadow-sm">
+                <div className="h-12 w-12 rounded-2xl bg-emerald-50 flex items-center justify-center">
+                  <CreditCard className="h-6 w-6 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase">Ativas</p>
+                  <p className="text-xl font-black text-slate-900">{summary?.active_subscriptions || 0}</p>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-[24px] border border-slate-100 flex items-center gap-4 shadow-sm">
+                <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center">
+                  <TrendingUp className="h-6 w-6 text-indigo-600" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase">Total</p>
+                  <p className="text-xl font-black text-slate-900">{summary?.total_subscriptions || 0}</p>
+                </div>
+              </div>
+            </div>
 
-        {/* Tier Progress */}
-        <TierProgress
-          currentTier={affiliate?.commission_tier || 1}
-          paidSubscriptions={affiliate?.paid_subscriptions_count || 0}
-        />
+            <CommissionChart data={chartData} />
+          </div>
 
-        {/* Charts and Recent Activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-          <CommissionChart data={chartData} />
-          <RecentSales sales={recentSales} />
+          <div className="lg:col-span-4 space-y-8">
+            <TierProgress
+              currentTier={affiliate?.commission_tier || 1}
+              paidSubscriptions={affiliate?.paid_subscriptions_count || 0}
+            />
+            <RecentSales sales={recentSales} />
+          </div>
         </div>
       </div>
     </div>
