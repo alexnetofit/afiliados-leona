@@ -404,7 +404,7 @@ export default function ConfiguracoesPage() {
           </div>
 
           <Button 
-            variant="warning" 
+            variant="secondary" 
             onClick={handleMigration} 
             loading={isMigrating} 
             icon={Database}
