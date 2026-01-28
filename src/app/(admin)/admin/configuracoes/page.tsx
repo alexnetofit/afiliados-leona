@@ -31,8 +31,10 @@ export default function ConfiguracoesPage() {
   const [isMigrating, setIsMigrating] = useState(false);
   const [resyncDays, setResyncDays] = useState("5");
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; summary?: Record<string, number> } | null>(null);
-  const [migrateResult, setMigrateResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [migrateResult, setMigrateResult] = useState<{ success: boolean; message: string; summary?: Record<string, number> } | null>(null);
   const [syncProgress, setSyncProgress] = useState<SyncProgress[]>([]);
+  const [migrateProgress, setMigrateProgress] = useState<SyncProgress[]>([]);
+  const [migrateErrors, setMigrateErrors] = useState<string[]>([]);
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const progressRef = useRef<HTMLDivElement>(null);
@@ -126,15 +128,59 @@ export default function ConfiguracoesPage() {
     if (!confirm("Tem certeza que deseja iniciar a migração do Rewardful? Este processo pode demorar.")) return;
     setIsMigrating(true);
     setMigrateResult(null);
+    setMigrateProgress([]);
+    setMigrateErrors([]);
+
     try {
       const response = await fetch("/api/admin/migrate-rewardful", { method: "POST" });
-      const data = await response.json();
-      if (response.ok) {
-        setMigrateResult({ success: true, message: `Migração concluída! ${data.affiliates || 0} afiliados, ${data.customers || 0} clientes, ${data.transactions || 0} transações.` });
-      } else throw new Error(data.error || "Erro na migração");
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("Falha ao iniciar streaming");
+
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = JSON.parse(line.slice(6));
+
+            if (data.type === "start") {
+              setMigrateProgress([{ step: "start", message: data.message }]);
+            } else if (data.type === "progress") {
+              setMigrateProgress(prev => {
+                const existing = prev.findIndex(p => p.step === data.step);
+                if (existing >= 0) {
+                  const updated = [...prev];
+                  updated[existing] = { step: data.step, message: data.message, completed: data.completed };
+                  return updated;
+                }
+                return [...prev, { step: data.step, message: data.message, completed: data.completed }];
+              });
+            } else if (data.type === "complete") {
+              setMigrateResult({ 
+                success: true, 
+                message: data.message,
+                summary: data.summary
+              });
+            } else if (data.type === "errors") {
+              setMigrateErrors(data.errors || []);
+            } else if (data.type === "error") {
+              setMigrateResult({ success: false, message: data.message });
+            }
+          }
+        }
+      }
     } catch (error) {
       setMigrateResult({ success: false, message: error instanceof Error ? error.message : "Erro desconhecido" });
-    } finally { setIsMigrating(false); }
+    } finally { 
+      setIsMigrating(false); 
+    }
   };
 
   const formatDate = (date: string) => {
@@ -149,9 +195,14 @@ export default function ConfiguracoesPage() {
   const getStepIcon = (step: string) => {
     switch (step) {
       case "customers": return Users;
+      case "affiliates": return Users;
+      case "referrals": return Users;
       case "subscriptions": return CreditCard;
       case "invoices": return ReceiptText;
+      case "transactions": return ReceiptText;
       case "refunds": return Undo2;
+      case "tiers": return Zap;
+      case "payouts": return CreditCard;
       default: return Info;
     }
   };
@@ -353,23 +404,77 @@ export default function ConfiguracoesPage() {
           </div>
 
           <Button 
-            variant="secondary" 
+            variant="warning" 
             onClick={handleMigration} 
             loading={isMigrating} 
             icon={Database}
             size="md"
+            disabled={isMigrating}
           >
-            Iniciar Migração
+            {isMigrating ? "Migrando..." : "Iniciar Migração"}
           </Button>
 
+          {/* Migration Progress Display */}
+          {migrateProgress.length > 0 && (
+            <div className="mt-4 p-3 bg-zinc-50 rounded-lg border border-zinc-200 max-h-64 overflow-y-auto">
+              <div className="space-y-2">
+                {migrateProgress.map((progress, idx) => {
+                  const Icon = getStepIcon(progress.step);
+                  return (
+                    <div key={idx} className="flex items-center gap-2 text-xs">
+                      {progress.completed ? (
+                        <CheckCircle className="h-3.5 w-3.5 text-success-600 flex-shrink-0" />
+                      ) : (
+                        <Icon className="h-3.5 w-3.5 text-warning-600 flex-shrink-0 animate-pulse" />
+                      )}
+                      <span className={progress.completed ? "text-success-700" : "text-zinc-600"}>
+                        {progress.message}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {migrateResult && (
-            <Alert 
-              variant={migrateResult.success ? "success" : "error"} 
-              icon={migrateResult.success ? CheckCircle : AlertTriangle}
-              className="mt-4"
-            >
-              {migrateResult.message}
-            </Alert>
+            <>
+              <Alert 
+                variant={migrateResult.success ? "success" : "error"} 
+                icon={migrateResult.success ? CheckCircle : AlertTriangle}
+                className="mt-4"
+              >
+                {migrateResult.message}
+              </Alert>
+              
+              {migrateResult.summary && (
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { label: "Afiliados importados", value: migrateResult.summary.affiliates },
+                    { label: "Já existiam", value: migrateResult.summary.affiliatesSkipped },
+                    { label: "Clientes vinculados", value: migrateResult.summary.customers },
+                    { label: "Transações", value: migrateResult.summary.transactions },
+                    { label: "Erros", value: migrateResult.summary.errors },
+                  ].map((item) => (
+                    <div key={item.label} className="p-2 bg-zinc-50 rounded-lg border border-zinc-200">
+                      <span className="text-[10px] text-zinc-500">{item.label}</span>
+                      <p className="text-sm font-semibold text-zinc-900">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {migrateErrors.length > 0 && (
+                <div className="mt-3 p-3 bg-error-50 rounded-lg border border-error-200 max-h-32 overflow-y-auto">
+                  <p className="text-xs font-medium text-error-700 mb-2">Erros encontrados:</p>
+                  <ul className="space-y-1">
+                    {migrateErrors.map((err, i) => (
+                      <li key={i} className="text-xs text-error-600">{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
           )}
         </Card>
 
