@@ -1,36 +1,125 @@
 "use client";
 
-import { useState } from "react";
-import { Card, Button, Badge, Input, Alert } from "@/components/ui/index";
-import { RefreshCw, Upload, Database, AlertTriangle, CheckCircle, Settings, Info, Zap, Shield } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useState, useEffect, useRef } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { Card, Button, Badge, Input, Alert, Progress } from "@/components/ui/index";
+import { RefreshCw, Upload, Database, AlertTriangle, CheckCircle, Settings, Info, Zap, Shield, Clock, Calendar, Users, CreditCard, ReceiptText, Undo2 } from "lucide-react";
+
+interface SyncLog {
+  id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: "running" | "completed" | "error";
+  days_synced: number;
+  customers_scanned: number;
+  customers_linked: number;
+  subscriptions_synced: number;
+  invoices_synced: number;
+  refunds_synced: number;
+  error_message: string | null;
+  triggered_by: "manual" | "cron";
+}
+
+interface SyncProgress {
+  step: string;
+  message: string;
+  completed?: boolean;
+}
 
 export default function ConfiguracoesPage() {
   const [isResyncing, setIsResyncing] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
-  const [resyncDays, setResyncDays] = useState("30");
-  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [resyncDays, setResyncDays] = useState("5");
+  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; summary?: Record<string, number> } | null>(null);
   const [migrateResult, setMigrateResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress[]>([]);
+  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(true);
+  const progressRef = useRef<HTMLDivElement>(null);
+
+  const supabase = createClient();
+
+  // Load sync logs on mount
+  useEffect(() => {
+    loadSyncLogs();
+  }, []);
+
+  const loadSyncLogs = async () => {
+    setLoadingLogs(true);
+    const { data } = await supabase
+      .from("sync_logs")
+      .select("*")
+      .order("started_at", { ascending: false })
+      .limit(10);
+    
+    setSyncLogs((data as SyncLog[]) || []);
+    setLoadingLogs(false);
+  };
 
   const handleResync = async () => {
     setIsResyncing(true);
     setSyncResult(null);
+    setSyncProgress([]);
+
     try {
       const response = await fetch("/api/admin/stripe-resync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ days: parseInt(resyncDays) }),
       });
-      const data = await response.json();
-      if (response.ok) {
-        const msg = data.customersLinked 
-          ? `Resync concluído! ${data.processed || 0} registros processados, ${data.customersLinked} clientes vinculados a afiliados.`
-          : `Resync concluído! ${data.processed || 0} registros processados.`;
-        setSyncResult({ success: true, message: msg });
-      } else throw new Error(data.error || "Erro no resync");
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("Falha ao iniciar streaming");
+
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = JSON.parse(line.slice(6));
+
+            if (data.type === "start") {
+              setSyncProgress([{ step: "start", message: data.message }]);
+            } else if (data.type === "progress") {
+              setSyncProgress(prev => {
+                const existing = prev.findIndex(p => p.step === data.step);
+                if (existing >= 0) {
+                  const updated = [...prev];
+                  updated[existing] = { step: data.step, message: data.message, completed: data.completed };
+                  return updated;
+                }
+                return [...prev, { step: data.step, message: data.message, completed: data.completed }];
+              });
+            } else if (data.type === "complete") {
+              setSyncResult({ 
+                success: true, 
+                message: data.message,
+                summary: data.summary
+              });
+              loadSyncLogs();
+            } else if (data.type === "error") {
+              setSyncResult({ success: false, message: data.message });
+              loadSyncLogs();
+            }
+          }
+        }
+
+        // Auto scroll to latest progress
+        if (progressRef.current) {
+          progressRef.current.scrollTop = progressRef.current.scrollHeight;
+        }
+      }
     } catch (error) {
       setSyncResult({ success: false, message: error instanceof Error ? error.message : "Erro desconhecido" });
-    } finally { setIsResyncing(false); }
+    } finally {
+      setIsResyncing(false);
+    }
   };
 
   const handleMigration = async () => {
@@ -46,6 +135,25 @@ export default function ConfiguracoesPage() {
     } catch (error) {
       setMigrateResult({ success: false, message: error instanceof Error ? error.message : "Erro desconhecido" });
     } finally { setIsMigrating(false); }
+  };
+
+  const formatDate = (date: string) => {
+    return new Date(date).toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const getStepIcon = (step: string) => {
+    switch (step) {
+      case "customers": return Users;
+      case "subscriptions": return CreditCard;
+      case "invoices": return ReceiptText;
+      case "refunds": return Undo2;
+      default: return Info;
+    }
   };
 
   return (
@@ -80,19 +188,130 @@ export default function ConfiguracoesPage() {
               value={resyncDays} 
               onChange={(e) => setResyncDays(e.target.value)} 
               className="w-full sm:w-32"
+              disabled={isResyncing}
             />
             <Button onClick={handleResync} loading={isResyncing} icon={RefreshCw} size="md" className="whitespace-nowrap">
-              Resync
+              {isResyncing ? "Sincronizando..." : "Resync"}
             </Button>
           </div>
 
-          {syncResult && (
-            <Alert 
-              variant={syncResult.success ? "success" : "error"} 
-              icon={syncResult.success ? CheckCircle : AlertTriangle}
+          {/* Progress Display */}
+          {syncProgress.length > 0 && (
+            <div 
+              ref={progressRef}
+              className="mb-4 p-3 bg-zinc-50 rounded-lg border border-zinc-200 max-h-48 overflow-y-auto"
             >
-              {syncResult.message}
-            </Alert>
+              <div className="space-y-2">
+                {syncProgress.map((progress, idx) => {
+                  const Icon = getStepIcon(progress.step);
+                  return (
+                    <div key={idx} className="flex items-center gap-2 text-xs">
+                      {progress.completed ? (
+                        <CheckCircle className="h-3.5 w-3.5 text-success-600 flex-shrink-0" />
+                      ) : (
+                        <Icon className="h-3.5 w-3.5 text-info-600 flex-shrink-0 animate-pulse" />
+                      )}
+                      <span className={progress.completed ? "text-success-700" : "text-zinc-600"}>
+                        {progress.message}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {syncResult && (
+            <>
+              <Alert 
+                variant={syncResult.success ? "success" : "error"} 
+                icon={syncResult.success ? CheckCircle : AlertTriangle}
+              >
+                {syncResult.message}
+              </Alert>
+              
+              {syncResult.summary && (
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { label: "Clientes escaneados", value: syncResult.summary.customersScanned, icon: Users },
+                    { label: "Clientes vinculados", value: syncResult.summary.customersLinked, icon: Users },
+                    { label: "Assinaturas", value: syncResult.summary.subscriptionsSynced, icon: CreditCard },
+                    { label: "Transações", value: syncResult.summary.invoicesSynced, icon: ReceiptText },
+                    { label: "Estornos", value: syncResult.summary.refundsSynced, icon: Undo2 },
+                    { label: "Total processado", value: syncResult.summary.totalProcessed, icon: Database },
+                  ].map((item) => (
+                    <div key={item.label} className="p-2 bg-zinc-50 rounded-lg border border-zinc-200">
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <item.icon className="h-3 w-3 text-zinc-400" />
+                        <span className="text-[10px] text-zinc-500">{item.label}</span>
+                      </div>
+                      <span className="text-sm font-semibold text-zinc-900">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+
+        {/* Sync History */}
+        <Card>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-9 w-9 rounded-lg bg-zinc-100 flex items-center justify-center">
+              <Clock className="h-4.5 w-4.5 text-zinc-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-900">Histórico de Syncs</h3>
+              <p className="text-xs text-zinc-500">Últimas sincronizações realizadas</p>
+            </div>
+          </div>
+
+          {loadingLogs ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-12 bg-zinc-100 rounded-lg animate-pulse" />
+              ))}
+            </div>
+          ) : syncLogs.length === 0 ? (
+            <p className="text-xs text-zinc-500 text-center py-4">Nenhum sync realizado ainda</p>
+          ) : (
+            <div className="space-y-2">
+              {syncLogs.map((log) => (
+                <div 
+                  key={log.id}
+                  className="p-3 bg-zinc-50 rounded-lg border border-zinc-200"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Badge 
+                        variant={log.status === "completed" ? "success" : log.status === "error" ? "error" : "default"}
+                        size="sm"
+                      >
+                        {log.status === "completed" ? "Concluído" : log.status === "error" ? "Erro" : "Executando"}
+                      </Badge>
+                      <Badge variant="secondary" size="sm">
+                        {log.triggered_by === "cron" ? "Automático" : "Manual"}
+                      </Badge>
+                    </div>
+                    <span className="text-[10px] text-zinc-500">
+                      {formatDate(log.started_at)}
+                    </span>
+                  </div>
+
+                  {log.status === "error" && log.error_message && (
+                    <p className="text-xs text-error-600 mb-2">{log.error_message}</p>
+                  )}
+
+                  <div className="flex items-center gap-4 text-[10px] text-zinc-500">
+                    <span>{log.days_synced} dias</span>
+                    <span>{log.customers_linked}/{log.customers_scanned} clientes</span>
+                    <span>{log.subscriptions_synced} assinaturas</span>
+                    <span>{log.invoices_synced} transações</span>
+                    <span>{log.refunds_synced} estornos</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </Card>
 
@@ -171,7 +390,7 @@ export default function ConfiguracoesPage() {
               { icon: Zap, label: "Versão", value: "1.0.0" },
               { icon: Shield, label: "Ambiente", value: process.env.NODE_ENV === "production" ? "Produção" : "Dev" },
               { icon: Info, label: "Comissão Base", value: "30%" },
-              { icon: Info, label: "Disponibilização", value: "15 dias" },
+              { icon: Calendar, label: "Sync Automático", value: "00:01 (BRT)" },
             ].map((item) => (
               <div key={item.label} className="p-3 bg-zinc-50 rounded-lg border border-zinc-200">
                 <div className="flex items-center gap-1.5 mb-1">
