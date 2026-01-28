@@ -67,7 +67,7 @@ export default function AssinaturasPage() {
               { label: "Refunds", value: stats.refund, color: "text-[#D97706]" },
               { label: "Disputas", value: stats.dispute, color: "text-[#DC2626]" },
             ].map((stat) => (
-              <Card key={stat.label} padding="sm">
+              <Card key={stat.label} className="!p-4">
                 <p className="text-xs text-[#6B7280] uppercase">{stat.label}</p>
                 <p className={`text-2xl font-semibold mt-1 ${stat.color}`}>{stat.value}</p>
               </Card>
