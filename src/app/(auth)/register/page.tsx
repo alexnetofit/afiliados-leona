@@ -7,195 +7,183 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Mail, Lock, User, Loader2, ArrowRight, Check } from "lucide-react";
 
+const BENEFITS = [
+  "Comissões de até 40%",
+  "Pagamentos via PIX",
+  "Dashboard completo",
+  "Suporte dedicado",
+];
+
 export default function RegisterPage() {
-  const [fullName, setFullName] = useState("");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
   const supabase = createClient();
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setLoading(true);
     setError("");
 
-    try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-        },
-      });
+    const { error: err } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: name } },
+    });
 
-      if (signUpError) {
-        console.error("Signup error:", signUpError);
-        setError(signUpError.message);
-        return;
-      }
-
-      if (data.user) {
-        router.push("/dashboard");
-        router.refresh();
-      }
-    } catch (err) {
-      console.error("Unexpected error:", err);
-      setError("Erro ao criar conta. Tente novamente.");
-    } finally {
-      setIsLoading(false);
+    if (err) {
+      setError(err.message);
+      setLoading(false);
+      return;
     }
+
+    router.push("/dashboard");
   };
 
-  const benefits = [
-    "Comissões de até 40% recorrentes",
-    "Dashboard completo para acompanhar vendas",
-    "Pagamentos via PIX ou transferência",
-    "Suporte dedicado para parceiros",
-  ];
-
   return (
-    <div className="min-h-screen flex">
-      {/* Left - Branding */}
-      <div className="hidden lg:flex lg:w-[480px] xl:w-[560px] flex-col justify-between p-12 relative overflow-hidden">
-        {/* Subtle gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#3A1D7A]/5 via-[#5B3FA6]/8 to-[#8E7EEA]/5" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-[#8E7EEA]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-[#3A1D7A]/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
+    <div className="min-h-screen bg-[#F8F9FC] grid lg:grid-cols-2">
+      {/* Left - Hero */}
+      <div className="hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-[#F8F9FC] via-[#EDE9FE]/30 to-[#F8F9FC]">
+        <Image
+          src="/logo-leona-roxa.png"
+          alt="Leona"
+          width={100}
+          height={32}
+          className="object-contain"
+        />
         
-        <div className="relative z-10">
-          <Image
-            src="/logo-leona-roxa.png"
-            alt="Leona"
-            width={120}
-            height={40}
-            className="object-contain"
-          />
-        </div>
-
-        <div className="relative z-10 space-y-8">
-          <div className="space-y-4">
-            <h1 className="text-4xl font-semibold text-[#1F1F2E] leading-tight tracking-tight">
-              Torne-se um<br />
-              <span className="text-[#3A1D7A]">Parceiro Leona</span>
-            </h1>
-            <p className="text-[#6B6F8D] text-lg max-w-sm leading-relaxed">
-              Crie sua conta gratuita e comece a ganhar comissões hoje mesmo.
-            </p>
-          </div>
+        <div className="max-w-md">
+          <h1 className="text-4xl font-semibold text-[#111827] leading-tight">
+            Torne-se um parceiro
+          </h1>
+          <p className="mt-4 text-lg text-[#6B7280]">
+            Crie sua conta e comece a ganhar comissões hoje.
+          </p>
           
-          <div className="space-y-4">
-            {benefits.map((benefit, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="h-6 w-6 rounded-full bg-[#3A1D7A]/10 flex items-center justify-center">
-                  <Check className="h-3.5 w-3.5 text-[#3A1D7A]" />
+          <div className="mt-10 space-y-4">
+            {BENEFITS.map((benefit) => (
+              <div key={benefit} className="flex items-center gap-3">
+                <div className="h-6 w-6 rounded-full bg-[#EDE9FE] flex items-center justify-center">
+                  <Check className="h-3.5 w-3.5 text-[#5B21B6]" />
                 </div>
-                <p className="text-[#1F1F2E]">{benefit}</p>
+                <span className="text-[#111827]">{benefit}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="relative z-10">
-          <p className="text-sm text-[#6B6F8D]">
-            © 2026 Leona. Todos os direitos reservados.
-          </p>
-        </div>
+        <p className="text-sm text-[#9CA3AF]">© 2026 Leona</p>
       </div>
 
       {/* Right - Form */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-white">
-        <div className="w-full max-w-[400px]">
-          {/* Mobile Logo */}
+      <div className="flex items-center justify-center p-8 lg:p-12">
+        <div className="w-full max-w-sm">
+          {/* Mobile logo */}
           <div className="lg:hidden mb-10">
             <Image
               src="/logo-leona-roxa.png"
               alt="Leona"
-              width={100}
-              height={32}
+              width={90}
+              height={28}
               className="object-contain"
             />
           </div>
 
-          <div className="space-y-2 mb-8">
-            <h2 className="text-2xl font-semibold text-[#1F1F2E] tracking-tight">
-              Criar conta
-            </h2>
-            <p className="text-[#6B6F8D]">
-              Preencha seus dados para começar
-            </p>
+          <div className="mb-8">
+            <h2 className="text-2xl font-semibold text-[#111827]">Criar conta</h2>
+            <p className="mt-2 text-[#6B7280]">Preencha seus dados</p>
           </div>
 
-          <form onSubmit={handleRegister} className="space-y-5">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-[#1F1F2E]" htmlFor="fullName">
-                Nome completo
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-[#111827] mb-2">
+                Nome
               </label>
               <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#6B6F8D]" />
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#9CA3AF]" />
                 <input
-                  id="fullName"
                   type="text"
                   required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   placeholder="Seu nome"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full h-12 pl-12 pr-4 bg-[#F8F9FC] border border-[#E5E7F2] rounded-xl text-[#1F1F2E] placeholder:text-[#6B6F8D]/60 focus:outline-none focus:border-[#3A1D7A] focus:ring-4 focus:ring-[#3A1D7A]/10 transition-all"
+                  className="
+                    w-full h-12 pl-12 pr-4
+                    bg-white border border-[#E8EAF0] rounded-xl
+                    text-[#111827] placeholder:text-[#9CA3AF]
+                    focus:outline-none focus:border-[#5B21B6] focus:ring-4 focus:ring-[#5B21B6]/10
+                    transition-all
+                  "
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-[#1F1F2E]" htmlFor="email">
+            <div>
+              <label className="block text-sm font-medium text-[#111827] mb-2">
                 E-mail
               </label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#6B6F8D]" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#9CA3AF]" />
                 <input
-                  id="email"
                   type="email"
                   required
-                  placeholder="seu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full h-12 pl-12 pr-4 bg-[#F8F9FC] border border-[#E5E7F2] rounded-xl text-[#1F1F2E] placeholder:text-[#6B6F8D]/60 focus:outline-none focus:border-[#3A1D7A] focus:ring-4 focus:ring-[#3A1D7A]/10 transition-all"
+                  placeholder="seu@email.com"
+                  className="
+                    w-full h-12 pl-12 pr-4
+                    bg-white border border-[#E8EAF0] rounded-xl
+                    text-[#111827] placeholder:text-[#9CA3AF]
+                    focus:outline-none focus:border-[#5B21B6] focus:ring-4 focus:ring-[#5B21B6]/10
+                    transition-all
+                  "
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-[#1F1F2E]" htmlFor="password">
+            <div>
+              <label className="block text-sm font-medium text-[#111827] mb-2">
                 Senha
               </label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#6B6F8D]" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#9CA3AF]" />
                 <input
-                  id="password"
                   type="password"
                   required
-                  placeholder="Mínimo 6 caracteres"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full h-12 pl-12 pr-4 bg-[#F8F9FC] border border-[#E5E7F2] rounded-xl text-[#1F1F2E] placeholder:text-[#6B6F8D]/60 focus:outline-none focus:border-[#3A1D7A] focus:ring-4 focus:ring-[#3A1D7A]/10 transition-all"
+                  placeholder="Mínimo 6 caracteres"
+                  className="
+                    w-full h-12 pl-12 pr-4
+                    bg-white border border-[#E8EAF0] rounded-xl
+                    text-[#111827] placeholder:text-[#9CA3AF]
+                    focus:outline-none focus:border-[#5B21B6] focus:ring-4 focus:ring-[#5B21B6]/10
+                    transition-all
+                  "
                 />
               </div>
             </div>
 
             {error && (
-              <div className="p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">
+              <div className="p-4 rounded-xl bg-[#FEE2E2] text-[#DC2626] text-sm">
                 {error}
               </div>
             )}
 
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full h-12 bg-[#3A1D7A] hover:bg-[#5B3FA6] text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+              disabled={loading}
+              className="
+                w-full h-12 rounded-xl
+                bg-[#5B21B6] hover:bg-[#4C1D95] text-white font-medium
+                flex items-center justify-center gap-2
+                transition-colors disabled:opacity-60
+              "
             >
-              {isLoading ? (
+              {loading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <>
@@ -206,17 +194,11 @@ export default function RegisterPage() {
             </button>
           </form>
 
-          <p className="mt-8 text-center text-[#6B6F8D]">
-            Já tem uma conta?{" "}
-            <Link href="/login" className="font-medium text-[#3A1D7A] hover:text-[#5B3FA6] transition-colors">
-              Fazer login
+          <p className="mt-8 text-center text-[#6B7280]">
+            Já tem conta?{" "}
+            <Link href="/login" className="text-[#5B21B6] font-medium hover:underline">
+              Entrar
             </Link>
-          </p>
-
-          <p className="mt-6 text-center text-xs text-[#6B6F8D]/80">
-            Ao criar sua conta, você concorda com nossos{" "}
-            <Link href="#" className="underline">Termos de Uso</Link> e{" "}
-            <Link href="#" className="underline">Política de Privacidade</Link>
           </p>
         </div>
       </div>

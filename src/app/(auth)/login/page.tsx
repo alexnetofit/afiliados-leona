@@ -10,169 +10,149 @@ import { Mail, Lock, Loader2, ArrowRight } from "lucide-react";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
   const supabase = createClient();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setLoading(true);
     setError("");
 
-    try {
-      const { error: loginError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
 
-      if (loginError) {
-        setError(loginError.message === "Invalid login credentials" 
-          ? "E-mail ou senha incorretos." 
-          : loginError.message);
-        return;
-      }
-
-      router.push("/dashboard");
-      router.refresh();
-    } catch {
-      setError("Ocorreu um erro ao entrar. Tente novamente.");
-    } finally {
-      setIsLoading(false);
+    if (err) {
+      setError(err.message === "Invalid login credentials" ? "E-mail ou senha incorretos" : err.message);
+      setLoading(false);
+      return;
     }
+
+    router.push("/dashboard");
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left - Branding */}
-      <div className="hidden lg:flex lg:w-[480px] xl:w-[560px] flex-col justify-between p-12 relative overflow-hidden">
-        {/* Subtle gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#3A1D7A]/5 via-[#5B3FA6]/8 to-[#8E7EEA]/5" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-[#8E7EEA]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-[#3A1D7A]/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
+    <div className="min-h-screen bg-[#F8F9FC] grid lg:grid-cols-2">
+      {/* Left - Hero */}
+      <div className="hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-[#F8F9FC] via-[#EDE9FE]/30 to-[#F8F9FC]">
+        <Image
+          src="/logo-leona-roxa.png"
+          alt="Leona"
+          width={100}
+          height={32}
+          className="object-contain"
+        />
         
-        <div className="relative z-10">
-          <Image
-            src="/logo-leona-roxa.png"
-            alt="Leona"
-            width={120}
-            height={40}
-            className="object-contain"
-          />
-        </div>
-
-        <div className="relative z-10 space-y-6">
-          <h1 className="text-4xl font-semibold text-[#1F1F2E] leading-tight tracking-tight">
-            Programa de<br />
-            <span className="text-[#3A1D7A]">Parceiros Leona</span>
+        <div className="max-w-md">
+          <h1 className="text-4xl font-semibold text-[#111827] leading-tight">
+            Programa de Parceiros
           </h1>
-          <p className="text-[#6B6F8D] text-lg max-w-sm leading-relaxed">
-            Ganhe comissões recorrentes de até 40% indicando novos clientes para a Leona.
+          <p className="mt-4 text-lg text-[#6B7280]">
+            Ganhe até 40% de comissão recorrente indicando novos clientes.
           </p>
           
-          <div className="flex gap-8 pt-4">
+          <div className="mt-10 grid grid-cols-3 gap-6">
             <div>
-              <p className="text-2xl font-semibold text-[#1F1F2E]">30%</p>
-              <p className="text-sm text-[#6B6F8D]">Comissão inicial</p>
+              <p className="text-3xl font-semibold text-[#111827]">30%</p>
+              <p className="text-sm text-[#6B7280] mt-1">Inicial</p>
             </div>
             <div>
-              <p className="text-2xl font-semibold text-[#1F1F2E]">40%</p>
-              <p className="text-sm text-[#6B6F8D]">Comissão máxima</p>
+              <p className="text-3xl font-semibold text-[#111827]">40%</p>
+              <p className="text-sm text-[#6B7280] mt-1">Máximo</p>
             </div>
             <div>
-              <p className="text-2xl font-semibold text-[#1F1F2E]">15 dias</p>
-              <p className="text-sm text-[#6B6F8D]">Para saque</p>
+              <p className="text-3xl font-semibold text-[#111827]">15d</p>
+              <p className="text-sm text-[#6B7280] mt-1">Para saque</p>
             </div>
           </div>
         </div>
 
-        <div className="relative z-10">
-          <p className="text-sm text-[#6B6F8D]">
-            © 2026 Leona. Todos os direitos reservados.
-          </p>
-        </div>
+        <p className="text-sm text-[#9CA3AF]">© 2026 Leona</p>
       </div>
 
       {/* Right - Form */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-white">
-        <div className="w-full max-w-[400px]">
-          {/* Mobile Logo */}
+      <div className="flex items-center justify-center p-8 lg:p-12">
+        <div className="w-full max-w-sm">
+          {/* Mobile logo */}
           <div className="lg:hidden mb-10">
             <Image
               src="/logo-leona-roxa.png"
               alt="Leona"
-              width={100}
-              height={32}
+              width={90}
+              height={28}
               className="object-contain"
             />
           </div>
 
-          <div className="space-y-2 mb-8">
-            <h2 className="text-2xl font-semibold text-[#1F1F2E] tracking-tight">
-              Bem-vindo de volta
-            </h2>
-            <p className="text-[#6B6F8D]">
-              Entre na sua conta de parceiro
-            </p>
+          <div className="mb-8">
+            <h2 className="text-2xl font-semibold text-[#111827]">Entrar</h2>
+            <p className="mt-2 text-[#6B7280]">Acesse sua conta de parceiro</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-[#1F1F2E]" htmlFor="email">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-[#111827] mb-2">
                 E-mail
               </label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#6B6F8D]" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#9CA3AF]" />
                 <input
-                  id="email"
                   type="email"
                   required
-                  placeholder="seu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full h-12 pl-12 pr-4 bg-[#F8F9FC] border border-[#E5E7F2] rounded-xl text-[#1F1F2E] placeholder:text-[#6B6F8D]/60 focus:outline-none focus:border-[#3A1D7A] focus:ring-4 focus:ring-[#3A1D7A]/10 transition-all"
+                  placeholder="seu@email.com"
+                  className="
+                    w-full h-12 pl-12 pr-4
+                    bg-white border border-[#E8EAF0] rounded-xl
+                    text-[#111827] placeholder:text-[#9CA3AF]
+                    focus:outline-none focus:border-[#5B21B6] focus:ring-4 focus:ring-[#5B21B6]/10
+                    transition-all
+                  "
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-[#1F1F2E]" htmlFor="password">
-                  Senha
-                </label>
-                <Link 
-                  href="/forgot-password" 
-                  className="text-sm font-medium text-[#3A1D7A] hover:text-[#5B3FA6] transition-colors"
-                >
-                  Esqueceu a senha?
-                </Link>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-[#111827] mb-2">
+                Senha
+              </label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#6B6F8D]" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#9CA3AF]" />
                 <input
-                  id="password"
                   type="password"
                   required
-                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full h-12 pl-12 pr-4 bg-[#F8F9FC] border border-[#E5E7F2] rounded-xl text-[#1F1F2E] placeholder:text-[#6B6F8D]/60 focus:outline-none focus:border-[#3A1D7A] focus:ring-4 focus:ring-[#3A1D7A]/10 transition-all"
+                  placeholder="••••••••"
+                  className="
+                    w-full h-12 pl-12 pr-4
+                    bg-white border border-[#E8EAF0] rounded-xl
+                    text-[#111827] placeholder:text-[#9CA3AF]
+                    focus:outline-none focus:border-[#5B21B6] focus:ring-4 focus:ring-[#5B21B6]/10
+                    transition-all
+                  "
                 />
               </div>
             </div>
 
             {error && (
-              <div className="p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">
+              <div className="p-4 rounded-xl bg-[#FEE2E2] text-[#DC2626] text-sm">
                 {error}
               </div>
             )}
 
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full h-12 bg-[#3A1D7A] hover:bg-[#5B3FA6] text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+              disabled={loading}
+              className="
+                w-full h-12 rounded-xl
+                bg-[#5B21B6] hover:bg-[#4C1D95] text-white font-medium
+                flex items-center justify-center gap-2
+                transition-colors disabled:opacity-60
+              "
             >
-              {isLoading ? (
+              {loading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <>
@@ -183,9 +163,9 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-8 text-center text-[#6B6F8D]">
-            Não tem uma conta?{" "}
-            <Link href="/register" className="font-medium text-[#3A1D7A] hover:text-[#5B3FA6] transition-colors">
+          <p className="mt-8 text-center text-[#6B7280]">
+            Não tem conta?{" "}
+            <Link href="/register" className="text-[#5B21B6] font-medium hover:underline">
               Criar conta
             </Link>
           </p>
