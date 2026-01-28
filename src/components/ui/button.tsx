@@ -6,24 +6,24 @@ import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-lighter focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-white hover:bg-primary-light shadow-button hover:shadow-lg",
+          "bg-[#3A1D7A] text-white hover:bg-[#5B3FA6] shadow-md hover:shadow-lg",
         secondary:
-          "bg-primary-lightest text-primary hover:bg-primary-lighter/30",
+          "bg-[#C6BEF5] text-[#3A1D7A] hover:bg-[#8E7EEA]/30",
         outline:
-          "border-2 border-border bg-transparent text-text-primary hover:bg-background hover:border-primary-lighter",
+          "border-2 border-[#E5E7F2] bg-transparent text-[#1F1F2E] hover:bg-[#F8F9FC] hover:border-[#8E7EEA]",
         ghost:
-          "text-text-secondary hover:bg-background hover:text-text-primary",
+          "text-[#6B6F8D] hover:bg-[#F8F9FC] hover:text-[#1F1F2E]",
         link:
-          "text-primary underline-offset-4 hover:underline",
+          "text-[#3A1D7A] underline-offset-4 hover:underline",
         destructive:
-          "bg-error text-white hover:bg-error/90",
+          "bg-red-500 text-white hover:bg-red-600",
         success:
-          "bg-success text-white hover:bg-success/90",
+          "bg-green-500 text-white hover:bg-green-600",
       },
       size: {
         default: "h-10 px-4 py-2",

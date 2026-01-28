@@ -19,7 +19,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-sm font-medium text-text-primary mb-1.5"
+            className="block text-sm font-medium text-[#1F1F2E] mb-1.5"
           >
             {label}
           </label>
@@ -28,22 +28,22 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           type={type}
           id={inputId}
           className={cn(
-            "flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary",
-            "placeholder:text-text-secondary/60",
-            "focus:outline-none focus:ring-2 focus:ring-primary-lighter focus:border-primary-lighter",
-            "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-background",
+            "flex h-10 w-full rounded-lg border border-[#E5E7F2] bg-white px-3 py-2 text-sm text-[#1F1F2E]",
+            "placeholder:text-[#6B6F8D]/60",
+            "focus:outline-none focus:ring-2 focus:ring-[#8E7EEA] focus:border-[#8E7EEA]",
+            "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-[#F8F9FC]",
             "transition-colors duration-200",
-            error && "border-error focus:ring-error/30 focus:border-error",
+            error && "border-red-500 focus:ring-red-300 focus:border-red-500",
             className
           )}
           ref={ref}
           {...props}
         />
         {hint && !error && (
-          <p className="mt-1.5 text-xs text-text-secondary">{hint}</p>
+          <p className="mt-1.5 text-xs text-[#6B6F8D]">{hint}</p>
         )}
         {error && (
-          <p className="mt-1.5 text-xs text-error">{error}</p>
+          <p className="mt-1.5 text-xs text-red-500">{error}</p>
         )}
       </div>
     );

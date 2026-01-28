@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,21 +56,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex justify-center mb-8">
           <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-12 w-12">
-              <Image
-                src="/assets/brand/leona-logo.png"
-                alt="Leona"
-                fill
-                className="object-contain"
-                priority
-              />
+            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[#3A1D7A] to-[#8E7EEA] flex items-center justify-center">
+              <span className="text-white text-2xl font-bold">L</span>
             </div>
-            <span className="text-3xl font-bold bg-gradient-leona bg-clip-text text-transparent">
+            <span className="text-3xl font-bold bg-gradient-to-r from-[#3A1D7A] via-[#5B3FA6] to-[#8E7EEA] bg-clip-text text-transparent">
               Leona
             </span>
           </Link>
@@ -107,7 +100,7 @@ export default function LoginPage() {
               />
 
               {error && (
-                <div className="rounded-lg bg-error-light p-3 text-sm text-error">
+                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600">
                   {error}
                 </div>
               )}
@@ -121,19 +114,19 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <div className="mt-6 text-center text-sm text-text-secondary">
+            <div className="mt-6 text-center text-sm text-[#6B6F8D]">
               Não tem uma conta?{" "}
-              <Link href="/register" className="text-primary font-medium hover:underline">
+              <Link href="/register" className="text-[#3A1D7A] font-medium hover:underline">
                 Cadastre-se
               </Link>
             </div>
           </CardContent>
         </Card>
 
-        <p className="mt-8 text-center text-xs text-text-secondary">
+        <p className="mt-8 text-center text-xs text-[#6B6F8D]">
           Ao entrar, você concorda com nossos{" "}
-          <a href="#" className="underline">Termos de Uso</a> e{" "}
-          <a href="#" className="underline">Política de Privacidade</a>
+          <a href="#" className="underline text-[#3A1D7A]">Termos de Uso</a> e{" "}
+          <a href="#" className="underline text-[#3A1D7A]">Política de Privacidade</a>
         </p>
       </div>
     </div>
