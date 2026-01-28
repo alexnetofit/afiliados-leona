@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/stripe-sync",
-      "schedule": "1 0 * * *"
+      "schedule": "1 3 * * *"
     }
   ]
 }
