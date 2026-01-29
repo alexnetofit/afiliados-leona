@@ -15,6 +15,11 @@ interface RewardfulLink {
   token: string; // O código legível (ex: "alex", "joao")
 }
 
+interface RewardfulCampaign {
+  id: string;
+  name: string; // Ex: "Afiliados 30%", "Afiliados 35%", "Afiliados 40%"
+}
+
 interface RewardfulAffiliate {
   id: string;
   email: string;
@@ -23,6 +28,16 @@ interface RewardfulAffiliate {
   token: string; // ID interno do Rewardful (não usar como código)
   state: string;
   links?: RewardfulLink[]; // Array de links expandidos
+  campaign?: RewardfulCampaign; // Campanha com nome contendo a comissão
+}
+
+// Helper to extract commission tier from campaign name
+function getCommissionTierFromCampaign(campaignName?: string): number {
+  if (!campaignName) return 1; // Default to tier 1 (30%)
+  
+  if (campaignName.includes("40")) return 3; // 40%
+  if (campaignName.includes("35")) return 2; // 35%
+  return 1; // Default 30%
 }
 
 interface RewardfulReferral {
@@ -147,9 +162,9 @@ export async function POST() {
           sendEvent({ type: "progress", step: "fetch", message: msg });
         };
 
-        // 1. Fetch affiliates with expanded links
+        // 1. Fetch affiliates with expanded links and campaign
         sendEvent({ type: "progress", step: "affiliates", message: "Buscando afiliados do Rewardful..." });
-        const affiliates = await fetchAllRewardful<RewardfulAffiliate>("/affiliates?expand=links", progressCallback);
+        const affiliates = await fetchAllRewardful<RewardfulAffiliate>("/affiliates?expand[]=links&expand[]=campaign", progressCallback);
         sendEvent({ type: "progress", step: "affiliates", message: `${affiliates.length} afiliados encontrados`, completed: true });
 
         // 2. Fetch referrals
@@ -224,6 +239,9 @@ export async function POST() {
           // Get the readable code from the first link, fallback to token
           const affiliateCode = aff.links?.[0]?.token || aff.token;
           
+          // Get commission tier from campaign name (30%, 35%, or 40%)
+          const commissionTier = getCommissionTierFromCampaign(aff.campaign?.name);
+          
           // Already exists with same code?
           if (codeToAffiliateId.has(affiliateCode)) {
             affiliateMap.set(aff.id, codeToAffiliateId.get(affiliateCode)!);
@@ -246,9 +264,9 @@ export async function POST() {
                 affiliateMap.set(aff.id, existingAffId);
                 skipped++;
               } else {
-                // Update code to Rewardful code
+                // Update code and tier to Rewardful values
                 const { error: updateError } = await supabase.from("affiliates")
-                  .update({ affiliate_code: affiliateCode })
+                  .update({ affiliate_code: affiliateCode, commission_tier: commissionTier })
                   .eq("id", existingAffId);
                 
                 if (updateError) {
@@ -268,6 +286,7 @@ export async function POST() {
                 .insert({
                   user_id: userId,
                   affiliate_code: affiliateCode,
+                  commission_tier: commissionTier,
                   is_active: aff.state === "active",
                 })
                 .select("id")
@@ -314,9 +333,13 @@ export async function POST() {
               .single();
 
             if (autoCreatedAffiliate) {
-              // Update code to Rewardful link token
+              // Update code, tier and status to Rewardful values
               await supabase.from("affiliates")
-                .update({ affiliate_code: affiliateCode, is_active: aff.state === "active" })
+                .update({ 
+                  affiliate_code: affiliateCode, 
+                  commission_tier: commissionTier,
+                  is_active: aff.state === "active" 
+                })
                 .eq("id", autoCreatedAffiliate.id);
               
               affiliateMap.set(aff.id, autoCreatedAffiliate.id);
