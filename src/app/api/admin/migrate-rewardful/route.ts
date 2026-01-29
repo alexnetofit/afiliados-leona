@@ -371,16 +371,27 @@ export async function POST() {
           
           const affiliateId = affiliateMap.get(aff.id);
           if (!affiliateId) {
-            console.log(`No affiliate ID found for ${aff.email} (rewardful id: ${aff.id})`);
-            continue;
+            // Try to find by code instead
+            const firstLinkToken = aff.links[0]?.token;
+            const affiliateIdByCode = firstLinkToken ? codeToAffiliateId.get(firstLinkToken) : undefined;
+            
+            if (!affiliateIdByCode) {
+              console.log(`No affiliate ID found for ${aff.email} - rewardful_id: ${aff.id}, first_token: ${firstLinkToken}`);
+              continue;
+            }
+            
+            // Use the ID found by code
+            affiliateMap.set(aff.id, affiliateIdByCode);
           }
+          
+          const finalAffiliateId = affiliateMap.get(aff.id)!;
           
           // Import links starting from index 1 (skip the first one, it's the main code)
           for (let j = 1; j < aff.links.length && j < 3; j++) { // Limit to 3 total (1 main + 2 aliases)
             const link = aff.links[j];
             if (!link.token) continue;
             
-            // Check if alias already exists
+            // Check if alias already exists globally
             const { data: existingLink } = await supabase
               .from("affiliate_links")
               .select("id")
@@ -389,15 +400,18 @@ export async function POST() {
             
             if (!existingLink) {
               const { error } = await supabase.from("affiliate_links").insert({
-                affiliate_id: affiliateId,
+                affiliate_id: finalAffiliateId,
                 alias: link.token,
               });
               
               if (!error) {
                 linksImported++;
+                sendEvent({ type: "progress", step: "links", message: `Importado alias: ${link.token}` });
               } else {
-                console.error(`Failed to insert link ${link.token}: ${error.message}`);
+                console.error(`Failed to insert link ${link.token} for ${aff.email}: ${error.message}`);
               }
+            } else {
+              console.log(`Alias ${link.token} already exists, skipping`);
             }
           }
         }
