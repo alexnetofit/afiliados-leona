@@ -244,7 +244,14 @@ export async function POST() {
           
           // Already exists with same code?
           if (codeToAffiliateId.has(affiliateCode)) {
-            affiliateMap.set(aff.id, codeToAffiliateId.get(affiliateCode)!);
+            const existingId = codeToAffiliateId.get(affiliateCode)!;
+            affiliateMap.set(aff.id, existingId);
+            
+            // Still update the tier even if code already exists
+            await supabase.from("affiliates")
+              .update({ commission_tier: commissionTier })
+              .eq("id", existingId);
+            
             skipped++;
             continue;
           }
@@ -257,17 +264,10 @@ export async function POST() {
             const existingAffId = userIdToAffiliateId.get(userId);
             
             if (existingAffId) {
-              // Check if code already matches
-              const currentCode = affiliateIdToCode.get(existingAffId);
-              if (currentCode === affiliateCode) {
-                // Code already correct, just map it
-                affiliateMap.set(aff.id, existingAffId);
-                skipped++;
-              } else {
-                // Update code and tier to Rewardful values
-                const { error: updateError } = await supabase.from("affiliates")
-                  .update({ affiliate_code: affiliateCode, commission_tier: commissionTier })
-                  .eq("id", existingAffId);
+              // Always update code and tier to Rewardful values
+              const { error: updateError } = await supabase.from("affiliates")
+                .update({ affiliate_code: affiliateCode, commission_tier: commissionTier })
+                .eq("id", existingAffId);
                 
                 if (updateError) {
                   // Code might already exist (unique constraint)
@@ -362,12 +362,19 @@ export async function POST() {
         sendEvent({ type: "progress", step: "links", message: "Importando links adicionais..." });
         
         let linksImported = 0;
+        let affiliatesWithMultipleLinks = 0;
+        
         for (const aff of affiliates) {
           // Skip if no additional links
           if (!aff.links || aff.links.length <= 1) continue;
           
+          affiliatesWithMultipleLinks++;
+          
           const affiliateId = affiliateMap.get(aff.id);
-          if (!affiliateId) continue;
+          if (!affiliateId) {
+            console.log(`No affiliate ID found for ${aff.email} (rewardful id: ${aff.id})`);
+            continue;
+          }
           
           // Import links starting from index 1 (skip the first one, it's the main code)
           for (let j = 1; j < aff.links.length && j < 3; j++) { // Limit to 3 total (1 main + 2 aliases)
@@ -389,14 +396,19 @@ export async function POST() {
               
               if (!error) {
                 linksImported++;
+              } else {
+                console.error(`Failed to insert link ${link.token}: ${error.message}`);
               }
             }
           }
         }
         
-        if (linksImported > 0) {
-          sendEvent({ type: "progress", step: "links", message: `${linksImported} links adicionais importados`, completed: true });
-        }
+        sendEvent({ 
+          type: "progress", 
+          step: "links", 
+          message: `${affiliatesWithMultipleLinks} afiliados com múltiplos links, ${linksImported} novos aliases importados`, 
+          completed: true 
+        });
 
         // 5. Link customers
         sendEvent({ type: "progress", step: "customers", message: "Vinculando clientes..." });
