@@ -268,17 +268,16 @@ export async function POST() {
               const { error: updateError } = await supabase.from("affiliates")
                 .update({ affiliate_code: affiliateCode, commission_tier: commissionTier })
                 .eq("id", existingAffId);
-                
-                if (updateError) {
-                  // Code might already exist (unique constraint)
-                  console.error(`Failed to update affiliate ${existingAffId} with code ${affiliateCode}: ${updateError.message}`);
-                  skipped++;
-                } else {
-                  affiliateMap.set(aff.id, existingAffId);
-                  codeToAffiliateId.set(affiliateCode, existingAffId);
-                  affiliateIdToCode.set(existingAffId, affiliateCode); // Update local cache
-                  updated++;
-                }
+              
+              if (updateError) {
+                // Code might already exist (unique constraint)
+                console.error(`Failed to update affiliate ${existingAffId} with code ${affiliateCode}: ${updateError.message}`);
+                skipped++;
+              } else {
+                affiliateMap.set(aff.id, existingAffId);
+                codeToAffiliateId.set(affiliateCode, existingAffId);
+                affiliateIdToCode.set(existingAffId, affiliateCode); // Update local cache
+                updated++;
               }
             } else {
               // Create affiliate for existing user
