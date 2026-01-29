@@ -49,15 +49,28 @@ async function getAffiliateForCustomer(
   
   console.log(`Found affiliate code in metadata: ${affiliateCode} for customer ${customerId}`);
 
-  // Find affiliate by code or alias
-  const { data: affiliate } = await supabase
+  // Find affiliate by code (exact match or in semicolon-separated list)
+  let affiliate = await supabase
     .from("affiliates")
     .select("id")
     .eq("affiliate_code", affiliateCode)
-    .single();
+    .single()
+    .then(r => r.data);
 
+  // If not found, try searching in semicolon-separated codes
   if (!affiliate) {
-    // Try finding by alias
+    const { data: affiliates } = await supabase
+      .from("affiliates")
+      .select("id, affiliate_code")
+      .ilike("affiliate_code", `%${affiliateCode}%`);
+    
+    affiliate = affiliates?.find(a => 
+      a.affiliate_code.split(';').map(c => c.trim().toLowerCase()).includes(affiliateCode.toLowerCase())
+    ) || null;
+  }
+
+  // Try finding by alias (legacy support)
+  if (!affiliate) {
     const { data: link } = await supabase
       .from("affiliate_links")
       .select("affiliate_id")
@@ -68,7 +81,6 @@ async function getAffiliateForCustomer(
       return null;
     }
 
-    // Create First Touch
     await supabase.from("customer_affiliates").insert({
       stripe_customer_id: customerId,
       affiliate_id: link.affiliate_id,

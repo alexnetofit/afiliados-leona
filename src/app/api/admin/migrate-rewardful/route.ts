@@ -236,23 +236,28 @@ export async function POST() {
             });
           }
           
-          // Get the readable code from the first link, fallback to token
-          const affiliateCode = aff.links?.[0]?.token || aff.token;
+          // Get ALL tokens from links, joined by semicolon
+          const allTokens = aff.links?.map(l => l.token).filter(Boolean) || [];
+          const affiliateCode = allTokens.length > 0 ? allTokens.join(';') : aff.token;
           
           // Get commission tier from campaign name (30%, 35%, or 40%)
           const commissionTier = getCommissionTierFromCampaign(aff.campaign?.name);
           
-          // Already exists with same code?
-          if (codeToAffiliateId.has(affiliateCode)) {
-            const existingId = codeToAffiliateId.get(affiliateCode)!;
+          // Check if any of the tokens already exists in the bank
+          const firstToken = allTokens[0] || aff.token;
+          if (codeToAffiliateId.has(firstToken)) {
+            const existingId = codeToAffiliateId.get(firstToken)!;
             affiliateMap.set(aff.id, existingId);
             
-            // Still update the tier even if code already exists
+            // Update code (with all tokens) and tier
             await supabase.from("affiliates")
-              .update({ commission_tier: commissionTier })
+              .update({ affiliate_code: affiliateCode, commission_tier: commissionTier })
               .eq("id", existingId);
             
-            skipped++;
+            // Update cache with all tokens pointing to this affiliate
+            allTokens.forEach(t => codeToAffiliateId.set(t, existingId));
+            
+            updated++;
             continue;
           }
           
@@ -357,73 +362,7 @@ export async function POST() {
           completed: true
         });
 
-        // 4. Import additional links (beyond the first one)
-        sendEvent({ type: "progress", step: "links", message: "Importando links adicionais..." });
-        
-        let linksImported = 0;
-        let affiliatesWithMultipleLinks = 0;
-        
-        for (const aff of affiliates) {
-          // Skip if no additional links
-          if (!aff.links || aff.links.length <= 1) continue;
-          
-          affiliatesWithMultipleLinks++;
-          
-          const affiliateId = affiliateMap.get(aff.id);
-          if (!affiliateId) {
-            // Try to find by code instead
-            const firstLinkToken = aff.links[0]?.token;
-            const affiliateIdByCode = firstLinkToken ? codeToAffiliateId.get(firstLinkToken) : undefined;
-            
-            if (!affiliateIdByCode) {
-              console.log(`No affiliate ID found for ${aff.email} - rewardful_id: ${aff.id}, first_token: ${firstLinkToken}`);
-              continue;
-            }
-            
-            // Use the ID found by code
-            affiliateMap.set(aff.id, affiliateIdByCode);
-          }
-          
-          const finalAffiliateId = affiliateMap.get(aff.id)!;
-          
-          // Import links starting from index 1 (skip the first one, it's the main code)
-          for (let j = 1; j < aff.links.length && j < 3; j++) { // Limit to 3 total (1 main + 2 aliases)
-            const link = aff.links[j];
-            if (!link.token) continue;
-            
-            // Check if alias already exists globally
-            const { data: existingLink } = await supabase
-              .from("affiliate_links")
-              .select("id")
-              .eq("alias", link.token)
-              .single();
-            
-            if (!existingLink) {
-              const { error } = await supabase.from("affiliate_links").insert({
-                affiliate_id: finalAffiliateId,
-                alias: link.token,
-              });
-              
-              if (!error) {
-                linksImported++;
-                sendEvent({ type: "progress", step: "links", message: `Importado alias: ${link.token}` });
-              } else {
-                console.error(`Failed to insert link ${link.token} for ${aff.email}: ${error.message}`);
-              }
-            } else {
-              console.log(`Alias ${link.token} already exists, skipping`);
-            }
-          }
-        }
-        
-        sendEvent({ 
-          type: "progress", 
-          step: "links", 
-          message: `${affiliatesWithMultipleLinks} afiliados com múltiplos links, ${linksImported} novos aliases importados`, 
-          completed: true 
-        });
-
-        // 5. Link customers
+        // 4. Link customers
         sendEvent({ type: "progress", step: "customers", message: "Vinculando clientes..." });
         
         let customersLinked = 0;
