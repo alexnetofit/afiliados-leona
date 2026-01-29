@@ -27,7 +27,10 @@ interface RewardfulReferral {
   };
 }
 
-// Fetch all pages from Rewardful API
+// Helper to wait
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Fetch all pages from Rewardful API with rate limit handling
 async function fetchAllRewardful<T>(endpoint: string): Promise<T[]> {
   const allData: T[] = [];
   let page = 1;
@@ -42,6 +45,12 @@ async function fetchAllRewardful<T>(endpoint: string): Promise<T[]> {
         "Content-Type": "application/json",
       },
     });
+
+    // Handle rate limit
+    if (response.status === 429) {
+      await delay(2000); // Wait 2 seconds and retry
+      continue;
+    }
 
     if (!response.ok) {
       break;
@@ -62,6 +71,9 @@ async function fetchAllRewardful<T>(endpoint: string): Promise<T[]> {
     allData.push(...items);
     
     if (items.length < 100) break;
+    
+    // Wait between requests to avoid rate limit
+    await delay(500);
     page++;
   }
 
