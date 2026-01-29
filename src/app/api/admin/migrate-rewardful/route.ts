@@ -150,14 +150,29 @@ export async function POST() {
         const referrals = await fetchAllRewardful<RewardfulReferral>("/referrals", progressCallback);
         sendEvent({ type: "progress", step: "referrals", message: `${referrals.length} referrals encontrados`, completed: true });
 
-        // 3. Get existing users by email
-        sendEvent({ type: "progress", step: "processing", message: "Processando afiliados..." });
+        // 3. Get existing users by email (with pagination to get ALL users)
+        sendEvent({ type: "progress", step: "processing", message: "Carregando usuários existentes..." });
         
-        const { data: existingUsers } = await supabase.auth.admin.listUsers();
         const emailToUserId = new Map<string, string>();
-        existingUsers?.users.forEach(u => {
-          if (u.email) emailToUserId.set(u.email.toLowerCase(), u.id);
-        });
+        let userPage = 1;
+        const usersPerPage = 1000;
+        let hasMoreUsers = true;
+
+        while (hasMoreUsers) {
+          const { data: { users } } = await supabase.auth.admin.listUsers({
+            page: userPage,
+            perPage: usersPerPage,
+          });
+          
+          users.forEach(u => {
+            if (u.email) emailToUserId.set(u.email.toLowerCase(), u.id);
+          });
+          
+          sendEvent({ type: "progress", step: "processing", message: `${emailToUserId.size} usuários carregados...` });
+          
+          hasMoreUsers = users.length === usersPerPage;
+          userPage++;
+        }
 
         // Get existing affiliates by code
         const { data: existingAffiliates } = await supabase
