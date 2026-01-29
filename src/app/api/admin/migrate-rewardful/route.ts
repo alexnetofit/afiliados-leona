@@ -31,13 +31,14 @@ interface RewardfulReferral {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Fetch all pages from Rewardful API with rate limit handling
-async function fetchAllRewardful<T>(endpoint: string): Promise<T[]> {
+async function fetchAllRewardful<T>(endpoint: string, sendProgress?: (msg: string) => void): Promise<T[]> {
   const allData: T[] = [];
   let page = 1;
-  const maxPages = 20;
+  const maxPages = 50;
+  let hasMore = true;
 
-  while (page <= maxPages) {
-    const url = `${REWARDFUL_API_URL}${endpoint}${endpoint.includes('?') ? '&' : '?'}page=${page}&per_page=100`;
+  while (hasMore && page <= maxPages) {
+    const url = `${REWARDFUL_API_URL}${endpoint}${endpoint.includes('?') ? '&' : '?'}page=${page}&per_page=50`;
     
     const response = await fetch(url, {
       headers: {
@@ -48,11 +49,13 @@ async function fetchAllRewardful<T>(endpoint: string): Promise<T[]> {
 
     // Handle rate limit
     if (response.status === 429) {
-      await delay(2000); // Wait 2 seconds and retry
+      sendProgress?.(`Rate limit, aguardando...`);
+      await delay(3000);
       continue;
     }
 
     if (!response.ok) {
+      console.error(`Rewardful error: ${response.status}`);
       break;
     }
 
@@ -66,14 +69,26 @@ async function fetchAllRewardful<T>(endpoint: string): Promise<T[]> {
       items = json.data;
     }
     
-    if (items.length === 0) break;
+    if (items.length === 0) {
+      hasMore = false;
+      break;
+    }
     
     allData.push(...items);
+    sendProgress?.(`Página ${page}: ${items.length} itens (total: ${allData.length})`);
     
-    if (items.length < 100) break;
+    // Check if there are more pages
+    if (json.pagination?.total_pages) {
+      hasMore = page < json.pagination.total_pages;
+    } else if (json.meta?.total_pages) {
+      hasMore = page < json.meta.total_pages;
+    } else {
+      // If no pagination info, assume there's more if we got a full page
+      hasMore = items.length >= 50;
+    }
     
     // Wait between requests to avoid rate limit
-    await delay(500);
+    await delay(800);
     page++;
   }
 
@@ -120,15 +135,20 @@ export async function POST() {
 
         sendEvent({ type: "start", message: "Iniciando migração do Rewardful..." });
 
+        // Progress callback
+        const progressCallback = (msg: string) => {
+          sendEvent({ type: "progress", step: "fetch", message: msg });
+        };
+
         // 1. Fetch affiliates
-        sendEvent({ type: "progress", step: "affiliates", message: "Buscando afiliados..." });
-        const affiliates = await fetchAllRewardful<RewardfulAffiliate>("/affiliates");
-        sendEvent({ type: "progress", step: "affiliates", message: `${affiliates.length} afiliados encontrados` });
+        sendEvent({ type: "progress", step: "affiliates", message: "Buscando afiliados do Rewardful..." });
+        const affiliates = await fetchAllRewardful<RewardfulAffiliate>("/affiliates", progressCallback);
+        sendEvent({ type: "progress", step: "affiliates", message: `${affiliates.length} afiliados encontrados`, completed: true });
 
         // 2. Fetch referrals
-        sendEvent({ type: "progress", step: "referrals", message: "Buscando referrals..." });
-        const referrals = await fetchAllRewardful<RewardfulReferral>("/referrals");
-        sendEvent({ type: "progress", step: "referrals", message: `${referrals.length} referrals encontrados` });
+        sendEvent({ type: "progress", step: "referrals", message: "Buscando referrals do Rewardful..." });
+        const referrals = await fetchAllRewardful<RewardfulReferral>("/referrals", progressCallback);
+        sendEvent({ type: "progress", step: "referrals", message: `${referrals.length} referrals encontrados`, completed: true });
 
         // 3. Get existing users by email
         sendEvent({ type: "progress", step: "processing", message: "Processando afiliados..." });
@@ -157,15 +177,19 @@ export async function POST() {
         let updated = 0;
         let skipped = 0;
 
-        for (const aff of affiliates) {
+        sendEvent({ type: "progress", step: "processing", message: `Processando ${affiliates.length} afiliados...` });
+
+        for (let i = 0; i < affiliates.length; i++) {
+          const aff = affiliates[i];
+          
           // Already exists with same code?
           if (codeToAffiliateId.has(aff.token)) {
             affiliateMap.set(aff.id, codeToAffiliateId.get(aff.token)!);
             skipped++;
             continue;
           }
-
-          // User exists?
+          
+          // Check if user exists by email
           const userId = emailToUserId.get(aff.email.toLowerCase());
           
           if (userId) {
@@ -194,6 +218,7 @@ export async function POST() {
               if (newAff) {
                 affiliateMap.set(aff.id, newAff.id);
                 codeToAffiliateId.set(aff.token, newAff.id);
+                userIdToAffiliateId.set(userId, newAff.id);
                 created++;
               }
             }
