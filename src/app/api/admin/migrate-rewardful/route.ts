@@ -181,9 +181,11 @@ export async function POST() {
         
         const codeToAffiliateId = new Map<string, string>();
         const userIdToAffiliateId = new Map<string, string>();
+        const affiliateIdToCode = new Map<string, string>(); // To check if update needed
         existingAffiliates?.forEach(a => {
           codeToAffiliateId.set(a.affiliate_code, a.id);
           userIdToAffiliateId.set(a.user_id, a.id);
+          affiliateIdToCode.set(a.id, a.affiliate_code);
         });
 
         // Map rewardful_id -> our affiliate_id
@@ -192,10 +194,25 @@ export async function POST() {
         let updated = 0;
         let skipped = 0;
 
+        sendEvent({ 
+          type: "progress", 
+          step: "processing", 
+          message: `${emailToUserId.size} usuários no Auth, ${existingAffiliates?.length || 0} affiliates no banco` 
+        });
+
         sendEvent({ type: "progress", step: "processing", message: `Processando ${affiliates.length} afiliados...` });
 
         for (let i = 0; i < affiliates.length; i++) {
           const aff = affiliates[i];
+          
+          // Progress update every 20 affiliates
+          if (i > 0 && i % 20 === 0) {
+            sendEvent({ 
+              type: "progress", 
+              step: "processing", 
+              message: `${i}/${affiliates.length} processados (${created} criados, ${updated} atualizados, ${skipped} skipped)` 
+            });
+          }
           
           // Already exists with same code?
           if (codeToAffiliateId.has(aff.token)) {
@@ -212,13 +229,29 @@ export async function POST() {
             const existingAffId = userIdToAffiliateId.get(userId);
             
             if (existingAffId) {
-              // Update code to Rewardful code
-              await supabase.from("affiliates")
-                .update({ affiliate_code: aff.token })
-                .eq("id", existingAffId);
-              affiliateMap.set(aff.id, existingAffId);
-              codeToAffiliateId.set(aff.token, existingAffId);
-              updated++;
+              // Check if code already matches
+              const currentCode = affiliateIdToCode.get(existingAffId);
+              if (currentCode === aff.token) {
+                // Code already correct, just map it
+                affiliateMap.set(aff.id, existingAffId);
+                skipped++;
+              } else {
+                // Update code to Rewardful code
+                const { error: updateError } = await supabase.from("affiliates")
+                  .update({ affiliate_code: aff.token })
+                  .eq("id", existingAffId);
+                
+                if (updateError) {
+                  // Code might already exist (unique constraint)
+                  console.error(`Failed to update affiliate ${existingAffId} with code ${aff.token}: ${updateError.message}`);
+                  skipped++;
+                } else {
+                  affiliateMap.set(aff.id, existingAffId);
+                  codeToAffiliateId.set(aff.token, existingAffId);
+                  affiliateIdToCode.set(existingAffId, aff.token); // Update local cache
+                  updated++;
+                }
+              }
             } else {
               // Create affiliate for existing user
               const { data: newAff } = await supabase.from("affiliates")
