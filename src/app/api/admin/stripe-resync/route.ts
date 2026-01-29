@@ -90,7 +90,7 @@ async function getOrCreateAffiliateForCustomer(
     return affiliate.id;
   }
 
-  // 4. Try finding by link alias (legacy support)
+  // Try finding by custom alias (created by affiliate in dashboard)
   const { data: link } = await supabaseAdmin
     .from("affiliate_links")
     .select("affiliate_id")

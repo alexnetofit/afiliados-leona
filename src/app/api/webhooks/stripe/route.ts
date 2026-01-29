@@ -69,7 +69,7 @@ async function getAffiliateForCustomer(
     ) || null;
   }
 
-  // Try finding by alias (legacy support)
+  // Try finding by custom alias (created by affiliate in dashboard)
   if (!affiliate) {
     const { data: link } = await supabase
       .from("affiliate_links")
