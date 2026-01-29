@@ -335,7 +335,47 @@ export async function POST() {
           completed: true
         });
 
-        // 4. Link customers
+        // 4. Import additional links (beyond the first one)
+        sendEvent({ type: "progress", step: "links", message: "Importando links adicionais..." });
+        
+        let linksImported = 0;
+        for (const aff of affiliates) {
+          // Skip if no additional links
+          if (!aff.links || aff.links.length <= 1) continue;
+          
+          const affiliateId = affiliateMap.get(aff.id);
+          if (!affiliateId) continue;
+          
+          // Import links starting from index 1 (skip the first one, it's the main code)
+          for (let j = 1; j < aff.links.length && j < 3; j++) { // Limit to 3 total (1 main + 2 aliases)
+            const link = aff.links[j];
+            if (!link.token) continue;
+            
+            // Check if alias already exists
+            const { data: existingLink } = await supabase
+              .from("affiliate_links")
+              .select("id")
+              .eq("alias", link.token)
+              .single();
+            
+            if (!existingLink) {
+              const { error } = await supabase.from("affiliate_links").insert({
+                affiliate_id: affiliateId,
+                alias: link.token,
+              });
+              
+              if (!error) {
+                linksImported++;
+              }
+            }
+          }
+        }
+        
+        if (linksImported > 0) {
+          sendEvent({ type: "progress", step: "links", message: `${linksImported} links adicionais importados`, completed: true });
+        }
+
+        // 5. Link customers
         sendEvent({ type: "progress", step: "customers", message: "Vinculando clientes..." });
         
         let customersLinked = 0;
