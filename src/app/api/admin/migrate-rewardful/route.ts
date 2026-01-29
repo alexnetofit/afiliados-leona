@@ -329,15 +329,26 @@ export async function POST() {
         sendEvent({ type: "progress", step: "customers", message: "Vinculando clientes..." });
         
         let customersLinked = 0;
+        let skippedReferrals = 0;
+        let noStripeId = 0;
+        let noAffiliateMatch = 0;
         const customerBatch: { stripe_customer_id: string; affiliate_id: string }[] = [];
 
         for (const ref of referrals) {
-          if (!ref.stripe_customer_id || !ref.affiliate?.id) continue;
+          if (!ref.stripe_customer_id) {
+            noStripeId++;
+            continue;
+          }
+          
+          if (!ref.affiliate?.id && !ref.affiliate?.token) {
+            skippedReferrals++;
+            continue;
+          }
           
           // Try to find affiliate by rewardful id or by token
-          let affiliateId = affiliateMap.get(ref.affiliate.id);
+          let affiliateId = ref.affiliate?.id ? affiliateMap.get(ref.affiliate.id) : undefined;
           
-          if (!affiliateId && ref.affiliate.token) {
+          if (!affiliateId && ref.affiliate?.token) {
             affiliateId = codeToAffiliateId.get(ref.affiliate.token);
           }
           
@@ -346,8 +357,16 @@ export async function POST() {
               stripe_customer_id: ref.stripe_customer_id,
               affiliate_id: affiliateId,
             });
+          } else {
+            noAffiliateMatch++;
           }
         }
+        
+        sendEvent({ 
+          type: "progress", 
+          step: "customers", 
+          message: `${customerBatch.length} para vincular (${noStripeId} sem stripe_id, ${noAffiliateMatch} sem match)` 
+        });
 
         // Bulk upsert customers
         if (customerBatch.length > 0) {
