@@ -237,27 +237,34 @@ export async function POST() {
               continue;
             }
 
-            // Create profile
+            // Note: Creating profile triggers on_profile_created which auto-creates affiliate
+            // with random code. We need to update it to use Rewardful token.
             await supabase.from("profiles").upsert({
               id: authUser.user.id,
               full_name: `${aff.first_name} ${aff.last_name}`.trim(),
               role: "affiliate",
             }, { onConflict: "id" });
 
-            // Create affiliate
-            const { data: newAff } = await supabase.from("affiliates")
-              .insert({
-                user_id: authUser.user.id,
-                affiliate_code: aff.token,
-                is_active: aff.state === "active",
-              })
+            // Small delay to ensure trigger has executed
+            await delay(100);
+
+            // Fetch the affiliate created by trigger and update with Rewardful token
+            const { data: autoCreatedAffiliate } = await supabase
+              .from("affiliates")
               .select("id")
+              .eq("user_id", authUser.user.id)
               .single();
 
-            if (newAff) {
-              affiliateMap.set(aff.id, newAff.id);
+            if (autoCreatedAffiliate) {
+              // Update code to Rewardful token
+              await supabase.from("affiliates")
+                .update({ affiliate_code: aff.token, is_active: aff.state === "active" })
+                .eq("id", autoCreatedAffiliate.id);
+              
+              affiliateMap.set(aff.id, autoCreatedAffiliate.id);
               emailToUserId.set(aff.email.toLowerCase(), authUser.user.id);
-              codeToAffiliateId.set(aff.token, newAff.id);
+              codeToAffiliateId.set(aff.token, autoCreatedAffiliate.id);
+              userIdToAffiliateId.set(authUser.user.id, autoCreatedAffiliate.id);
               created++;
             }
           }

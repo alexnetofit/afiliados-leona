@@ -42,8 +42,11 @@ async function getOrCreateAffiliateForCustomer(
     return existing.affiliate_id;
   }
 
+  // Check referral, Link, via, etc
   const affiliateCode = 
     customerMetadata?.referral || 
+    customerMetadata?.Link ||
+    customerMetadata?.link ||
     customerMetadata?.via || 
     customerMetadata?.affiliate_code || 
     customerMetadata?.ref;

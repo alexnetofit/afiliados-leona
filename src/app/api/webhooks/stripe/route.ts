@@ -34,9 +34,11 @@ async function getAffiliateForCustomer(
   }
 
   // 2. If no First Touch, check metadata for affiliate code
-  // Support multiple metadata keys: referral, via, affiliate_code, ref
+  // Support multiple metadata keys: referral, Link, via, affiliate_code, ref
   const affiliateCode = 
     metadata?.referral || 
+    metadata?.Link ||
+    metadata?.link ||
     metadata?.via || 
     metadata?.affiliate_code || 
     metadata?.ref;
