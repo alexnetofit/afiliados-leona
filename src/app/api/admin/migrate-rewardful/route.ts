@@ -46,9 +46,13 @@ async function fetchAllRewardful<T>(endpoint: string): Promise<T[]> {
   const allData: T[] = [];
   let page = 1;
   let totalPages = 1;
+  const maxPages = 50; // Safety limit
 
   do {
-    const response = await fetch(`${REWARDFUL_API_URL}${endpoint}${endpoint.includes('?') ? '&' : '?'}page=${page}&per_page=100`, {
+    const url = `${REWARDFUL_API_URL}${endpoint}${endpoint.includes('?') ? '&' : '?'}page=${page}&per_page=100`;
+    console.log(`[Rewardful] Fetching: ${url}`);
+    
+    const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${REWARDFUL_API_SECRET}`,
         "Content-Type": "application/json",
@@ -56,15 +60,41 @@ async function fetchAllRewardful<T>(endpoint: string): Promise<T[]> {
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Rewardful] Error ${response.status}: ${errorText}`);
       throw new Error(`Rewardful API error: ${response.status}`);
     }
 
-    const json = await response.json() as RewardfulPaginatedResponse<T>;
-    allData.push(...json.data);
+    const json = await response.json();
+    console.log(`[Rewardful] Response keys:`, Object.keys(json));
     
-    totalPages = json.pagination?.total_pages || 1;
+    // Handle different response structures
+    let items: T[] = [];
+    if (Array.isArray(json)) {
+      items = json;
+    } else if (json.data && Array.isArray(json.data)) {
+      items = json.data;
+    } else if (json.affiliates && Array.isArray(json.affiliates)) {
+      items = json.affiliates;
+    } else if (json.referrals && Array.isArray(json.referrals)) {
+      items = json.referrals;
+    }
+    
+    allData.push(...items);
+    console.log(`[Rewardful] Page ${page}: ${items.length} items, total so far: ${allData.length}`);
+    
+    // Check pagination
+    if (json.pagination?.total_pages) {
+      totalPages = json.pagination.total_pages;
+    } else if (json.meta?.total_pages) {
+      totalPages = json.meta.total_pages;
+    } else if (items.length < 100) {
+      // If we got less than per_page items, we're on the last page
+      break;
+    }
+    
     page++;
-  } while (page <= totalPages);
+  } while (page <= totalPages && page <= maxPages);
 
   return allData;
 }
