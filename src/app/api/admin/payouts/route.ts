@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
     
     const { data: affiliates, error: affError } = await supabaseAdmin
       .from("affiliates")
-      .select("id, affiliate_code, payout_pix_key, payout_wise_email, user_id")
+      .select("id, affiliate_code, payout_pix_key, payout_wise_details, user_id")
       .in("id", affiliateIds);
 
     console.log("Affiliates found:", { count: affiliates?.length, error: affError?.message });
@@ -141,14 +141,16 @@ export async function GET(request: NextRequest) {
     const payouts = affiliates.map(aff => {
       const txData = affiliateMap.get(aff.id) || { total: 0, count: 0 };
       const isPaid = paidMap.has(aff.id);
+      const wiseDetails = aff.payout_wise_details as { email?: string } | null;
+      const wiseEmail = wiseDetails?.email || null;
 
       return {
         affiliate_id: aff.id,
         affiliate_code: aff.affiliate_code,
         full_name: profileMap.get(aff.user_id) || null,
-        email: aff.payout_wise_email || "-",
+        email: wiseEmail || "-",
         payout_pix_key: aff.payout_pix_key,
-        payout_wise_email: aff.payout_wise_email,
+        payout_wise_email: wiseEmail,
         total_cents: txData.total,
         transactions_count: txData.count,
         status: isPaid ? "paid" : "pending",
