@@ -223,9 +223,8 @@ export default function PagamentosPage() {
 
         if (existing) {
           // Update existing record
-          await supabase
-            .from("monthly_payouts")
-            .update({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.from("monthly_payouts") as any).update({
               status: "paid",
               paid_at: new Date().toISOString(),
               total_commission_cents: payoutRecord.total_commission_cents,
@@ -234,7 +233,8 @@ export default function PagamentosPage() {
             .eq("id", existing.id);
         } else {
           // Insert new record
-          await supabase.from("monthly_payouts").insert(payoutRecord);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.from("monthly_payouts") as any).insert(payoutRecord);
         }
       }
 
