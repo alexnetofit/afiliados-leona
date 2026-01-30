@@ -34,8 +34,6 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get("endDate");
     const payoutDate = searchParams.get("payoutDate");
 
-    console.log("Payouts API called:", { startDate, endDate, payoutDate });
-
     if (!startDate || !endDate) {
       return NextResponse.json({ error: "startDate e endDate são obrigatórios" }, { status: 400 });
     }
@@ -43,8 +41,6 @@ export async function GET(request: NextRequest) {
     // Build proper date range (startDate and endDate come as YYYY-MM-DD)
     const startDateTime = `${startDate}T00:00:00`;
     const endDateTime = `${endDate}T23:59:59`;
-    
-    console.log("Query date range:", { startDateTime, endDateTime });
 
     // Fetch transactions (using service role - bypasses RLS)
     const { data: transactions, error: txError } = await supabaseAdmin
@@ -54,31 +50,12 @@ export async function GET(request: NextRequest) {
       .lte("paid_at", endDateTime)
       .eq("type", "commission");
 
-    console.log("Transactions found:", { count: transactions?.length, error: txError?.message, sample: transactions?.[0] });
-
     if (txError) {
       return NextResponse.json({ error: txError.message }, { status: 500 });
     }
 
     if (!transactions || transactions.length === 0) {
-      // Debug: check what transactions exist
-      const { data: allTx } = await supabaseAdmin
-        .from("transactions")
-        .select("id, paid_at, type, affiliate_id")
-        .eq("type", "commission")
-        .order("paid_at", { ascending: false })
-        .limit(5);
-      console.log("Recent transactions in DB:", allTx);
-      
-      // Return debug info to client
-      return NextResponse.json({ 
-        payouts: [], 
-        stats: { pending: 0, paid: 0, count: 0 },
-        debug: {
-          queryRange: { startDateTime, endDateTime },
-          recentTransactions: allTx?.map(t => ({ id: t.id, paid_at: t.paid_at })) || []
-        }
-      });
+      return NextResponse.json({ payouts: [], stats: { pending: 0, paid: 0, count: 0 } });
     }
 
     // Group by affiliate
@@ -90,28 +67,16 @@ export async function GET(request: NextRequest) {
       affiliateMap.set(tx.affiliate_id, existing);
     });
 
-    // Fetch affiliates with profiles
+    // Fetch affiliates
     const affiliateIds = Array.from(affiliateMap.keys());
-    console.log("Affiliate IDs from transactions:", affiliateIds.length, affiliateIds.slice(0, 3));
     
-    const { data: affiliates, error: affError } = await supabaseAdmin
+    const { data: affiliates } = await supabaseAdmin
       .from("affiliates")
       .select("id, affiliate_code, payout_pix_key, payout_wise_details, user_id")
       .in("id", affiliateIds);
 
-    console.log("Affiliates found:", { count: affiliates?.length, error: affError?.message });
-
     if (!affiliates || affiliates.length === 0) {
-      return NextResponse.json({ 
-        payouts: [], 
-        stats: { pending: 0, paid: 0, count: 0 },
-        debug: {
-          transactionsFound: transactions.length,
-          affiliateIdsFromTx: affiliateIds.slice(0, 5),
-          affiliatesFound: 0,
-          affiliateError: affError?.message
-        }
-      });
+      return NextResponse.json({ payouts: [], stats: { pending: 0, paid: 0, count: 0 } });
     }
 
     // Fetch profiles for names
@@ -167,15 +132,7 @@ export async function GET(request: NextRequest) {
       count: payouts.filter(p => p.status === "pending").length,
     };
 
-    return NextResponse.json({ 
-      payouts, 
-      stats,
-      debug: {
-        transactionsFound: transactions.length,
-        affiliatesFound: affiliates.length,
-        payoutsGenerated: payouts.length
-      }
-    });
+    return NextResponse.json({ payouts, stats });
   } catch (error) {
     console.error("Payouts API error:", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });

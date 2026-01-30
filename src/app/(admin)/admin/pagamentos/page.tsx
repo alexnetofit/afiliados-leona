@@ -109,16 +109,11 @@ export default function PagamentosPage() {
       
       // Use API route to bypass RLS
       const apiUrl = `/api/admin/payouts?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&payoutDate=${encodeURIComponent(selectedPayoutDate)}`;
-      console.log("Calling API:", apiUrl);
-      console.log("Date range:", { startDate, endDate, selectedPayoutDate });
       
       const response = await fetch(apiUrl);
       const data = await response.json();
       
-      console.log("API response:", { status: response.status, data });
-      
       if (!response.ok) {
-        console.error("API error:", data);
         setPayoutData([]);
         return;
       }
