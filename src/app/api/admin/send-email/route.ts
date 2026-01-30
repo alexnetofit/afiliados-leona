@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     // If test email, send only to that address
     if (testEmail) {
       const { error } = await resend.emails.send({
-        from: "Leona Afiliados <noreply@leonasolutions.io>",
+        from: "Leona Afiliados <onboarding@resend.dev>",
         to: testEmail,
         subject: `[TESTE] ${subject}`,
         html: htmlContent,
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
       const results = await Promise.allSettled(
         batch.map(email =>
           resend.emails.send({
-            from: "Leona Afiliados <noreply@leonasolutions.io>",
+            from: "Leona Afiliados <onboarding@resend.dev>",
             to: email,
             subject,
             html: htmlContent,
