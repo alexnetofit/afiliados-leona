@@ -18,23 +18,36 @@ export default function ResetPasswordPage() {
   const router = useRouter();
   const supabase = createClient();
 
+  const [isValidAccess, setIsValidAccess] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
+
   // Check if user has a valid session from the reset link
   useEffect(() => {
-    // Listen for auth state changes - this handles the token from the URL hash
+    // Check if URL has recovery tokens (hash fragment)
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const hasRecoveryToken = hashParams.has("access_token") || hashParams.has("token");
+    
+    // If no tokens in URL, redirect immediately
+    if (!hasRecoveryToken && !window.location.hash) {
+      router.push("/forgot-password");
+      return;
+    }
+
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY") {
-        // User clicked the reset link - session is now valid
-        return;
-      }
-      
-      if (event === "SIGNED_IN" && session) {
-        // Session established from recovery link
-        return;
-      }
-      
-      // If no session after initial check, redirect
-      if (event === "INITIAL_SESSION" && !session) {
-        router.push("/forgot-password");
+      if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
+        setIsValidAccess(true);
+        setIsChecking(false);
+      } else if (event === "INITIAL_SESSION") {
+        // Wait a bit for tokens to be processed
+        setTimeout(() => {
+          if (!session) {
+            router.push("/forgot-password");
+          } else {
+            setIsValidAccess(true);
+            setIsChecking(false);
+          }
+        }, 500);
       }
     });
 
@@ -77,6 +90,18 @@ export default function ResetPasswordPage() {
       router.push("/dashboard");
     }, 2000);
   };
+
+  // Show loading while checking session
+  if (isChecking) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary-600 mx-auto mb-4" />
+          <p className="text-zinc-500">Verificando link...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
