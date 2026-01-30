@@ -194,8 +194,17 @@ export default function PagamentosPage() {
       }
 
       // Build enriched data
-      const enrichedData: AffiliatePayoutData[] = affiliates.map((aff) => {
-        const profile = aff.profiles as { full_name: string | null } | null;
+      type AffiliateWithProfile = {
+        id: string;
+        affiliate_code: string;
+        payout_pix_key: string | null;
+        payout_wise_email: string | null;
+        user_id: string;
+        profiles: { full_name: string | null } | null;
+      };
+      
+      const enrichedData: AffiliatePayoutData[] = (affiliates as AffiliateWithProfile[]).map((aff) => {
+        const profile = aff.profiles;
         const txData = affiliateMap.get(aff.id) || { total: 0, count: 0 };
         const isPaid = paidMap.has(aff.id);
 
