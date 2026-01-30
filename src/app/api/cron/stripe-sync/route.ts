@@ -42,14 +42,14 @@ async function getOrCreateAffiliateForCustomer(
     return existing.affiliate_id;
   }
 
-  // Check Link first, then referral as fallback
+  // Check Link first, then referral, then others
   const affiliateCode = 
     customerMetadata?.Link ||
+    customerMetadata?.referral ||
     customerMetadata?.link ||
     customerMetadata?.via ||
     customerMetadata?.affiliate_code ||
-    customerMetadata?.ref ||
-    customerMetadata?.referral;
+    customerMetadata?.ref;
 
   if (!affiliateCode) {
     affiliateCache.set(customerId, null);

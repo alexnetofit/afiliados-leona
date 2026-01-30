@@ -46,14 +46,14 @@ async function getOrCreateAffiliateForCustomer(
   }
 
   // 2. Check metadata for affiliate code
-  // Priority: Link first (readable code), then referral as fallback
+  // Priority: Link first, then referral, then others
   const affiliateCode = 
     customerMetadata?.Link ||
+    customerMetadata?.referral ||
     customerMetadata?.link ||
     customerMetadata?.via || 
     customerMetadata?.affiliate_code || 
-    customerMetadata?.ref ||
-    customerMetadata?.referral;
+    customerMetadata?.ref;
 
   if (!affiliateCode) {
     affiliateCache.set(customerId, null);

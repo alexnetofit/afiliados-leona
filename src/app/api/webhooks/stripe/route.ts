@@ -34,14 +34,14 @@ async function getAffiliateForCustomer(
   }
 
   // 2. If no First Touch, check metadata for affiliate code
-  // Priority: Link first (readable code), then referral as fallback
+  // Priority: Link first, then referral, then others
   const affiliateCode = 
     metadata?.Link ||
+    metadata?.referral ||
     metadata?.link ||
     metadata?.via || 
     metadata?.affiliate_code || 
-    metadata?.ref ||
-    metadata?.referral;
+    metadata?.ref;
   
   if (!affiliateCode) {
     return null;
