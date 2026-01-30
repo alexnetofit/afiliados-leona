@@ -168,53 +168,52 @@ export default function PagamentosPage() {
         affiliateMap.set(tx.affiliate_id, existing);
       });
 
-      // Fetch affiliate details
+      // Fetch affiliate details with profile join
       const affiliateIds = Array.from(affiliateMap.keys());
-      const { data: affiliates } = await supabase
+      console.log("Fetching affiliates for IDs:", affiliateIds.length);
+      
+      const { data: affiliates, error: affError } = await supabase
         .from("affiliates")
-        .select("id, affiliate_code, payout_pix_key, payout_wise_email, user_id")
+        .select(`
+          id, 
+          affiliate_code, 
+          payout_pix_key, 
+          payout_wise_email, 
+          user_id,
+          profiles:user_id (full_name)
+        `)
         .in("id", affiliateIds);
 
-      if (!affiliates) {
+      console.log("Affiliates result:", { count: affiliates?.length, error: affError, sample: affiliates?.[0] });
+
+      if (!affiliates || affiliates.length === 0) {
+        console.log("No affiliates found for the transaction affiliate_ids");
         setPayoutData([]);
         setIsLoading(false);
         return;
       }
 
-      // Enrich with profile data
-      const enrichedData: AffiliatePayoutData[] = await Promise.all(
-        (affiliates as Array<{ id: string; affiliate_code: string; payout_pix_key: string | null; payout_wise_email: string | null; user_id: string }>).map(async (aff) => {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("full_name")
-            .eq("id", aff.user_id)
-            .single();
+      // Build enriched data
+      const enrichedData: AffiliatePayoutData[] = affiliates.map((aff) => {
+        const profile = aff.profiles as { full_name: string | null } | null;
+        const txData = affiliateMap.get(aff.id) || { total: 0, count: 0 };
+        const isPaid = paidMap.has(aff.id);
 
-          let email = "N/A";
-          try {
-            const { data: authData } = await supabase.auth.admin.getUserById(aff.user_id);
-            email = authData?.user?.email || "N/A";
-          } catch {
-            email = "N/A";
-          }
-
-          const txData = affiliateMap.get(aff.id) || { total: 0, count: 0 };
-          const isPaid = paidMap.has(aff.id);
-
-          return {
-            affiliate_id: aff.id,
-            affiliate_code: aff.affiliate_code,
-            full_name: (profile as { full_name: string | null } | null)?.full_name || null,
-            email,
-            payout_pix_key: aff.payout_pix_key,
-            payout_wise_email: aff.payout_wise_email,
-            total_cents: txData.total,
-            transactions_count: txData.count,
-            status: isPaid ? "paid" : "pending",
-            paid_at: paidMap.get(aff.id)?.paid_at || null,
-          };
-        })
-      );
+        return {
+          affiliate_id: aff.id,
+          affiliate_code: aff.affiliate_code,
+          full_name: profile?.full_name || null,
+          email: aff.payout_wise_email || "-", // Use Wise email as fallback
+          payout_pix_key: aff.payout_pix_key,
+          payout_wise_email: aff.payout_wise_email,
+          total_cents: txData.total,
+          transactions_count: txData.count,
+          status: isPaid ? "paid" : "pending",
+          paid_at: paidMap.get(aff.id)?.paid_at || null,
+        };
+      });
+      
+      console.log("Enriched data:", { count: enrichedData.length, sample: enrichedData[0] });
 
       // Apply status filter
       let filtered = enrichedData;
