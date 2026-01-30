@@ -77,7 +77,7 @@ async function getOrCreateAffiliateForCustomer(
     
     // Verify it's an exact match within the semicolon-separated values
     affiliate = affiliates?.find(a => 
-      a.affiliate_code.split(';').map(c => c.trim().toLowerCase()).includes(affiliateCode.toLowerCase())
+      a.affiliate_code.split(';').map((c: string) => c.trim().toLowerCase()).includes(affiliateCode.toLowerCase())
     ) || null;
   }
 

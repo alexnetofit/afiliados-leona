@@ -65,7 +65,7 @@ async function getAffiliateForCustomer(
       .ilike("affiliate_code", `%${affiliateCode}%`);
     
     affiliate = affiliates?.find(a => 
-      a.affiliate_code.split(';').map(c => c.trim().toLowerCase()).includes(affiliateCode.toLowerCase())
+      a.affiliate_code.split(';').map((c: string) => c.trim().toLowerCase()).includes(affiliateCode.toLowerCase())
     ) || null;
   }
 
