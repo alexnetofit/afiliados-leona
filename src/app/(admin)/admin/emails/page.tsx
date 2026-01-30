@@ -29,12 +29,12 @@ const EMAIL_TEMPLATES = [
   },
   {
     name: "Novidades do programa",
-    subject: "Novidades no Programa de Afiliados Leona!",
+    subject: "Novidades no Programa de Afiliados Leona, {name}!",
     html: `<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <h1 style="color: #7C3AED; margin-bottom: 20px;">Olá, Afiliado(a)! 👋</h1>
+  <h1 style="color: #7C3AED; margin-bottom: 20px;">Olá, {name}! 👋</h1>
   
   <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-    Temos novidades incríveis para você! Confira o que preparamos para melhorar ainda mais sua experiência como afiliado Leona.
+    Temos novidades incríveis para você, afiliado <strong>{tier}</strong>! Confira o que preparamos para melhorar ainda mais sua experiência como afiliado Leona.
   </p>
   
   <div style="background: #F3F4F6; padding: 20px; border-radius: 12px; margin: 24px 0;">
@@ -48,36 +48,91 @@ const EMAIL_TEMPLATES = [
   
   <p style="color: #6B7280; font-size: 14px; margin-top: 32px;">
     Equipe Leona<br>
-    <a href="https://app.leonasolutions.io" style="color: #7C3AED;">app.leonasolutions.io</a>
+    <a href="https://parceiros.leonaflow.com" style="color: #7C3AED;">parceiros.leonaflow.com</a>
   </p>
 </div>`,
   },
   {
     name: "Lembrete de pagamento",
-    subject: "Seu pagamento de comissões está disponível! 💰",
+    subject: "{name}, seu pagamento de comissões está disponível! 💰",
     html: `<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <h1 style="color: #7C3AED; margin-bottom: 20px;">Pagamento Disponível! 💰</h1>
+  <h1 style="color: #7C3AED; margin-bottom: 20px;">Pagamento Disponível, {name}! 💰</h1>
   
   <p style="color: #374151; font-size: 16px; line-height: 1.6;">
     Suas comissões estão prontas para serem pagas! Certifique-se de que seus dados de pagamento estão atualizados.
   </p>
   
   <div style="background: linear-gradient(135deg, #7C3AED 0%, #9333EA 100%); padding: 24px; border-radius: 12px; margin: 24px 0; text-align: center;">
-    <p style="color: rgba(255,255,255,0.8); margin: 0 0 8px 0; font-size: 14px;">Valor disponível</p>
-    <p style="color: white; margin: 0; font-size: 32px; font-weight: bold;">R$ XXX,XX</p>
+    <p style="color: rgba(255,255,255,0.8); margin: 0 0 8px 0; font-size: 14px;">Seu tier atual</p>
+    <p style="color: white; margin: 0; font-size: 24px; font-weight: bold;">{tier}</p>
   </div>
   
   <p style="color: #374151; font-size: 16px; line-height: 1.6;">
     Acesse seu painel para verificar os detalhes e atualizar suas informações de pagamento.
   </p>
   
-  <a href="https://app.leonasolutions.io/perfil" style="display: inline-block; background: #7C3AED; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 16px;">
+  <a href="https://parceiros.leonaflow.com/perfil" style="display: inline-block; background: #7C3AED; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 16px;">
     Verificar Pagamento
   </a>
   
   <p style="color: #6B7280; font-size: 14px; margin-top: 32px;">
     Equipe Leona
   </p>
+</div>`,
+  },
+  {
+    name: "Nova Área de Parceiros",
+    subject: "🚀 Novidade para você, {name}!",
+    html: `<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  
+  <h1 style="color: #7C3AED; margin-bottom: 12px;">
+    🚀 Novidade para você, {name}!
+  </h1>
+  
+  <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+    Acabamos de liberar a <strong>nova Área de Parceiros</strong> — feita para você acompanhar seus resultados e aumentar suas comissões com muito mais clareza.
+  </p>
+  
+  <div style="background: #F3F4F6; padding: 20px; border-radius: 12px; margin: 24px 0;">
+    <h3 style="color: #1F2937; margin: 0 0 12px 0;">
+      🎯 Nova Área de Parceiros
+    </h3>
+    <p style="color: #4B5563; margin: 0; line-height: 1.5;">
+      Agora você consegue ver:
+      <br>• vendas em tempo real  
+      <br>• assinaturas ativas  
+      <br>• pagamentos  
+      <br>• seu nível de afiliado  
+      <br>• e muito mais.
+    </p>
+  </div>
+  
+  <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+    <strong>Para acessar:</strong> clique no link abaixo e <strong>recupere sua senha</strong> (mesmo que seja seu primeiro acesso).  
+    Depois, é só entrar com seu e-mail e a nova senha.
+  </p>
+
+  <div style="text-align: center; margin: 28px 0 12px 0;">
+    <a href="https://parceiros.leonaflow.com/forgot-password?email={email}"
+       style="background: #7C3AED; color: #ffffff; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 700; display: inline-block;">
+      Recuperar senha e acessar
+    </a>
+  </div>
+
+  <p style="color: #6B7280; font-size: 13px; line-height: 1.5; margin: 0 0 18px 0; text-align: center;">
+    Link direto: <a href="https://parceiros.leonaflow.com/forgot-password?email={email}" style="color: #7C3AED;">parceiros.leonaflow.com/forgot-password</a>
+  </p>
+  
+  <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+    Continue divulgando seu link e acompanhe de perto sua evolução dentro do programa. 🚀
+  </p>
+  
+  <p style="color: #6B7280; font-size: 14px; margin-top: 32px;">
+    Conte com a gente!<br><br>
+    <strong>Equipe Leona</strong><br>
+    <a href="https://parceiros.leonaflow.com" style="color: #7C3AED;">parceiros.leonaflow.com</a>
+  </p>
+
 </div>`,
   },
 ];
@@ -351,6 +406,28 @@ export default function EmailsPage() {
                     {template.name}
                   </button>
                 ))}
+              </div>
+            </Card>
+
+            {/* Variables */}
+            <Card>
+              <h3 className="font-bold text-zinc-900 mb-3">Variáveis Disponíveis</h3>
+              <p className="text-xs text-zinc-500 mb-3">
+                Use no título ou conteúdo para personalizar:
+              </p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 rounded-lg border border-zinc-200">
+                  <code className="text-sm font-mono text-primary-600">{"{email}"}</code>
+                  <span className="text-xs text-zinc-500">Email do afiliado</span>
+                </div>
+                <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 rounded-lg border border-zinc-200">
+                  <code className="text-sm font-mono text-primary-600">{"{name}"}</code>
+                  <span className="text-xs text-zinc-500">Nome do afiliado</span>
+                </div>
+                <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 rounded-lg border border-zinc-200">
+                  <code className="text-sm font-mono text-primary-600">{"{tier}"}</code>
+                  <span className="text-xs text-zinc-500">Bronze / Prata / Ouro</span>
+                </div>
               </div>
             </Card>
           </div>

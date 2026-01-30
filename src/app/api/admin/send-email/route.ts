@@ -23,6 +23,25 @@ interface SendEmailRequest {
   testEmail?: string;
 }
 
+interface AffiliateData {
+  email: string;
+  name: string;
+  tier: string;
+}
+
+const TIER_NAMES: Record<number, string> = {
+  1: "Bronze",
+  2: "Prata",
+  3: "Ouro",
+};
+
+function replaceVariables(content: string, data: AffiliateData): string {
+  return content
+    .replace(/\{email\}/gi, data.email)
+    .replace(/\{name\}/gi, data.name)
+    .replace(/\{tier\}/gi, data.tier);
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Auth check
@@ -51,13 +70,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Título e conteúdo são obrigatórios" }, { status: 400 });
     }
 
-    // If test email, send only to that address
+    // If test email, send only to that address with sample data
     if (testEmail) {
+      const testData: AffiliateData = {
+        email: testEmail,
+        name: "Nome de Teste",
+        tier: "Ouro",
+      };
+      
+      const personalizedHtml = replaceVariables(htmlContent, testData);
+      const personalizedSubject = replaceVariables(subject, testData);
+      
       const { error } = await resend.emails.send({
         from: "Leona Afiliados <onboarding@resend.dev>",
         to: testEmail,
-        subject: `[TESTE] ${subject}`,
-        html: htmlContent,
+        subject: `[TESTE] ${personalizedSubject}`,
+        html: personalizedHtml,
       });
 
       if (error) {
@@ -134,42 +162,60 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Nenhum afiliado encontrado com os filtros de comissão" }, { status: 400 });
     }
 
-    // Get user emails from auth
+    // Get profiles for names
     const userIds = filteredAffiliates.map(a => a.user_id);
-    const emails: string[] = [];
+    const { data: profiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", userIds);
 
-    for (const userId of userIds) {
+    const profileMap = new Map<string, string>();
+    (profiles || []).forEach(p => {
+      profileMap.set(p.id, p.full_name || "");
+    });
+
+    // Build affiliate data with email, name, and tier
+    const affiliateDataList: AffiliateData[] = [];
+
+    for (const affiliate of filteredAffiliates) {
       try {
-        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(affiliate.user_id);
         if (authUser?.user?.email) {
-          emails.push(authUser.user.email);
+          affiliateDataList.push({
+            email: authUser.user.email,
+            name: profileMap.get(affiliate.user_id) || authUser.user.email.split("@")[0],
+            tier: TIER_NAMES[affiliate.commission_tier] || "Bronze",
+          });
         }
       } catch {
         // Skip users we can't get email for
       }
     }
 
-    if (emails.length === 0) {
+    if (affiliateDataList.length === 0) {
       return NextResponse.json({ error: "Nenhum email encontrado para os afiliados selecionados" }, { status: 400 });
     }
 
-    // Send emails in batches
+    // Send personalized emails in batches
     let sent = 0;
     let failed = 0;
     const batchSize = 10;
 
-    for (let i = 0; i < emails.length; i += batchSize) {
-      const batch = emails.slice(i, i + batchSize);
+    for (let i = 0; i < affiliateDataList.length; i += batchSize) {
+      const batch = affiliateDataList.slice(i, i + batchSize);
       
       const results = await Promise.allSettled(
-        batch.map(email =>
-          resend.emails.send({
+        batch.map(data => {
+          const personalizedHtml = replaceVariables(htmlContent, data);
+          const personalizedSubject = replaceVariables(subject, data);
+          
+          return resend.emails.send({
             from: "Leona Afiliados <onboarding@resend.dev>",
-            to: email,
-            subject,
-            html: htmlContent,
-          })
-        )
+            to: data.email,
+            subject: personalizedSubject,
+            html: personalizedHtml,
+          });
+        })
       );
 
       results.forEach(result => {
@@ -181,7 +227,7 @@ export async function POST(request: NextRequest) {
       });
 
       // Small delay between batches
-      if (i + batchSize < emails.length) {
+      if (i + batchSize < affiliateDataList.length) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
@@ -190,7 +236,7 @@ export async function POST(request: NextRequest) {
       success: true, 
       sent, 
       failed,
-      total: emails.length 
+      total: affiliateDataList.length 
     });
   } catch (error) {
     console.error("Send email error:", error);
