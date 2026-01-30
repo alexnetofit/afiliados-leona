@@ -18,41 +18,47 @@ export default function ResetPasswordPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [isValidAccess, setIsValidAccess] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
   // Check if user has a valid session from the reset link
   useEffect(() => {
-    // Check if URL has recovery tokens (hash fragment)
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const hasRecoveryToken = hashParams.has("access_token") || hashParams.has("token");
-    
-    // If no tokens in URL, redirect immediately
-    if (!hasRecoveryToken && !window.location.hash) {
-      router.push("/forgot-password");
-      return;
-    }
+    let redirectTimeout: NodeJS.Timeout;
+    let hasValidSession = false;
 
-    // Listen for auth state changes
+    // Listen for auth state changes - PKCE flow will trigger these
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
-        setIsValidAccess(true);
+      console.log("Auth event:", event, "Session:", !!session);
+      
+      if (event === "PASSWORD_RECOVERY") {
+        // User came from password recovery link
+        hasValidSession = true;
         setIsChecking(false);
+        if (redirectTimeout) clearTimeout(redirectTimeout);
+      } else if (event === "SIGNED_IN" && session) {
+        // Session established
+        hasValidSession = true;
+        setIsChecking(false);
+        if (redirectTimeout) clearTimeout(redirectTimeout);
       } else if (event === "INITIAL_SESSION") {
-        // Wait a bit for tokens to be processed
-        setTimeout(() => {
-          if (!session) {
-            router.push("/forgot-password");
-          } else {
-            setIsValidAccess(true);
-            setIsChecking(false);
-          }
-        }, 500);
+        if (session) {
+          // Already has a session
+          hasValidSession = true;
+          setIsChecking(false);
+        } else {
+          // No session yet - wait for PKCE code exchange
+          // Set a timeout to redirect if no session is established
+          redirectTimeout = setTimeout(() => {
+            if (!hasValidSession) {
+              router.push("/forgot-password");
+            }
+          }, 3000); // Wait 3 seconds for PKCE to complete
+        }
       }
     });
 
     return () => {
       subscription.unsubscribe();
+      if (redirectTimeout) clearTimeout(redirectTimeout);
     };
   }, [supabase, router]);
 
