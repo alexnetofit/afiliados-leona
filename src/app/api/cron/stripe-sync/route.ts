@@ -42,13 +42,14 @@ async function getOrCreateAffiliateForCustomer(
     return existing.affiliate_id;
   }
 
-  // Check Link, via, etc (NOT referral - that's a Rewardful UUID)
+  // Check Link first, then referral as fallback
   const affiliateCode = 
     customerMetadata?.Link ||
     customerMetadata?.link ||
-    customerMetadata?.via || 
-    customerMetadata?.affiliate_code || 
-    customerMetadata?.ref;
+    customerMetadata?.via ||
+    customerMetadata?.affiliate_code ||
+    customerMetadata?.ref ||
+    customerMetadata?.referral;
 
   if (!affiliateCode) {
     affiliateCache.set(customerId, null);

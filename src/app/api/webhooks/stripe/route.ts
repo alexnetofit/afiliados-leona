@@ -34,14 +34,14 @@ async function getAffiliateForCustomer(
   }
 
   // 2. If no First Touch, check metadata for affiliate code
-  // NOTE: "Link" contains the readable affiliate code (e.g., "raphaela-thaine")
-  // "referral" contains the Rewardful referral UUID (not an affiliate code)
+  // Priority: Link first (readable code), then referral as fallback
   const affiliateCode = 
     metadata?.Link ||
     metadata?.link ||
     metadata?.via || 
     metadata?.affiliate_code || 
-    metadata?.ref;
+    metadata?.ref ||
+    metadata?.referral;
   
   if (!affiliateCode) {
     return null;

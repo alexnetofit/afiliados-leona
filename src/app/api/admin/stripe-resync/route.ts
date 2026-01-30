@@ -45,15 +45,15 @@ async function getOrCreateAffiliateForCustomer(
     return existing.affiliate_id;
   }
 
-  // 2. Check metadata for affiliate code (Link, via, etc)
-  // NOTE: "Link" contains the readable affiliate code (e.g., "raphaela-thaine")
-  // "referral" contains the Rewardful referral UUID (not an affiliate code)
+  // 2. Check metadata for affiliate code
+  // Priority: Link first (readable code), then referral as fallback
   const affiliateCode = 
     customerMetadata?.Link ||
     customerMetadata?.link ||
     customerMetadata?.via || 
     customerMetadata?.affiliate_code || 
-    customerMetadata?.ref;
+    customerMetadata?.ref ||
+    customerMetadata?.referral;
 
   if (!affiliateCode) {
     affiliateCache.set(customerId, null);
