@@ -200,25 +200,43 @@ export default function PagamentosPage() {
     if (!selectedPayoutDate) return;
     setIsProcessing(true);
     try {
-      // Upsert monthly_payouts records
-      const payoutRecords = affiliateIds.map((id) => {
+      // Insert or update monthly_payouts records
+      for (const id of affiliateIds) {
         const data = payoutData.find((p) => p.affiliate_id === id);
-        return {
+        const payoutRecord = {
           affiliate_id: id,
           month: selectedPayoutDate,
           total_commission_cents: data?.total_cents || 0,
           total_negative_cents: 0,
           total_payable_cents: data?.total_cents || 0,
-          status: "paid",
+          status: "paid" as const,
           paid_at: new Date().toISOString(),
         };
-      });
 
-      const { error } = await supabase
-        .from("monthly_payouts")
-        .upsert(payoutRecords, { onConflict: "affiliate_id,month" });
+        // Check if record exists
+        const { data: existing } = await supabase
+          .from("monthly_payouts")
+          .select("id")
+          .eq("affiliate_id", id)
+          .eq("month", selectedPayoutDate)
+          .single();
 
-      if (error) throw error;
+        if (existing) {
+          // Update existing record
+          await supabase
+            .from("monthly_payouts")
+            .update({
+              status: "paid",
+              paid_at: new Date().toISOString(),
+              total_commission_cents: payoutRecord.total_commission_cents,
+              total_payable_cents: payoutRecord.total_payable_cents,
+            })
+            .eq("id", existing.id);
+        } else {
+          // Insert new record
+          await supabase.from("monthly_payouts").insert(payoutRecord);
+        }
+      }
 
       setSelectedIds(new Set());
       await fetchPayoutData();
