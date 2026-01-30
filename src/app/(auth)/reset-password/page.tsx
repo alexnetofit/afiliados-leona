@@ -20,14 +20,27 @@ export default function ResetPasswordPage() {
 
   // Check if user has a valid session from the reset link
   useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        // No valid session, redirect to forgot password
+    // Listen for auth state changes - this handles the token from the URL hash
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        // User clicked the reset link - session is now valid
+        return;
+      }
+      
+      if (event === "SIGNED_IN" && session) {
+        // Session established from recovery link
+        return;
+      }
+      
+      // If no session after initial check, redirect
+      if (event === "INITIAL_SESSION" && !session) {
         router.push("/forgot-password");
       }
+    });
+
+    return () => {
+      subscription.unsubscribe();
     };
-    checkSession();
   }, [supabase, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
