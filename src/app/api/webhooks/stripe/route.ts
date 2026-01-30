@@ -249,8 +249,14 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   const paidAt = inv.status_transitions?.paid_at 
     ? new Date(inv.status_transitions.paid_at * 1000) 
     : new Date();
-  const availableAt = new Date(paidAt);
-  availableAt.setDate(availableAt.getDate() + 15);
+  // Calculate available_at based on payout schedule:
+  // Day 01-15 → available day 05 of next month
+  // Day 16-31 → available day 20 of next month
+  const paidDay = paidAt.getDate();
+  const nextMonth = new Date(paidAt.getFullYear(), paidAt.getMonth() + 1, 1);
+  const availableAt = paidDay <= 15 
+    ? new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 5)
+    : new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 20);
 
   // Get subscription ID from our database
   const subscriptionRecord = subscriptionId 

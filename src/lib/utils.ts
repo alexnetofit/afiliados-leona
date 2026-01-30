@@ -69,6 +69,47 @@ export function isDateAvailable(availableAt: string | Date): boolean {
   return new Date(availableAt) <= new Date();
 }
 
+/**
+ * Calculate when a commission becomes available for payout
+ * - Payments from day 01-15 → available on day 05 of next month
+ * - Payments from day 16-31 → available on day 20 of next month
+ */
+export function calculateAvailableAt(paidAt: Date): Date {
+  const day = paidAt.getDate();
+  const nextMonth = new Date(paidAt.getFullYear(), paidAt.getMonth() + 1, 1);
+  
+  if (day <= 15) {
+    // Available on day 05 of next month
+    return new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 5);
+  } else {
+    // Available on day 20 of next month
+    return new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 20);
+  }
+}
+
+/**
+ * Get the payout period for a given date
+ * Returns which payout cycle this payment belongs to
+ */
+export function getPayoutPeriod(paidAt: Date): { payoutDate: Date; label: string } {
+  const day = paidAt.getDate();
+  const nextMonth = new Date(paidAt.getFullYear(), paidAt.getMonth() + 1, 1);
+  
+  if (day <= 15) {
+    const payoutDate = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 5);
+    return { 
+      payoutDate, 
+      label: `05/${String(nextMonth.getMonth() + 1).padStart(2, '0')}/${nextMonth.getFullYear()}` 
+    };
+  } else {
+    const payoutDate = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 20);
+    return { 
+      payoutDate, 
+      label: `20/${String(nextMonth.getMonth() + 1).padStart(2, '0')}/${nextMonth.getFullYear()}` 
+    };
+  }
+}
+
 export function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
     trialing: 'bg-blue-100 text-blue-800',
