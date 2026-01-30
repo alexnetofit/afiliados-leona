@@ -70,7 +70,15 @@ export async function GET(request: NextRequest) {
         .limit(5);
       console.log("Recent transactions in DB:", allTx);
       
-      return NextResponse.json({ payouts: [], stats: { pending: 0, paid: 0, count: 0 } });
+      // Return debug info to client
+      return NextResponse.json({ 
+        payouts: [], 
+        stats: { pending: 0, paid: 0, count: 0 },
+        debug: {
+          queryRange: { startDateTime, endDateTime },
+          recentTransactions: allTx?.map(t => ({ id: t.id, paid_at: t.paid_at })) || []
+        }
+      });
     }
 
     // Group by affiliate
