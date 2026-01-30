@@ -329,7 +329,19 @@ export async function POST(request: NextRequest) {
           const batch = invoices.slice(i, i + 10);
           await Promise.all(batch.map(async (invoice) => {
             const inv = invoice as any;
-            if (!inv.subscription || !inv.amount_paid) return;
+            
+            // Skip invoices without payment
+            if (!inv.amount_paid) return;
+
+            // Extract subscription ID from lines if not directly available
+            // In newer Stripe API versions, subscription is inside lines.data[].parent.subscription_item_details
+            let subscriptionId = inv.subscription;
+            if (!subscriptionId && inv.lines?.data?.length > 0) {
+              const firstLine = inv.lines.data[0];
+              subscriptionId = firstLine?.parent?.subscription_item_details?.subscription || 
+                               firstLine?.subscription || 
+                               null;
+            }
 
             const customerId = inv.customer?.id || inv.customer as string;
             const customerObj = typeof inv.customer === 'object' && !inv.customer?.deleted 
@@ -370,11 +382,11 @@ export async function POST(request: NextRequest) {
             const availableAt = new Date(paidAt);
             availableAt.setDate(availableAt.getDate() + 15);
 
-            const { data: subRecord } = await supabaseAdmin
+            const { data: subRecord } = subscriptionId ? await supabaseAdmin
               .from("subscriptions")
               .select("id")
-              .eq("stripe_subscription_id", inv.subscription)
-              .single();
+              .eq("stripe_subscription_id", subscriptionId)
+              .single() : { data: null };
 
             await supabaseAdmin.from("transactions").insert({
               affiliate_id: affiliateId,

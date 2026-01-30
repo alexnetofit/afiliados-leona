@@ -205,9 +205,18 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const inv = invoice as any;
   
-  // Skip if no subscription or no amount
-  if (!inv.subscription || !inv.amount_paid || inv.amount_paid <= 0) {
+  // Skip if no amount
+  if (!inv.amount_paid || inv.amount_paid <= 0) {
     return;
+  }
+
+  // Extract subscription ID from lines if not directly available
+  let subscriptionId = inv.subscription;
+  if (!subscriptionId && inv.lines?.data?.length > 0) {
+    const firstLine = inv.lines.data[0];
+    subscriptionId = firstLine?.parent?.subscription_item_details?.subscription || 
+                     firstLine?.subscription || 
+                     null;
   }
 
   const customerId = inv.customer as string;
@@ -244,7 +253,9 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   availableAt.setDate(availableAt.getDate() + 15);
 
   // Get subscription ID from our database
-  const subscriptionRecord = await getSubscriptionByStripeId(inv.subscription as string);
+  const subscriptionRecord = subscriptionId 
+    ? await getSubscriptionByStripeId(subscriptionId as string)
+    : null;
 
   // Create transaction
   await supabase.from("transactions").insert({
