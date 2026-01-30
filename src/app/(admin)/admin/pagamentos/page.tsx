@@ -92,33 +92,38 @@ export default function PagamentosPage() {
   async function fetchPayoutData() {
     setIsLoading(true);
     try {
-      const payoutDate = new Date(selectedPayoutDate);
-      const payoutDay = payoutDate.getDate();
+      // Parse the date as local time by splitting the string
+      const [year, month, day] = selectedPayoutDate.split("-").map(Number);
+      const payoutDay = day;
       
       // Calculate the date range for transactions based on payout date
       // For day 05: transactions from day 01-15 of previous month
       // For day 20: transactions from day 16-31 of previous month
-      let startDate: Date;
-      let endDate: Date;
+      let startDate: string;
+      let endDate: string;
       
-      const prevMonth = new Date(payoutDate.getFullYear(), payoutDate.getMonth() - 1, 1);
+      // Previous month (for the payout calculation)
+      const prevMonth = month - 1 === 0 ? 12 : month - 1;
+      const prevYear = month - 1 === 0 ? year - 1 : year;
       
       if (payoutDay === 5) {
         // Transactions from day 01-15 of previous month
-        startDate = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), 1);
-        endDate = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), 15, 23, 59, 59);
+        startDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-01T00:00:00`;
+        endDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-15T23:59:59`;
       } else {
         // Transactions from day 16-31 of previous month
-        startDate = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), 16);
-        endDate = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0, 23, 59, 59); // Last day of month
+        // Get last day of previous month
+        const lastDay = new Date(prevYear, prevMonth, 0).getDate();
+        startDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-16T00:00:00`;
+        endDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-${lastDay}T23:59:59`;
       }
       
       // Fetch transactions paid within this date range
       const { data: transactions } = await supabase
         .from("transactions")
         .select("id, affiliate_id, commission_amount_cents, paid_at, available_at, type")
-        .gte("paid_at", startDate.toISOString())
-        .lte("paid_at", endDate.toISOString())
+        .gte("paid_at", startDate)
+        .lte("paid_at", endDate)
         .eq("type", "commission");
 
       if (!transactions || transactions.length === 0) {
@@ -348,7 +353,7 @@ export default function PagamentosPage() {
             <MetricCard icon={Wallet} label="Pendente" value={formatCurrency(pendingTotal / 100)} color="warning" />
             <MetricCard icon={CheckCircle} label="Pago" value={formatCurrency(paidTotal / 100)} color="success" />
             <MetricCard icon={Users} label="Afiliados Pendentes" value={pendingCount.toString()} color="primary" />
-            <MetricCard icon={Calendar} label="Data Pagamento" value={formatDate(selectedPayoutDate)} color="info" />
+            <MetricCard icon={Calendar} label="Data Pagamento" value={selectedPayoutDate.split("-").reverse().join("/")} color="info" />
           </div>
         )}
 
@@ -367,7 +372,7 @@ export default function PagamentosPage() {
           <div className="p-6 border-b border-zinc-100">
             <h3 className="text-lg font-bold text-zinc-900">Relatório de Pagamentos</h3>
             <p className="text-sm text-zinc-500">
-              {selectedPayoutDate ? `Pagamento em ${formatDate(selectedPayoutDate)}` : "Selecione uma data de pagamento"}
+              {selectedPayoutDate ? `Pagamento em ${selectedPayoutDate.split("-").reverse().join("/")}` : "Selecione uma data de pagamento"}
             </p>
           </div>
 
