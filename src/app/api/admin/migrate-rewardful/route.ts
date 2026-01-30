@@ -43,9 +43,10 @@ function getCommissionTierFromCampaign(campaignName?: string): number {
 interface RewardfulReferral {
   id: string;
   stripe_customer_id: string;
-  affiliate: {
+  affiliate?: {
     id: string;
-    token: string;
+    token?: string;
+    email?: string;
   };
 }
 
@@ -167,9 +168,9 @@ export async function POST() {
         const affiliates = await fetchAllRewardful<RewardfulAffiliate>("/affiliates?expand[]=links&expand[]=campaign", progressCallback);
         sendEvent({ type: "progress", step: "affiliates", message: `${affiliates.length} afiliados encontrados`, completed: true });
 
-        // 2. Fetch referrals
+        // 2. Fetch referrals with expanded affiliate data
         sendEvent({ type: "progress", step: "referrals", message: "Buscando referrals do Rewardful..." });
-        const referrals = await fetchAllRewardful<RewardfulReferral>("/referrals", progressCallback);
+        const referrals = await fetchAllRewardful<RewardfulReferral>("/referrals?expand=affiliate", progressCallback);
         sendEvent({ type: "progress", step: "referrals", message: `${referrals.length} referrals encontrados`, completed: true });
 
         // 3. Get existing users by email (with pagination to get ALL users)
@@ -377,16 +378,25 @@ export async function POST() {
             continue;
           }
           
-          if (!ref.affiliate?.id && !ref.affiliate?.token) {
+          if (!ref.affiliate?.id && !ref.affiliate?.email) {
             skippedReferrals++;
             continue;
           }
           
-          // Try to find affiliate by rewardful id or by token
+          // Try to find affiliate by rewardful id first
           let affiliateId = ref.affiliate?.id ? affiliateMap.get(ref.affiliate.id) : undefined;
           
+          // Try by token if available
           if (!affiliateId && ref.affiliate?.token) {
             affiliateId = codeToAffiliateId.get(ref.affiliate.token);
+          }
+          
+          // Try by email - find user_id first, then affiliate_id
+          if (!affiliateId && ref.affiliate?.email) {
+            const userId = emailToUserId.get(ref.affiliate.email.toLowerCase());
+            if (userId) {
+              affiliateId = userIdToAffiliateId.get(userId);
+            }
           }
           
           if (affiliateId) {
