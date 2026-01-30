@@ -35,6 +35,8 @@ export default function LoginPage() {
       return;
     }
 
+    // Refresh to sync cookies before redirecting
+    router.refresh();
     router.push("/dashboard");
   };
 
