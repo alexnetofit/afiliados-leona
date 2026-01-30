@@ -11,7 +11,18 @@ const ITEMS_PER_PAGE = 10;
 
 export default function VendasPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { profile, transactions, summary, isLoading, isInitialized } = useAppData();
+  const { profile, transactions, subscriptions, summary, isLoading, isInitialized } = useAppData();
+
+  // Create a map of subscription_id -> customer_name for quick lookup
+  const subscriptionNames = useMemo(() => {
+    const map = new Map<string, string>();
+    (subscriptions || []).forEach((sub) => {
+      if (sub.id && sub.customer_name) {
+        map.set(sub.id, sub.customer_name);
+      }
+    });
+    return map;
+  }, [subscriptions]);
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -136,8 +147,8 @@ export default function VendasPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Cliente</TableHead>
                       <TableHead>Data</TableHead>
-                      <TableHead>Tipo</TableHead>
                       <TableHead>Valor bruto</TableHead>
                       <TableHead>Comissão</TableHead>
                       <TableHead>Valor</TableHead>
@@ -148,18 +159,25 @@ export default function VendasPage() {
                     {paginatedData.map((tx) => {
                       const neg = tx.commission_amount_cents < 0;
                       const avail = tx.available_at ? isDateAvailable(tx.available_at) : false;
+                      const customerName = tx.subscription_id ? subscriptionNames.get(tx.subscription_id) : null;
+                      const isRefundOrDispute = tx.type === "refund" || tx.type === "dispute";
+                      
                       return (
                         <TableRow key={tx.id} className="hover:bg-zinc-50">
-                          <TableCell className="font-medium">
-                            {tx.paid_at ? formatDateTime(tx.paid_at) : "-"}
-                          </TableCell>
                           <TableCell>
-                            <Badge 
-                              variant={tx.type === "commission" ? "success" : tx.type === "refund" ? "error" : "warning"}
-                              dot
-                            >
-                              {tx.type === "commission" ? "Comissão" : tx.type === "refund" ? "Estorno" : "Disputa"}
-                            </Badge>
+                            <div className="flex items-center gap-3">
+                              <div className="h-8 w-8 rounded-lg bg-zinc-100 flex items-center justify-center">
+                                <span className="text-xs font-bold text-zinc-500">
+                                  {(customerName || "?")[0].toUpperCase()}
+                                </span>
+                              </div>
+                              <span className="font-medium text-zinc-900">
+                                {customerName || "Cliente"}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-zinc-600">
+                            {tx.paid_at ? formatDateTime(tx.paid_at) : "-"}
                           </TableCell>
                           <TableCell className="text-zinc-500">
                             {formatCurrency(Math.abs(tx.amount_gross_cents) / 100)}
@@ -177,8 +195,10 @@ export default function VendasPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            {neg ? (
-                              <Badge variant="error" size="sm">Debitado</Badge>
+                            {isRefundOrDispute ? (
+                              <Badge variant="error" size="sm">
+                                {tx.type === "refund" ? "Estorno" : "Disputa"}
+                              </Badge>
                             ) : avail ? (
                               <Badge variant="success" size="sm">Disponível</Badge>
                             ) : (
