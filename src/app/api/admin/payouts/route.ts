@@ -92,13 +92,26 @@ export async function GET(request: NextRequest) {
 
     // Fetch affiliates with profiles
     const affiliateIds = Array.from(affiliateMap.keys());
-    const { data: affiliates } = await supabaseAdmin
+    console.log("Affiliate IDs from transactions:", affiliateIds.length, affiliateIds.slice(0, 3));
+    
+    const { data: affiliates, error: affError } = await supabaseAdmin
       .from("affiliates")
       .select("id, affiliate_code, payout_pix_key, payout_wise_email, user_id")
       .in("id", affiliateIds);
 
+    console.log("Affiliates found:", { count: affiliates?.length, error: affError?.message });
+
     if (!affiliates || affiliates.length === 0) {
-      return NextResponse.json({ payouts: [], stats: { pending: 0, paid: 0, count: 0 } });
+      return NextResponse.json({ 
+        payouts: [], 
+        stats: { pending: 0, paid: 0, count: 0 },
+        debug: {
+          transactionsFound: transactions.length,
+          affiliateIdsFromTx: affiliateIds.slice(0, 5),
+          affiliatesFound: 0,
+          affiliateError: affError?.message
+        }
+      });
     }
 
     // Fetch profiles for names
@@ -152,7 +165,15 @@ export async function GET(request: NextRequest) {
       count: payouts.filter(p => p.status === "pending").length,
     };
 
-    return NextResponse.json({ payouts, stats });
+    return NextResponse.json({ 
+      payouts, 
+      stats,
+      debug: {
+        transactionsFound: transactions.length,
+        affiliatesFound: affiliates.length,
+        payoutsGenerated: payouts.length
+      }
+    });
   } catch (error) {
     console.error("Payouts API error:", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
