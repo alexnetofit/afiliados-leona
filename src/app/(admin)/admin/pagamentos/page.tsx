@@ -170,21 +170,38 @@ export default function PagamentosPage() {
 
       // Fetch affiliate details with profile join
       const affiliateIds = Array.from(affiliateMap.keys());
-      console.log("Fetching affiliates for IDs:", affiliateIds.length);
+      console.log("Fetching affiliates for IDs:", affiliateIds.length, "IDs:", affiliateIds.slice(0, 5));
       
+      // First, let's check if we can read affiliates at all
+      const { data: testAff, error: testError } = await supabase
+        .from("affiliates")
+        .select("id, affiliate_code")
+        .limit(1);
+      console.log("Test affiliates query:", { data: testAff, error: testError });
+      
+      // Try without the join first
       const { data: affiliates, error: affError } = await supabase
         .from("affiliates")
-        .select(`
-          id, 
-          affiliate_code, 
-          payout_pix_key, 
-          payout_wise_email, 
-          user_id,
-          profiles:user_id (full_name)
-        `)
+        .select("id, affiliate_code, payout_pix_key, payout_wise_email, user_id")
         .in("id", affiliateIds);
 
       console.log("Affiliates result:", { count: affiliates?.length, error: affError, sample: affiliates?.[0] });
+      
+      // If no affiliates found, try fetching profiles separately
+      if (!affiliates || affiliates.length === 0) {
+        console.log("RLS might be blocking. Trying alternative approach...");
+        
+        // Let's check what the current user can see
+        const { data: currentUser } = await supabase.auth.getUser();
+        console.log("Current user:", currentUser?.user?.id, currentUser?.user?.email);
+        
+        const { data: currentProfile } = await supabase
+          .from("profiles")
+          .select("id, role")
+          .eq("id", currentUser?.user?.id || "")
+          .single();
+        console.log("Current profile:", currentProfile);
+      }
 
       if (!affiliates || affiliates.length === 0) {
         console.log("No affiliates found for the transaction affiliate_ids");
