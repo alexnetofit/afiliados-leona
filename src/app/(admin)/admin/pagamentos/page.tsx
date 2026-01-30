@@ -97,14 +97,14 @@ export default function PagamentosPage() {
       
       if (payoutDay === 5) {
         // Transactions from day 01-15 of previous month
-        startDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-01T00:00:00`;
-        endDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-15T23:59:59`;
+        startDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-01`;
+        endDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-15`;
       } else {
         // Transactions from day 16-31 of previous month
         // Get last day of previous month
         const lastDay = new Date(prevYear, prevMonth, 0).getDate();
-        startDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-16T00:00:00`;
-        endDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-${lastDay}T23:59:59`;
+        startDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-16`;
+        endDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-${lastDay}`;
       }
       
       // Use API route to bypass RLS

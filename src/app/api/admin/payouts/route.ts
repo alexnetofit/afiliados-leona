@@ -40,12 +40,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "startDate e endDate são obrigatórios" }, { status: 400 });
     }
 
+    // Build proper date range (startDate and endDate come as YYYY-MM-DD)
+    const startDateTime = `${startDate}T00:00:00`;
+    const endDateTime = `${endDate}T23:59:59`;
+    
+    console.log("Query date range:", { startDateTime, endDateTime });
+
     // Fetch transactions (using service role - bypasses RLS)
     const { data: transactions, error: txError } = await supabaseAdmin
       .from("transactions")
       .select("id, affiliate_id, commission_amount_cents, paid_at, available_at, type")
-      .gte("paid_at", startDate)
-      .lte("paid_at", endDate)
+      .gte("paid_at", startDateTime)
+      .lte("paid_at", endDateTime)
       .eq("type", "commission");
 
     console.log("Transactions found:", { count: transactions?.length, error: txError?.message, sample: transactions?.[0] });
