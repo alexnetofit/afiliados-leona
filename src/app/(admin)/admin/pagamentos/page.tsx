@@ -118,15 +118,28 @@ export default function PagamentosPage() {
         endDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-${lastDay}T23:59:59`;
       }
       
+      console.log("Payout query:", { startDate, endDate, payoutDay, prevMonth, prevYear });
+      
       // Fetch transactions paid within this date range
-      const { data: transactions } = await supabase
+      const { data: transactions, error: txError } = await supabase
         .from("transactions")
         .select("id, affiliate_id, commission_amount_cents, paid_at, available_at, type")
         .gte("paid_at", startDate)
         .lte("paid_at", endDate)
         .eq("type", "commission");
 
+      console.log("Transactions result:", { count: transactions?.length, error: txError, sample: transactions?.[0] });
+
       if (!transactions || transactions.length === 0) {
+        // Debug: fetch ALL transactions to see what's in the database
+        const { data: allTx } = await supabase
+          .from("transactions")
+          .select("id, paid_at, type")
+          .eq("type", "commission")
+          .order("paid_at", { ascending: false })
+          .limit(5);
+        console.log("All recent transactions:", allTx);
+        
         setPayoutData([]);
         setIsLoading(false);
         return;
