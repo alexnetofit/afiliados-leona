@@ -42,9 +42,8 @@ async function getOrCreateAffiliateForCustomer(
     return existing.affiliate_id;
   }
 
-  // Check referral, Link, via, etc
+  // Check Link, via, etc (NOT referral - that's a Rewardful UUID)
   const affiliateCode = 
-    customerMetadata?.referral || 
     customerMetadata?.Link ||
     customerMetadata?.link ||
     customerMetadata?.via || 

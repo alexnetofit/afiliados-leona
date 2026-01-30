@@ -45,9 +45,10 @@ async function getOrCreateAffiliateForCustomer(
     return existing.affiliate_id;
   }
 
-  // 2. Check metadata for affiliate code (referral, Link, via, etc)
+  // 2. Check metadata for affiliate code (Link, via, etc)
+  // NOTE: "Link" contains the readable affiliate code (e.g., "raphaela-thaine")
+  // "referral" contains the Rewardful referral UUID (not an affiliate code)
   const affiliateCode = 
-    customerMetadata?.referral || 
     customerMetadata?.Link ||
     customerMetadata?.link ||
     customerMetadata?.via || 

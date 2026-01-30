@@ -34,9 +34,9 @@ async function getAffiliateForCustomer(
   }
 
   // 2. If no First Touch, check metadata for affiliate code
-  // Support multiple metadata keys: referral, Link, via, affiliate_code, ref
+  // NOTE: "Link" contains the readable affiliate code (e.g., "raphaela-thaine")
+  // "referral" contains the Rewardful referral UUID (not an affiliate code)
   const affiliateCode = 
-    metadata?.referral || 
     metadata?.Link ||
     metadata?.link ||
     metadata?.via || 
