@@ -93,14 +93,33 @@ export default function PagamentosPage() {
     setIsLoading(true);
     try {
       const payoutDate = new Date(selectedPayoutDate);
+      const payoutDay = payoutDate.getDate();
       
-      // Fetch all transactions that are available on this payout date
+      // Calculate the date range for transactions based on payout date
       // For day 05: transactions from day 01-15 of previous month
       // For day 20: transactions from day 16-31 of previous month
+      let startDate: Date;
+      let endDate: Date;
+      
+      const prevMonth = new Date(payoutDate.getFullYear(), payoutDate.getMonth() - 1, 1);
+      
+      if (payoutDay === 5) {
+        // Transactions from day 01-15 of previous month
+        startDate = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), 1);
+        endDate = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), 15, 23, 59, 59);
+      } else {
+        // Transactions from day 16-31 of previous month
+        startDate = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), 16);
+        endDate = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0, 23, 59, 59); // Last day of month
+      }
+      
+      // Fetch transactions paid within this date range
       const { data: transactions } = await supabase
         .from("transactions")
         .select("id, affiliate_id, commission_amount_cents, paid_at, available_at, type")
-        .eq("available_at", payoutDate.toISOString().split("T")[0]);
+        .gte("paid_at", startDate.toISOString())
+        .lte("paid_at", endDate.toISOString())
+        .eq("type", "commission");
 
       if (!transactions || transactions.length === 0) {
         setPayoutData([]);
