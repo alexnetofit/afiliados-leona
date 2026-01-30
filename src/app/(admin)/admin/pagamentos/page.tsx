@@ -214,12 +214,14 @@ export default function PagamentosPage() {
         };
 
         // Check if record exists
-        const { data: existing } = await supabase
+        const { data: existingData } = await supabase
           .from("monthly_payouts")
           .select("id")
           .eq("affiliate_id", id)
           .eq("month", selectedPayoutDate)
           .single();
+
+        const existing = existingData as { id: string } | null;
 
         if (existing) {
           // Update existing record
