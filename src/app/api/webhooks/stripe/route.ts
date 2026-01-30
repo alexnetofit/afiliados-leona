@@ -49,53 +49,37 @@ async function getAffiliateForCustomer(
   
   console.log(`Found affiliate code in metadata: ${affiliateCode} for customer ${customerId}`);
 
-  // Find affiliate by code (exact match or in semicolon-separated list)
-  let affiliate = await supabase
+  // Find affiliate by code (exact match on affiliate_code)
+  const { data: affiliate } = await supabase
     .from("affiliates")
     .select("id")
     .eq("affiliate_code", affiliateCode)
-    .single()
-    .then(r => r.data);
+    .single();
 
-  // If not found, try searching in semicolon-separated codes
-  if (!affiliate) {
-    const { data: affiliates } = await supabase
-      .from("affiliates")
-      .select("id, affiliate_code")
-      .ilike("affiliate_code", `%${affiliateCode}%`);
-    
-    affiliate = affiliates?.find(a => 
-      a.affiliate_code.split(';').map((c: string) => c.trim().toLowerCase()).includes(affiliateCode.toLowerCase())
-    ) || null;
+  if (affiliate) {
+    await supabase.from("customer_affiliates").insert({
+      stripe_customer_id: customerId,
+      affiliate_id: affiliate.id,
+    });
+    return affiliate.id;
   }
 
-  // Try finding by custom alias (created by affiliate in dashboard)
-  if (!affiliate) {
-    const { data: link } = await supabase
-      .from("affiliate_links")
-      .select("affiliate_id")
-      .eq("alias", affiliateCode)
-      .single();
+  // Try finding by custom alias (from affiliate_links table)
+  const { data: link } = await supabase
+    .from("affiliate_links")
+    .select("affiliate_id")
+    .eq("alias", affiliateCode)
+    .single();
 
-    if (!link) {
-      return null;
-    }
-
+  if (link) {
     await supabase.from("customer_affiliates").insert({
       stripe_customer_id: customerId,
       affiliate_id: link.affiliate_id,
     });
-
     return link.affiliate_id;
   }
 
-  // Create First Touch
-  await supabase.from("customer_affiliates").insert({
-    stripe_customer_id: customerId,
-    affiliate_id: affiliate.id,
-  });
-
-  return affiliate.id;
+  return null;
 }
 
 function getCommissionPercent(tier: number): number {

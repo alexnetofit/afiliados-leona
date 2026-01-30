@@ -84,25 +84,12 @@ async function getOrCreateAffiliateForCustomer(
     return null;
   }
 
-  // Find affiliate by code (exact match or in semicolon-separated list)
-  let affiliate = await supabaseAdmin
+  // Find affiliate by code (exact match on affiliate_code)
+  const { data: affiliate } = await supabaseAdmin
     .from("affiliates")
     .select("id")
     .eq("affiliate_code", affiliateCode)
-    .single()
-    .then(r => r.data);
-
-  // If not found, try searching in semicolon-separated codes
-  if (!affiliate) {
-    const { data: affiliates } = await supabaseAdmin
-      .from("affiliates")
-      .select("id, affiliate_code")
-      .ilike("affiliate_code", `%${affiliateCode}%`);
-    
-    affiliate = affiliates?.find(a => 
-      a.affiliate_code.split(';').map((c: string) => c.trim().toLowerCase()).includes(affiliateCode.toLowerCase())
-    ) || null;
-  }
+    .single();
 
   if (affiliate) {
     await supabaseAdmin.from("customer_affiliates").insert({
@@ -113,7 +100,7 @@ async function getOrCreateAffiliateForCustomer(
     return affiliate.id;
   }
 
-  // Try finding by custom alias (created by affiliate in dashboard)
+  // Try finding by custom alias (from affiliate_links table)
   const { data: link } = await supabaseAdmin
     .from("affiliate_links")
     .select("affiliate_id")

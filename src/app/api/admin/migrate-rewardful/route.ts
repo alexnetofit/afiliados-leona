@@ -225,6 +225,26 @@ export async function POST() {
 
         sendEvent({ type: "progress", step: "processing", message: `Processando ${affiliates.length} afiliados...` });
 
+        // Helper function to create additional links for an affiliate
+        async function createAdditionalLinks(affiliateId: string, additionalTokens: string[]) {
+          for (const token of additionalTokens) {
+            // Check if link already exists
+            const { data: existingLink } = await supabase
+              .from("affiliate_links")
+              .select("id")
+              .eq("affiliate_id", affiliateId)
+              .eq("alias", token)
+              .single();
+            
+            if (!existingLink) {
+              await supabase.from("affiliate_links").insert({
+                affiliate_id: affiliateId,
+                alias: token,
+              });
+            }
+          }
+        }
+
         for (let i = 0; i < affiliates.length; i++) {
           const aff = affiliates[i];
           
@@ -237,23 +257,29 @@ export async function POST() {
             });
           }
           
-          // Get ALL tokens from links, joined by semicolon
+          // Get tokens from links
           const allTokens = aff.links?.map(l => l.token).filter(Boolean) || [];
-          const affiliateCode = allTokens.length > 0 ? allTokens.join(';') : aff.token;
+          // First token = main affiliate_code, rest = additional links
+          const primaryCode = allTokens[0] || aff.token;
+          const additionalCodes = allTokens.slice(1); // Remaining tokens go to affiliate_links
           
           // Get commission tier from campaign name (30%, 35%, or 40%)
           const commissionTier = getCommissionTierFromCampaign(aff.campaign?.name);
           
-          // Check if any of the tokens already exists in the bank
-          const firstToken = allTokens[0] || aff.token;
-          if (codeToAffiliateId.has(firstToken)) {
-            const existingId = codeToAffiliateId.get(firstToken)!;
+          // Check if first token already exists
+          if (codeToAffiliateId.has(primaryCode)) {
+            const existingId = codeToAffiliateId.get(primaryCode)!;
             affiliateMap.set(aff.id, existingId);
             
-            // Update code (with all tokens) and tier
+            // Update code (only first token) and tier
             await supabase.from("affiliates")
-              .update({ affiliate_code: affiliateCode, commission_tier: commissionTier })
+              .update({ affiliate_code: primaryCode, commission_tier: commissionTier })
               .eq("id", existingId);
+            
+            // Create additional links
+            if (additionalCodes.length > 0) {
+              await createAdditionalLinks(existingId, additionalCodes);
+            }
             
             // Update cache with all tokens pointing to this affiliate
             allTokens.forEach(t => codeToAffiliateId.set(t, existingId));
@@ -270,19 +296,24 @@ export async function POST() {
             const existingAffId = userIdToAffiliateId.get(userId);
             
             if (existingAffId) {
-              // Always update code and tier to Rewardful values
+              // Update code (only first token) and tier
               const { error: updateError } = await supabase.from("affiliates")
-                .update({ affiliate_code: affiliateCode, commission_tier: commissionTier })
+                .update({ affiliate_code: primaryCode, commission_tier: commissionTier })
                 .eq("id", existingAffId);
               
               if (updateError) {
-                // Code might already exist (unique constraint)
-                console.error(`Failed to update affiliate ${existingAffId} with code ${affiliateCode}: ${updateError.message}`);
+                console.error(`Failed to update affiliate ${existingAffId} with code ${primaryCode}: ${updateError.message}`);
                 skipped++;
               } else {
                 affiliateMap.set(aff.id, existingAffId);
-                codeToAffiliateId.set(affiliateCode, existingAffId);
-                affiliateIdToCode.set(existingAffId, affiliateCode); // Update local cache
+                codeToAffiliateId.set(primaryCode, existingAffId);
+                affiliateIdToCode.set(existingAffId, primaryCode);
+                
+                // Create additional links
+                if (additionalCodes.length > 0) {
+                  await createAdditionalLinks(existingAffId, additionalCodes);
+                }
+                
                 updated++;
               }
             } else {
@@ -290,7 +321,7 @@ export async function POST() {
               const { data: newAff } = await supabase.from("affiliates")
                 .insert({
                   user_id: userId,
-                  affiliate_code: affiliateCode,
+                  affiliate_code: primaryCode,
                   commission_tier: commissionTier,
                   is_active: aff.state === "active",
                 })
@@ -299,8 +330,14 @@ export async function POST() {
               
               if (newAff) {
                 affiliateMap.set(aff.id, newAff.id);
-                codeToAffiliateId.set(affiliateCode, newAff.id);
+                codeToAffiliateId.set(primaryCode, newAff.id);
                 userIdToAffiliateId.set(userId, newAff.id);
+                
+                // Create additional links
+                if (additionalCodes.length > 0) {
+                  await createAdditionalLinks(newAff.id, additionalCodes);
+                }
+                
                 created++;
               }
             }
@@ -338,18 +375,23 @@ export async function POST() {
               .single();
 
             if (autoCreatedAffiliate) {
-              // Update code, tier and status to Rewardful values
+              // Update code (only first token), tier and status
               await supabase.from("affiliates")
                 .update({ 
-                  affiliate_code: affiliateCode, 
+                  affiliate_code: primaryCode, 
                   commission_tier: commissionTier,
                   is_active: aff.state === "active" 
                 })
                 .eq("id", autoCreatedAffiliate.id);
               
+              // Create additional links
+              if (additionalCodes.length > 0) {
+                await createAdditionalLinks(autoCreatedAffiliate.id, additionalCodes);
+              }
+              
               affiliateMap.set(aff.id, autoCreatedAffiliate.id);
               emailToUserId.set(aff.email.toLowerCase(), authUser.user.id);
-              codeToAffiliateId.set(affiliateCode, autoCreatedAffiliate.id);
+              codeToAffiliateId.set(primaryCode, autoCreatedAffiliate.id);
               userIdToAffiliateId.set(authUser.user.id, autoCreatedAffiliate.id);
               created++;
             }
