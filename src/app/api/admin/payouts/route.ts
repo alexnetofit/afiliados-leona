@@ -34,6 +34,8 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get("endDate");
     const payoutDate = searchParams.get("payoutDate");
 
+    console.log("Payouts API called:", { startDate, endDate, payoutDate });
+
     if (!startDate || !endDate) {
       return NextResponse.json({ error: "startDate e endDate são obrigatórios" }, { status: 400 });
     }
@@ -46,11 +48,22 @@ export async function GET(request: NextRequest) {
       .lte("paid_at", endDate)
       .eq("type", "commission");
 
+    console.log("Transactions found:", { count: transactions?.length, error: txError?.message, sample: transactions?.[0] });
+
     if (txError) {
       return NextResponse.json({ error: txError.message }, { status: 500 });
     }
 
     if (!transactions || transactions.length === 0) {
+      // Debug: check what transactions exist
+      const { data: allTx } = await supabaseAdmin
+        .from("transactions")
+        .select("id, paid_at, type, affiliate_id")
+        .eq("type", "commission")
+        .order("paid_at", { ascending: false })
+        .limit(5);
+      console.log("Recent transactions in DB:", allTx);
+      
       return NextResponse.json({ payouts: [], stats: { pending: 0, paid: 0, count: 0 } });
     }
 
