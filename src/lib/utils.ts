@@ -1,6 +1,9 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+// Timezone padrão do sistema: São Paulo (UTC-3)
+const TIMEZONE = 'America/Sao_Paulo';
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -17,6 +20,7 @@ export function formatDate(date: string | Date): string {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
+    timeZone: TIMEZONE,
   }).format(new Date(date));
 }
 
@@ -27,6 +31,7 @@ export function formatDateTime(date: string | Date): string {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: TIMEZONE,
   }).format(new Date(date));
 }
 
@@ -34,7 +39,23 @@ export function formatMonth(date: string | Date): string {
   return new Intl.DateTimeFormat('pt-BR', {
     month: 'long',
     year: 'numeric',
+    timeZone: TIMEZONE,
   }).format(new Date(date));
+}
+
+/**
+ * Get current date/time in São Paulo timezone
+ */
+export function getNowBRT(): Date {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }));
+}
+
+/**
+ * Convert a date to São Paulo timezone
+ */
+export function toBRT(date: Date | string): Date {
+  const d = new Date(date);
+  return new Date(d.toLocaleString('en-US', { timeZone: TIMEZONE }));
 }
 
 export function getAffiliateLink(code: string): string {
@@ -66,17 +87,21 @@ export function getLastDayOfMonth(date: Date = new Date()): Date {
 }
 
 export function isDateAvailable(availableAt: string | Date): boolean {
-  return new Date(availableAt) <= new Date();
+  const available = toBRT(availableAt);
+  const now = getNowBRT();
+  return available <= now;
 }
 
 /**
  * Calculate when a commission becomes available for payout
  * - Payments from day 01-15 → available on day 05 of next month
  * - Payments from day 16-31 → available on day 20 of next month
+ * Uses São Paulo timezone for all calculations
  */
 export function calculateAvailableAt(paidAt: Date): Date {
-  const day = paidAt.getDate();
-  const nextMonth = new Date(paidAt.getFullYear(), paidAt.getMonth() + 1, 1);
+  const paidBRT = toBRT(paidAt);
+  const day = paidBRT.getDate();
+  const nextMonth = new Date(paidBRT.getFullYear(), paidBRT.getMonth() + 1, 1);
   
   if (day <= 15) {
     // Available on day 05 of next month
@@ -90,10 +115,12 @@ export function calculateAvailableAt(paidAt: Date): Date {
 /**
  * Get the payout period for a given date
  * Returns which payout cycle this payment belongs to
+ * Uses São Paulo timezone for all calculations
  */
 export function getPayoutPeriod(paidAt: Date): { payoutDate: Date; label: string } {
-  const day = paidAt.getDate();
-  const nextMonth = new Date(paidAt.getFullYear(), paidAt.getMonth() + 1, 1);
+  const paidBRT = toBRT(paidAt);
+  const day = paidBRT.getDate();
+  const nextMonth = new Date(paidBRT.getFullYear(), paidBRT.getMonth() + 1, 1);
   
   if (day <= 15) {
     const payoutDate = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 5);

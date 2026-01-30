@@ -106,6 +106,34 @@ function getCommissionPercent(tier: number): number {
   }
 }
 
+// Helper: Get date components in São Paulo timezone (UTC-3)
+function getDateInBRT(date: Date): { day: number; month: number; year: number } {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    day: 'numeric',
+    month: 'numeric',
+    year: 'numeric',
+  });
+  const parts = formatter.formatToParts(date);
+  return {
+    day: parseInt(parts.find(p => p.type === 'day')?.value || '1'),
+    month: parseInt(parts.find(p => p.type === 'month')?.value || '1') - 1, // 0-indexed
+    year: parseInt(parts.find(p => p.type === 'year')?.value || '2026'),
+  };
+}
+
+// Helper: Calculate available_at based on payout schedule in BRT
+function calculateAvailableAtBRT(paidAt: Date): Date {
+  const brt = getDateInBRT(paidAt);
+  const nextMonth = new Date(brt.year, brt.month + 1, 1);
+  
+  if (brt.day <= 15) {
+    return new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 5, 12, 0, 0);
+  } else {
+    return new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 20, 12, 0, 0);
+  }
+}
+
 async function getSubscriptionByStripeId(stripeSubscriptionId: string) {
   const { data } = await supabase
     .from("subscriptions")
@@ -245,18 +273,11 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   const commissionPercent = getCommissionPercent(affiliate.commission_tier);
   const commissionAmount = Math.round(inv.amount_paid * commissionPercent / 100);
 
-  // Calculate available_at (+15 days)
+  // Calculate available_at in BRT timezone
   const paidAt = inv.status_transitions?.paid_at 
     ? new Date(inv.status_transitions.paid_at * 1000) 
     : new Date();
-  // Calculate available_at based on payout schedule:
-  // Day 01-15 → available day 05 of next month
-  // Day 16-31 → available day 20 of next month
-  const paidDay = paidAt.getDate();
-  const nextMonth = new Date(paidAt.getFullYear(), paidAt.getMonth() + 1, 1);
-  const availableAt = paidDay <= 15 
-    ? new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 5)
-    : new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 20);
+  const availableAt = calculateAvailableAtBRT(paidAt);
 
   // Get subscription ID from our database
   const subscriptionRecord = subscriptionId 
