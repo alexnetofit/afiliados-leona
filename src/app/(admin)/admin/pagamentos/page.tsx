@@ -1,19 +1,9 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Badge, Select, Checkbox, LoadingScreen, EmptyState, MetricCard, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/index";
 import { Download, CheckCircle, Wallet, Users, Calendar } from "lucide-react";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
-
-interface TransactionWithAffiliate {
-  id: string;
-  affiliate_id: string;
-  commission_amount_cents: number;
-  paid_at: string;
-  available_at: string;
-  type: string;
-}
+import { formatCurrency, cn } from "@/lib/utils";
 
 interface AffiliatePayoutData {
   affiliate_id: string;
@@ -36,7 +26,6 @@ export default function PagamentosPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paidPayouts, setPaidPayouts] = useState<Map<string, { paid_at: string }>>(new Map());
-  const supabase = createClient();
 
   // Generate payout date options (day 05 and day 20 of each month for the next 12 months)
   const payoutDateOptions = useMemo(() => {
@@ -118,137 +107,34 @@ export default function PagamentosPage() {
         endDate = `${prevYear}-${String(prevMonth).padStart(2, "0")}-${lastDay}T23:59:59`;
       }
       
-      console.log("Payout query:", { startDate, endDate, payoutDay, prevMonth, prevYear });
+      // Use API route to bypass RLS
+      const response = await fetch(
+        `/api/admin/payouts?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&payoutDate=${encodeURIComponent(selectedPayoutDate)}`
+      );
       
-      // Fetch transactions paid within this date range
-      const { data: transactions, error: txError } = await supabase
-        .from("transactions")
-        .select("id, affiliate_id, commission_amount_cents, paid_at, available_at, type")
-        .gte("paid_at", startDate)
-        .lte("paid_at", endDate)
-        .eq("type", "commission");
-
-      console.log("Transactions result:", { count: transactions?.length, error: txError, sample: transactions?.[0] });
-
-      if (!transactions || transactions.length === 0) {
-        // Debug: fetch ALL transactions to see what's in the database
-        const { data: allTx } = await supabase
-          .from("transactions")
-          .select("id, paid_at, type")
-          .eq("type", "commission")
-          .order("paid_at", { ascending: false })
-          .limit(5);
-        console.log("All recent transactions:", allTx);
-        
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("API error:", error);
         setPayoutData([]);
-        setIsLoading(false);
         return;
       }
-
-      // Fetch existing payout records
-      const { data: existingPayouts } = await supabase
-        .from("monthly_payouts")
-        .select("affiliate_id, status, paid_at")
-        .eq("month", selectedPayoutDate);
-
-      const paidMap = new Map<string, { paid_at: string }>();
-      (existingPayouts || []).forEach((p: { affiliate_id: string; status: string; paid_at: string | null }) => {
+      
+      const data = await response.json();
+      
+      // Build paid map for local state
+      const newPaidMap = new Map<string, { paid_at: string }>();
+      data.payouts.forEach((p: AffiliatePayoutData) => {
         if (p.status === "paid" && p.paid_at) {
-          paidMap.set(p.affiliate_id, { paid_at: p.paid_at });
+          newPaidMap.set(p.affiliate_id, { paid_at: p.paid_at });
         }
       });
-      setPaidPayouts(paidMap);
-
-      // Group transactions by affiliate
-      const affiliateMap = new Map<string, { total: number; count: number }>();
-      (transactions as TransactionWithAffiliate[]).forEach((tx) => {
-        const existing = affiliateMap.get(tx.affiliate_id) || { total: 0, count: 0 };
-        existing.total += tx.commission_amount_cents;
-        existing.count += 1;
-        affiliateMap.set(tx.affiliate_id, existing);
-      });
-
-      // Fetch affiliate details with profile join
-      const affiliateIds = Array.from(affiliateMap.keys());
-      console.log("Fetching affiliates for IDs:", affiliateIds.length, "IDs:", affiliateIds.slice(0, 5));
-      
-      // First, let's check if we can read affiliates at all
-      const { data: testAff, error: testError } = await supabase
-        .from("affiliates")
-        .select("id, affiliate_code")
-        .limit(1);
-      console.log("Test affiliates query:", { data: testAff, error: testError });
-      
-      // Try without the join first
-      const { data: affiliates, error: affError } = await supabase
-        .from("affiliates")
-        .select("id, affiliate_code, payout_pix_key, payout_wise_email, user_id")
-        .in("id", affiliateIds);
-
-      console.log("Affiliates result:", { count: affiliates?.length, error: affError, sample: affiliates?.[0] });
-      
-      // If no affiliates found, try fetching profiles separately
-      if (!affiliates || affiliates.length === 0) {
-        console.log("RLS might be blocking. Trying alternative approach...");
-        
-        // Let's check what the current user can see
-        const { data: currentUser } = await supabase.auth.getUser();
-        console.log("Current user:", currentUser?.user?.id, currentUser?.user?.email);
-        
-        const { data: currentProfile } = await supabase
-          .from("profiles")
-          .select("id, role")
-          .eq("id", currentUser?.user?.id || "")
-          .single();
-        console.log("Current profile:", currentProfile);
-      }
-
-      if (!affiliates || affiliates.length === 0) {
-        console.log("No affiliates found for the transaction affiliate_ids");
-        setPayoutData([]);
-        setIsLoading(false);
-        return;
-      }
-
-      // Build enriched data
-      type AffiliateWithProfile = {
-        id: string;
-        affiliate_code: string;
-        payout_pix_key: string | null;
-        payout_wise_email: string | null;
-        user_id: string;
-        profiles: { full_name: string | null } | null;
-      };
-      
-      const enrichedData: AffiliatePayoutData[] = (affiliates as AffiliateWithProfile[]).map((aff) => {
-        const profile = aff.profiles;
-        const txData = affiliateMap.get(aff.id) || { total: 0, count: 0 };
-        const isPaid = paidMap.has(aff.id);
-
-        return {
-          affiliate_id: aff.id,
-          affiliate_code: aff.affiliate_code,
-          full_name: profile?.full_name || null,
-          email: aff.payout_wise_email || "-", // Use Wise email as fallback
-          payout_pix_key: aff.payout_pix_key,
-          payout_wise_email: aff.payout_wise_email,
-          total_cents: txData.total,
-          transactions_count: txData.count,
-          status: isPaid ? "paid" : "pending",
-          paid_at: paidMap.get(aff.id)?.paid_at || null,
-        };
-      });
-      
-      console.log("Enriched data:", { count: enrichedData.length, sample: enrichedData[0] });
+      setPaidPayouts(newPaidMap);
 
       // Apply status filter
-      let filtered = enrichedData;
+      let filtered = data.payouts as AffiliatePayoutData[];
       if (statusFilter !== "all") {
-        filtered = enrichedData.filter((p) => p.status === statusFilter);
+        filtered = filtered.filter((p) => p.status === statusFilter);
       }
-
-      // Sort by total descending
-      filtered.sort((a, b) => b.total_cents - a.total_cents);
 
       setPayoutData(filtered);
     } catch (error) {
@@ -262,51 +148,33 @@ export default function PagamentosPage() {
     if (!selectedPayoutDate) return;
     setIsProcessing(true);
     try {
-      // Insert or update monthly_payouts records
-      for (const id of affiliateIds) {
+      // Build amounts map
+      const amounts: Record<string, number> = {};
+      affiliateIds.forEach(id => {
         const data = payoutData.find((p) => p.affiliate_id === id);
-        const payoutRecord = {
-          affiliate_id: id,
-          month: selectedPayoutDate,
-          total_commission_cents: data?.total_cents || 0,
-          total_negative_cents: 0,
-          total_payable_cents: data?.total_cents || 0,
-          status: "paid" as const,
-          paid_at: new Date().toISOString(),
-        };
+        amounts[id] = data?.total_cents || 0;
+      });
 
-        // Check if record exists
-        const { data: existingData } = await supabase
-          .from("monthly_payouts")
-          .select("id")
-          .eq("affiliate_id", id)
-          .eq("month", selectedPayoutDate)
-          .single();
+      const response = await fetch("/api/admin/payouts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          affiliateIds,
+          payoutDate: selectedPayoutDate,
+          amounts,
+        }),
+      });
 
-        const existing = existingData as { id: string } | null;
-
-        if (existing) {
-          // Update existing record
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from("monthly_payouts") as any).update({
-              status: "paid",
-              paid_at: new Date().toISOString(),
-              total_commission_cents: payoutRecord.total_commission_cents,
-              total_payable_cents: payoutRecord.total_payable_cents,
-            })
-            .eq("id", existing.id);
-        } else {
-          // Insert new record
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from("monthly_payouts") as any).insert(payoutRecord);
-        }
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Erro ao marcar como pago");
       }
 
       setSelectedIds(new Set());
       await fetchPayoutData();
     } catch (error) {
       console.error("Error marking as paid:", error);
-      alert("Erro ao marcar como pago");
+      alert(error instanceof Error ? error.message : "Erro ao marcar como pago");
     } finally {
       setIsProcessing(false);
     }
