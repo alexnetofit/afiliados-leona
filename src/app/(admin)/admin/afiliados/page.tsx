@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Card, Badge, LoadingScreen, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Input, MetricCard, Select } from "@/components/ui/index";
-import { Search, Users, UserCheck, DollarSign, Filter } from "lucide-react";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { Card, Badge, LoadingScreen, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, MetricCard } from "@/components/ui/index";
+import { Users, UserCheck, DollarSign } from "lucide-react";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import { COMMISSION_TIERS } from "@/types";
+import { AffiliateFilters, type AffiliateFilterState } from "@/components/admin";
 
 interface AffiliateWithStats {
   id: string;
@@ -20,18 +21,23 @@ interface AffiliateWithStats {
   activeSubscriptions: number;
 }
 
-type SortField = "name" | "code" | "tier" | "sales" | "commissions" | "created";
-type SortOrder = "asc" | "desc";
+const DEFAULT_FILTERS: AffiliateFilterState = {
+  search: "",
+  tier: "all",
+  status: "all",
+  sortBy: "created-desc",
+  onlyWithSales: false,
+};
 
 export default function AfiliadosPage() {
   const [affiliates, setAffiliates] = useState<AffiliateWithStats[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [tierFilter, setTierFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [sortField, setSortField] = useState<SortField>("created");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [filters, setFilters] = useState<AffiliateFilterState>(DEFAULT_FILTERS);
   const [isLoading, setIsLoading] = useState(true);
   const supabase = createClient();
+
+  const handleFiltersChange = useCallback((newFilters: AffiliateFilterState) => {
+    setFilters(newFilters);
+  }, []);
 
   useEffect(() => {
     fetchAffiliates();
@@ -80,8 +86,8 @@ export default function AfiliadosPage() {
     let result = affiliates;
 
     // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+    if (filters.search) {
+      const query = filters.search.toLowerCase();
       result = result.filter((a) =>
         a.affiliate_code.toLowerCase().includes(query) ||
         a.profile.full_name?.toLowerCase().includes(query) ||
@@ -90,15 +96,23 @@ export default function AfiliadosPage() {
     }
 
     // Filter by tier
-    if (tierFilter !== "all") {
-      result = result.filter((a) => a.commission_tier === parseInt(tierFilter));
+    if (filters.tier !== "all") {
+      result = result.filter((a) => a.commission_tier === parseInt(filters.tier));
     }
 
     // Filter by status
-    if (statusFilter !== "all") {
-      const isActive = statusFilter === "active";
+    if (filters.status !== "all") {
+      const isActive = filters.status === "active";
       result = result.filter((a) => a.is_active === isActive);
     }
+
+    // Filter by only with sales
+    if (filters.onlyWithSales) {
+      result = result.filter((a) => a.paid_subscriptions_count > 0);
+    }
+
+    // Parse sort option (e.g., "created-desc" -> field: "created", order: "desc")
+    const [sortField, sortOrder] = filters.sortBy.split("-") as [string, "asc" | "desc"];
 
     // Sort
     result = [...result].sort((a, b) => {
@@ -127,7 +141,7 @@ export default function AfiliadosPage() {
     });
 
     return result;
-  }, [affiliates, searchQuery, tierFilter, statusFilter, sortField, sortOrder]);
+  }, [affiliates, filters]);
 
   const totalCommissions = affiliates.reduce((sum, a) => sum + a.totalCommissions, 0);
 
@@ -150,63 +164,12 @@ export default function AfiliadosPage() {
         </div>
 
         {/* Filters */}
-        <Card>
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1">
-              <Input
-                placeholder="Buscar por nome, código ou email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                icon={Search}
-              />
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Select
-                options={[
-                  { value: "all", label: "Todos os Tiers" },
-                  { value: "1", label: "Tier 1 (30%)" },
-                  { value: "2", label: "Tier 2 (35%)" },
-                  { value: "3", label: "Tier 3 (40%)" },
-                ]}
-                value={tierFilter}
-                onChange={(e) => setTierFilter(e.target.value)}
-                className="w-40"
-              />
-              <Select
-                options={[
-                  { value: "all", label: "Todos os Status" },
-                  { value: "active", label: "Ativos" },
-                  { value: "inactive", label: "Inativos" },
-                ]}
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-40"
-              />
-              <Select
-                options={[
-                  { value: "created", label: "Data de Criação" },
-                  { value: "name", label: "Nome" },
-                  { value: "code", label: "Código" },
-                  { value: "tier", label: "Tier" },
-                  { value: "sales", label: "Vendas" },
-                  { value: "commissions", label: "Comissões" },
-                ]}
-                value={sortField}
-                onChange={(e) => setSortField(e.target.value as SortField)}
-                className="w-44"
-              />
-              <Select
-                options={[
-                  { value: "desc", label: "Decrescente" },
-                  { value: "asc", label: "Crescente" },
-                ]}
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-                className="w-36"
-              />
-            </div>
-          </div>
-        </Card>
+        <AffiliateFilters
+          filters={filters}
+          onChange={handleFiltersChange}
+          totalCount={affiliates.length}
+          filteredCount={filteredAndSortedAffiliates.length}
+        />
 
         {/* Table */}
         <Card noPadding>
