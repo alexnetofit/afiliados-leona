@@ -128,7 +128,13 @@ export default function PagamentosPage() {
             <p className="text-zinc-500 mt-1">Gerencie os pagamentos mensais dos afiliados</p>
           </div>
           <div className="flex gap-3">
-            <Button variant="secondary" onClick={generatePayouts} loading={isProcessing} icon={RefreshCw}>
+            <Button 
+              variant="secondary" 
+              onClick={generatePayouts} 
+              loading={isProcessing} 
+              disabled={!selectedMonth || isProcessing}
+              icon={RefreshCw}
+            >
               Gerar Payouts
             </Button>
             <Button variant="secondary" onClick={handleExportCSV} disabled={payouts.length === 0} icon={Download}>

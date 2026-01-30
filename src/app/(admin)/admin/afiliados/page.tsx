@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Card, Badge, LoadingScreen, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Input, MetricCard } from "@/components/ui/index";
-import { Search, Users, UserCheck, DollarSign } from "lucide-react";
+import { Card, Badge, LoadingScreen, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Input, MetricCard, Select } from "@/components/ui/index";
+import { Search, Users, UserCheck, DollarSign, Filter } from "lucide-react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { COMMISSION_TIERS } from "@/types";
 
@@ -20,9 +20,16 @@ interface AffiliateWithStats {
   activeSubscriptions: number;
 }
 
+type SortField = "name" | "code" | "tier" | "sales" | "commissions" | "created";
+type SortOrder = "asc" | "desc";
+
 export default function AfiliadosPage() {
   const [affiliates, setAffiliates] = useState<AffiliateWithStats[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [tierFilter, setTierFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortField, setSortField] = useState<SortField>("created");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [isLoading, setIsLoading] = useState(true);
   const supabase = createClient();
 
@@ -69,10 +76,58 @@ export default function AfiliadosPage() {
     }
   }
 
-  const filteredAffiliates = affiliates.filter((a) => {
-    const query = searchQuery.toLowerCase();
-    return a.affiliate_code.toLowerCase().includes(query) || a.profile.full_name?.toLowerCase().includes(query) || a.user.email.toLowerCase().includes(query);
-  });
+  const filteredAndSortedAffiliates = useMemo(() => {
+    let result = affiliates;
+
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((a) =>
+        a.affiliate_code.toLowerCase().includes(query) ||
+        a.profile.full_name?.toLowerCase().includes(query) ||
+        a.user.email.toLowerCase().includes(query)
+      );
+    }
+
+    // Filter by tier
+    if (tierFilter !== "all") {
+      result = result.filter((a) => a.commission_tier === parseInt(tierFilter));
+    }
+
+    // Filter by status
+    if (statusFilter !== "all") {
+      const isActive = statusFilter === "active";
+      result = result.filter((a) => a.is_active === isActive);
+    }
+
+    // Sort
+    result = [...result].sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case "name":
+          comparison = (a.profile.full_name || "").localeCompare(b.profile.full_name || "");
+          break;
+        case "code":
+          comparison = a.affiliate_code.localeCompare(b.affiliate_code);
+          break;
+        case "tier":
+          comparison = a.commission_tier - b.commission_tier;
+          break;
+        case "sales":
+          comparison = a.paid_subscriptions_count - b.paid_subscriptions_count;
+          break;
+        case "commissions":
+          comparison = a.totalCommissions - b.totalCommissions;
+          break;
+        case "created":
+          comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          break;
+      }
+      return sortOrder === "desc" ? -comparison : comparison;
+    });
+
+    return result;
+  }, [affiliates, searchQuery, tierFilter, statusFilter, sortField, sortOrder]);
 
   const totalCommissions = affiliates.reduce((sum, a) => sum + a.totalCommissions, 0);
 
@@ -94,14 +149,10 @@ export default function AfiliadosPage() {
           <MetricCard icon={DollarSign} label="Total Comissões" value={formatCurrency(totalCommissions / 100)} color="info" />
         </div>
 
-        {/* Table */}
-        <Card noPadding>
-          <div className="p-6 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-zinc-900">Lista de Afiliados</h3>
-              <p className="text-sm text-zinc-500">{filteredAffiliates.length} afiliados encontrados</p>
-            </div>
-            <div className="w-full sm:w-72">
+        {/* Filters */}
+        <Card>
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex-1">
               <Input
                 placeholder="Buscar por nome, código ou email..."
                 value={searchQuery}
@@ -109,6 +160,59 @@ export default function AfiliadosPage() {
                 icon={Search}
               />
             </div>
+            <div className="flex flex-wrap gap-3">
+              <Select
+                options={[
+                  { value: "all", label: "Todos os Tiers" },
+                  { value: "1", label: "Tier 1 (30%)" },
+                  { value: "2", label: "Tier 2 (35%)" },
+                  { value: "3", label: "Tier 3 (40%)" },
+                ]}
+                value={tierFilter}
+                onChange={(e) => setTierFilter(e.target.value)}
+                className="w-40"
+              />
+              <Select
+                options={[
+                  { value: "all", label: "Todos os Status" },
+                  { value: "active", label: "Ativos" },
+                  { value: "inactive", label: "Inativos" },
+                ]}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-40"
+              />
+              <Select
+                options={[
+                  { value: "created", label: "Data de Criação" },
+                  { value: "name", label: "Nome" },
+                  { value: "code", label: "Código" },
+                  { value: "tier", label: "Tier" },
+                  { value: "sales", label: "Vendas" },
+                  { value: "commissions", label: "Comissões" },
+                ]}
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value as SortField)}
+                className="w-44"
+              />
+              <Select
+                options={[
+                  { value: "desc", label: "Decrescente" },
+                  { value: "asc", label: "Crescente" },
+                ]}
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                className="w-36"
+              />
+            </div>
+          </div>
+        </Card>
+
+        {/* Table */}
+        <Card noPadding>
+          <div className="p-6 border-b border-zinc-100">
+            <h3 className="text-lg font-bold text-zinc-900">Lista de Afiliados</h3>
+            <p className="text-sm text-zinc-500">{filteredAndSortedAffiliates.length} de {affiliates.length} afiliados</p>
           </div>
 
           <Table>
@@ -125,7 +229,7 @@ export default function AfiliadosPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAffiliates.map((affiliate) => (
+              {filteredAndSortedAffiliates.map((affiliate) => (
                 <TableRow key={affiliate.id} className="hover:bg-zinc-50">
                   <TableCell>
                     <div className="flex items-center gap-3">
