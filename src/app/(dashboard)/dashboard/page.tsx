@@ -12,7 +12,7 @@ import { formatCurrency, cn, formatDate } from "@/lib/utils";
 
 export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { profile, affiliate, summary, transactions, isLoading, isInitialized } = useAppData();
+  const { profile, affiliate, summary, transactions, subscriptions, isLoading, isInitialized } = useAppData();
 
   // Only show loading on first load, not on navigation
   if (isLoading && !isInitialized) {
@@ -22,6 +22,13 @@ export default function DashboardPage() {
   const chartData = generateChartData(transactions || []);
   const tierName = affiliate?.commission_tier === 3 ? "Ouro" : affiliate?.commission_tier === 2 ? "Prata" : "Bronze";
   const tierPercent = affiliate?.commission_tier === 3 ? 40 : affiliate?.commission_tier === 2 ? 35 : 30;
+
+  // Calcular clientes únicos (vendas = clientes diferentes que pagaram)
+  const uniqueCustomers = new Set(
+    (subscriptions || [])
+      .filter(s => s.status === "active" || s.status === "past_due" || s.status === "canceled")
+      .map(s => s.stripe_customer_id)
+  ).size;
 
   const pendingValue = (summary?.pending_cents || 0) / 100;
   const availableValue = (summary?.available_cents || 0) / 100;
@@ -125,7 +132,7 @@ export default function DashboardPage() {
                     </Badge>
                     <span className="text-sm font-semibold text-zinc-900">{tierPercent}%</span>
                   </div>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">{affiliate?.paid_subscriptions_count || 0} vendas</p>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">{uniqueCustomers} {uniqueCustomers === 1 ? "cliente" : "clientes"}</p>
                 </div>
               </div>
             </Card>

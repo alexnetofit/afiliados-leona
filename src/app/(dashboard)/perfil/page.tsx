@@ -10,7 +10,7 @@ import { COMMISSION_TIERS } from "@/types";
 
 export default function PerfilPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, profile, affiliate, isLoading, isInitialized, refetch } = useAppData();
+  const { user, profile, affiliate, subscriptions, isLoading, isInitialized, refetch } = useAppData();
   
   const [name, setName] = useState("");
   const [pix, setPix] = useState("");
@@ -127,7 +127,14 @@ export default function PerfilPage() {
 
   const tierName = affiliate?.commission_tier === 3 ? "Ouro" : affiliate?.commission_tier === 2 ? "Prata" : "Bronze";
   const tierPercent = COMMISSION_TIERS[affiliate?.commission_tier || 1].percent;
-  const currentSales = affiliate?.paid_subscriptions_count || 0;
+  
+  // Calcular clientes únicos (vendas = clientes diferentes que pagaram)
+  const currentSales = new Set(
+    (subscriptions || [])
+      .filter(s => s.status === "active" || s.status === "past_due" || s.status === "canceled")
+      .map(s => s.stripe_customer_id)
+  ).size;
+  
   const nextTier = affiliate?.commission_tier && affiliate.commission_tier < 3 
     ? COMMISSION_TIERS[(affiliate.commission_tier + 1) as 2 | 3]
     : null;
