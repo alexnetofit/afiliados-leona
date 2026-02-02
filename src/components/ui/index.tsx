@@ -356,7 +356,7 @@ export function MetricCard({ label, value, description, icon: Icon, trend, color
           <p className="text-xs text-zinc-500 truncate mb-0.5">{label}</p>
           <p className="text-lg font-semibold text-zinc-900 tracking-tight truncate">{value}</p>
           {description && (
-            <p className="text-[11px] text-zinc-400 mt-0.5">{description}</p>
+            <div className="text-[11px] text-zinc-400 mt-0.5 whitespace-pre-line">{description}</div>
           )}
           {trend && (
             <div className={cn(

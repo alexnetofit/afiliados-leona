@@ -27,8 +27,8 @@ export default function DashboardPage() {
   const availableValue = (summary?.available_cents || 0) / 100;
   const paidValue = (summary?.paid_cents || 0) / 100;
 
-  // Calcular próxima data de liberação baseada nas transações pendentes
-  const getNextReleaseDate = () => {
+  // Calcular valores por data de liberação
+  const getPendingByReleaseDate = () => {
     if (!transactions || transactions.length === 0 || pendingValue === 0) return null;
     
     const pendingTxs = transactions.filter(t => 
@@ -39,14 +39,33 @@ export default function DashboardPage() {
     
     if (pendingTxs.length === 0) return null;
     
-    // Encontrar a data mais próxima
-    const dates = pendingTxs.map(t => new Date(t.available_at!));
-    const nextDate = new Date(Math.min(...dates.map(d => d.getTime())));
+    // Agrupar por data de liberação
+    const byDate = new Map<string, number>();
     
-    return formatDate(nextDate);
+    pendingTxs.forEach(t => {
+      const dateKey = new Date(t.available_at!).toISOString().split('T')[0];
+      const current = byDate.get(dateKey) || 0;
+      byDate.set(dateKey, current + t.commission_amount_cents);
+    });
+    
+    // Ordenar por data e formatar
+    const sorted = Array.from(byDate.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([dateStr, cents]) => {
+        const date = new Date(dateStr + 'T12:00:00');
+        return {
+          date: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+          value: cents / 100,
+        };
+      });
+    
+    return sorted;
   };
   
-  const nextReleaseDate = getNextReleaseDate();
+  const pendingByDate = getPendingByReleaseDate();
+  const pendingDescription = pendingByDate
+    ?.map(p => `${formatCurrency(p.value)} libera em ${p.date}`)
+    .join('\n') || undefined;
 
   return (
     <>
@@ -65,7 +84,7 @@ export default function DashboardPage() {
               icon={Clock}
               label="Saldo pendente"
               value={formatCurrency(pendingValue)}
-              description={nextReleaseDate ? `Libera em ${nextReleaseDate}` : undefined}
+              description={pendingDescription}
               color="warning"
             />
             <MetricCard
