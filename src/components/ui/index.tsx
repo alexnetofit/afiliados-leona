@@ -324,13 +324,14 @@ Badge.displayName = "Badge";
 interface MetricCardProps {
   label: string;
   value: string;
+  description?: string;
   icon?: LucideIcon;
   trend?: { value: number; positive: boolean };
   color?: "default" | "success" | "warning" | "error" | "primary" | "info";
   className?: string;
 }
 
-export function MetricCard({ label, value, icon: Icon, trend, color = "primary", className }: MetricCardProps) {
+export function MetricCard({ label, value, description, icon: Icon, trend, color = "primary", className }: MetricCardProps) {
   const iconColors = {
     default: "bg-zinc-100 text-zinc-600",
     success: "bg-success-50 text-success-600",
@@ -354,6 +355,9 @@ export function MetricCard({ label, value, icon: Icon, trend, color = "primary",
         <div className="flex-1 min-w-0">
           <p className="text-xs text-zinc-500 truncate mb-0.5">{label}</p>
           <p className="text-lg font-semibold text-zinc-900 tracking-tight truncate">{value}</p>
+          {description && (
+            <p className="text-[11px] text-zinc-400 mt-0.5">{description}</p>
+          )}
           {trend && (
             <div className={cn(
               "inline-flex items-center gap-1 mt-1 text-[10px] font-medium",

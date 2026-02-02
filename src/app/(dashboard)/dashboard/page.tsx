@@ -8,7 +8,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
 import { Clock, CheckCircle, Wallet, Trophy, ArrowUpRight, TrendingUp } from "lucide-react";
-import { formatCurrency, cn } from "@/lib/utils";
+import { formatCurrency, cn, formatDate } from "@/lib/utils";
 
 export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -27,6 +27,27 @@ export default function DashboardPage() {
   const availableValue = (summary?.available_cents || 0) / 100;
   const paidValue = (summary?.paid_cents || 0) / 100;
 
+  // Calcular próxima data de liberação baseada nas transações pendentes
+  const getNextReleaseDate = () => {
+    if (!transactions || transactions.length === 0 || pendingValue === 0) return null;
+    
+    const pendingTxs = transactions.filter(t => 
+      t.type === "commission" && 
+      t.available_at && 
+      new Date(t.available_at) > new Date()
+    );
+    
+    if (pendingTxs.length === 0) return null;
+    
+    // Encontrar a data mais próxima
+    const dates = pendingTxs.map(t => new Date(t.available_at!));
+    const nextDate = new Date(Math.min(...dates.map(d => d.getTime())));
+    
+    return formatDate(nextDate);
+  };
+  
+  const nextReleaseDate = getNextReleaseDate();
+
   return (
     <>
       <Header
@@ -44,6 +65,7 @@ export default function DashboardPage() {
               icon={Clock}
               label="Saldo pendente"
               value={formatCurrency(pendingValue)}
+              description={nextReleaseDate ? `Libera em ${nextReleaseDate}` : undefined}
               color="warning"
             />
             <MetricCard
