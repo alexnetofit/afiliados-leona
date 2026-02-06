@@ -51,7 +51,7 @@ export default function ResetPasswordPage() {
             if (!hasValidSession) {
               router.push("/forgot-password");
             }
-          }, 3000); // Wait 3 seconds for PKCE to complete
+          }, 5000); // Wait 5 seconds for PKCE to complete
         }
       }
     });
