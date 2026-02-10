@@ -136,9 +136,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log("[CRON] Starting automatic Stripe sync (last 3 days)...");
+    console.log("[CRON] Starting automatic Stripe sync (last 20 days)...");
 
-    const days = 3;
+    const days = 20;
 
     // Create sync log entry
     const { data: syncLog } = await supabaseAdmin
