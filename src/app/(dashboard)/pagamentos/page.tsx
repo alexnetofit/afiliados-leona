@@ -60,13 +60,21 @@ export default function PagamentosPage() {
 
     commissions.forEach(tx => {
       const availDate = new Date(tx.available_at!);
-      const dateKey = availDate.toISOString().split("T")[0];
+      // Use São Paulo timezone to avoid UTC offset issues (e.g. 20/02 showing as 19/02)
+      const brtDate = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Sao_Paulo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(availDate); // "YYYY-MM-DD"
+      const dateKey = brtDate;
       
       if (!groups.has(dateKey)) {
         const dateLabel = availDate.toLocaleDateString("pt-BR", {
           day: "2-digit",
           month: "2-digit",
           year: "numeric",
+          timeZone: "America/Sao_Paulo",
         });
         
         // Check if paid via monthly_payouts (match by month YYYY-MM)
