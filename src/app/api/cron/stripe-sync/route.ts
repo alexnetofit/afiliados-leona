@@ -36,14 +36,15 @@ function getDateInBRT(date: Date): { day: number; month: number; year: number } 
 }
 
 // Helper: Calculate available_at based on payout schedule in BRT
+// Uses Date.UTC to ensure noon UTC regardless of server timezone
 function calculateAvailableAtBRT(paidAt: Date): Date {
   const brt = getDateInBRT(paidAt);
-  const nextMonth = new Date(brt.year, brt.month + 1, 1);
+  const nextMonth = new Date(Date.UTC(brt.year, brt.month + 1, 1));
   
   if (brt.day <= 15) {
-    return new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 5, 12, 0, 0);
+    return new Date(Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth(), 5, 12, 0, 0));
   } else {
-    return new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 20, 12, 0, 0);
+    return new Date(Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth(), 20, 12, 0, 0));
   }
 }
 
