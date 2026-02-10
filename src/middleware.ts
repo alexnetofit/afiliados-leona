@@ -68,6 +68,7 @@ export const config = {
     '/links/:path*',
     '/vendas/:path*',
     '/assinaturas/:path*',
+    '/pagamentos/:path*',
     '/perfil/:path*',
   ],
 };

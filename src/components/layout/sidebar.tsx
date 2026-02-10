@@ -8,6 +8,7 @@ import {
   Link2,
   DollarSign,
   CreditCard,
+  Wallet,
   User,
   LogOut,
   X,
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { name: "Links", href: "/links", icon: Link2 },
   { name: "Vendas", href: "/vendas", icon: DollarSign },
   { name: "Assinaturas", href: "/assinaturas", icon: CreditCard },
+  { name: "Pagamentos", href: "/pagamentos", icon: Wallet },
   { name: "Perfil", href: "/perfil", icon: User },
 ];
 

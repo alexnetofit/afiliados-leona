@@ -247,14 +247,27 @@ export async function POST(request: NextRequest) {
         // 5. Sync Subscriptions
         sendEvent({ type: "progress", step: "subscriptions", message: "Sincronizando assinaturas..." });
 
-        const subscriptions: Stripe.Subscription[] = [];
-        for await (const subscription of stripe.subscriptions.list({
+        const subscriptionMap = new Map<string, Stripe.Subscription>();
+
+        // Recently created
+        for await (const sub of stripe.subscriptions.list({
           created: { gte: startTimestamp },
           expand: ["data.customer"],
           limit: 100,
         })) {
-          subscriptions.push(subscription);
+          subscriptionMap.set(sub.id, sub);
         }
+
+        // Recently changed period (catches trial->active, renewals)
+        for await (const sub of stripe.subscriptions.list({
+          current_period_start: { gte: startTimestamp },
+          expand: ["data.customer"],
+          limit: 100,
+        })) {
+          subscriptionMap.set(sub.id, sub);
+        }
+
+        const subscriptions = Array.from(subscriptionMap.values());
 
         sendEvent({ type: "progress", step: "subscriptions", message: `${subscriptions.length} assinaturas encontradas` });
 

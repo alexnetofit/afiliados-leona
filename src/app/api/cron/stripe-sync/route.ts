@@ -193,16 +193,29 @@ export async function GET(request: NextRequest) {
 
     console.log(`[CRON] ${customersLinked} customers linked`);
 
-    // 2. Sync Subscriptions
+    // 2. Sync Subscriptions - fetch both created AND recently updated
     console.log("[CRON] Syncing subscriptions...");
-    const subscriptions: Stripe.Subscription[] = [];
-    for await (const subscription of stripe.subscriptions.list({
+    const subscriptionMap = new Map<string, Stripe.Subscription>();
+
+    // 2a. Recently created
+    for await (const sub of stripe.subscriptions.list({
       created: { gte: startTimestamp },
       expand: ["data.customer"],
       limit: 100,
     })) {
-      subscriptions.push(subscription);
+      subscriptionMap.set(sub.id, sub);
     }
+
+    // 2b. Recently changed period (catches trial->active, renewals)
+    for await (const sub of stripe.subscriptions.list({
+      current_period_start: { gte: startTimestamp },
+      expand: ["data.customer"],
+      limit: 100,
+    })) {
+      subscriptionMap.set(sub.id, sub);
+    }
+
+    const subscriptions = Array.from(subscriptionMap.values());
 
     for (let i = 0; i < subscriptions.length; i += 10) {
       const batch = subscriptions.slice(i, i + 10);
