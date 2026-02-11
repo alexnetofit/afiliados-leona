@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { Card, Badge, LoadingScreen, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, MetricCard } from "@/components/ui/index";
 import { Users, UserCheck, DollarSign, KeyRound, X, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -34,7 +33,6 @@ export default function AfiliadosPage() {
   const [affiliates, setAffiliates] = useState<AffiliateWithStats[]>([]);
   const [filters, setFilters] = useState<AffiliateFilterState>(DEFAULT_FILTERS);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = createClient();
 
   // Password reset modal state
   const [selectedAffiliate, setSelectedAffiliate] = useState<AffiliateWithStats | null>(null);
@@ -98,36 +96,12 @@ export default function AfiliadosPage() {
 
   async function fetchAffiliates() {
     try {
-      const { data: affiliatesData } = await supabase
-        .from("affiliates")
-        .select("id, affiliate_code, commission_tier, paid_subscriptions_count, is_active, created_at, user_id")
-        .order("created_at", { ascending: false });
+      const res = await fetch("/api/admin/affiliates");
+      const data = await res.json();
 
-      if (!affiliatesData) return;
-
-      const enrichedAffiliates = await Promise.all(
-        (affiliatesData as Array<{ id: string; affiliate_code: string; commission_tier: number; paid_subscriptions_count: number; is_active: boolean; created_at: string; user_id: string }>).map(async (affiliate) => {
-          const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", affiliate.user_id).single();
-          let userEmail = "N/A";
-          try {
-            const { data: authData } = await supabase.auth.admin.getUserById(affiliate.user_id);
-            userEmail = authData?.user?.email || "N/A";
-          } catch { userEmail = "N/A"; }
-
-          const { data: transactions } = await supabase.from("transactions").select("commission_amount_cents").eq("affiliate_id", affiliate.id).eq("type", "commission");
-          const { count: activeCount } = await supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("affiliate_id", affiliate.id).eq("status", "active");
-
-          return {
-            ...affiliate,
-            profile: profile || { full_name: null },
-            user: { email: userEmail },
-            totalCommissions: ((transactions || []) as Array<{ commission_amount_cents: number }>).reduce((sum, t) => sum + t.commission_amount_cents, 0),
-            activeSubscriptions: activeCount || 0,
-          };
-        })
-      );
-
-      setAffiliates(enrichedAffiliates);
+      if (res.ok && data.affiliates) {
+        setAffiliates(data.affiliates);
+      }
     } catch (error) {
       console.error("Error fetching affiliates:", error);
     } finally {
