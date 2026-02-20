@@ -12,6 +12,35 @@ const supabaseAdmin = createClient(
 
 const ADMIN_EMAIL = "kinhonetovai@gmail.com";
 
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    const affiliateId = request.nextUrl.searchParams.get("affiliateId");
+    if (!affiliateId) {
+      return NextResponse.json({ dateLabels: [] });
+    }
+
+    const { data } = await supabaseAdmin
+      .from("withdraw_requests")
+      .select("date_label")
+      .eq("affiliate_id", affiliateId);
+
+    const dateLabels = (data || [])
+      .map((r: { date_label: string | null }) => r.date_label)
+      .filter(Boolean);
+
+    return NextResponse.json({ dateLabels });
+  } catch {
+    return NextResponse.json({ dateLabels: [] });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient();

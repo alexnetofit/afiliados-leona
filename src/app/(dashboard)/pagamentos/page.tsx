@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAppData } from "@/contexts";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
@@ -39,6 +39,19 @@ export default function PagamentosPage() {
   const [savingPix, setSavingPix] = useState(false);
 
   const supabase = createClient();
+
+  // Load existing withdraw requests to mark groups as already requested
+  useEffect(() => {
+    if (!affiliate?.id) return;
+    fetch("/api/withdraw?affiliateId=" + affiliate.id)
+      .then(res => res.json())
+      .then(data => {
+        if (data.dateLabels && data.dateLabels.length > 0) {
+          setWithdrawnGroups(new Set(data.dateLabels));
+        }
+      })
+      .catch(() => {});
+  }, [affiliate?.id]);
 
   const hasPayoutInfo = !!(affiliate?.payout_pix_key || affiliate?.payout_wise_details);
 
@@ -100,7 +113,7 @@ export default function PagamentosPage() {
       });
 
       if (res.ok) {
-        setWithdrawnGroups(prev => new Set(prev).add(group.dateKey));
+        setWithdrawnGroups(prev => new Set(prev).add(group.dateLabel));
       }
     } catch {
       // silently fail
@@ -303,7 +316,7 @@ export default function PagamentosPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {group.status === "available" && !withdrawnGroups.has(group.dateKey) && (
+                        {group.status === "available" && !withdrawnGroups.has(group.dateLabel) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -315,7 +328,7 @@ export default function PagamentosPage() {
                             {withdrawingGroup === group.dateKey ? "Solicitando..." : "Solicitar Saque"}
                           </button>
                         )}
-                        {group.status === "available" && withdrawnGroups.has(group.dateKey) && (
+                        {group.status === "available" && withdrawnGroups.has(group.dateLabel) && (
                           <span className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full">
                             <CheckCircle2 className="h-3 w-3" />
                             Solicitado
