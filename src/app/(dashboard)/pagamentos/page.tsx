@@ -31,6 +31,7 @@ export default function PagamentosPage() {
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [withdrawingGroup, setWithdrawingGroup] = useState<string | null>(null);
   const [withdrawnGroups, setWithdrawnGroups] = useState<Set<string>>(new Set());
+  const [withdrawsLoaded, setWithdrawsLoaded] = useState(false);
 
   // PIX/Wise modal state
   const [pixModalGroup, setPixModalGroup] = useState<PaymentGroup | null>(null);
@@ -50,7 +51,8 @@ export default function PagamentosPage() {
           setWithdrawnGroups(new Set(data.dateLabels));
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setWithdrawsLoaded(true));
   }, [affiliate?.id]);
 
   const hasPayoutInfo = !!(affiliate?.payout_pix_key || affiliate?.payout_wise_details);
@@ -316,7 +318,7 @@ export default function PagamentosPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {group.status === "available" && !withdrawnGroups.has(group.dateLabel) && (
+                        {group.status === "available" && withdrawsLoaded && !withdrawnGroups.has(group.dateLabel) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
