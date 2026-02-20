@@ -7,7 +7,7 @@ import {
   Card, Badge, MetricCard, LoadingScreen,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyState,
 } from "@/components/ui/index";
-import { Wallet, Clock, CheckCircle, ChevronDown, ChevronRight, Banknote, ArrowUpRight, CheckCircle2 } from "lucide-react";
+import { Wallet, Clock, CheckCircle, ChevronDown, ChevronRight, Banknote, CheckCircle2 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
 interface PaymentGroup {
@@ -247,7 +247,25 @@ export default function PagamentosPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        {group.status === "available" && !withdrawnGroups.has(group.dateKey) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleWithdraw(group);
+                            }}
+                            disabled={withdrawingGroup === group.dateKey}
+                            className="px-3 py-1 text-xs font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 rounded-full transition-colors"
+                          >
+                            {withdrawingGroup === group.dateKey ? "Solicitando..." : "Solicitar Saque"}
+                          </button>
+                        )}
+                        {group.status === "available" && withdrawnGroups.has(group.dateKey) && (
+                          <span className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Solicitado
+                          </span>
+                        )}
                         {getStatusBadge(group.status)}
                         <span className={cn(
                           "text-sm font-semibold",
@@ -264,38 +282,6 @@ export default function PagamentosPage() {
                         )}
                       </div>
                     </button>
-
-                    {/* Withdraw button for available groups */}
-                    {group.status === "available" && (
-                      <div className="px-3 pb-3 -mt-1">
-                        {withdrawnGroups.has(group.dateKey) ? (
-                          <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 rounded-lg">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                            <span className="text-sm font-medium text-emerald-700">
-                              Saque solicitado com sucesso!
-                            </span>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleWithdraw(group);
-                            }}
-                            disabled={withdrawingGroup === group.dateKey}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-400 rounded-lg transition-colors"
-                          >
-                            {withdrawingGroup === group.dateKey ? (
-                              "Solicitando..."
-                            ) : (
-                              <>
-                                <ArrowUpRight className="h-4 w-4" />
-                                Solicitar Saque
-                              </>
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    )}
 
                     {/* Expanded Transactions */}
                     {expandedGroup === group.dateKey && (
