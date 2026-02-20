@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useAppData } from "@/contexts";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
@@ -27,11 +27,16 @@ interface PaymentGroup {
 
 export default function PagamentosPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { profile, affiliate, transactions, payouts, subscriptions, isLoading, isInitialized } = useAppData();
+  const { profile, affiliate, transactions, payouts, subscriptions, withdrawnDateLabels, isLoading, isInitialized } = useAppData();
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [withdrawingGroup, setWithdrawingGroup] = useState<string | null>(null);
-  const [withdrawnGroups, setWithdrawnGroups] = useState<Set<string>>(new Set());
-  const [withdrawsLoaded, setWithdrawsLoaded] = useState(false);
+  const [localWithdrawn, setLocalWithdrawn] = useState<Set<string>>(new Set());
+
+  const withdrawnGroups = useMemo(() => {
+    const merged = new Set(withdrawnDateLabels);
+    localWithdrawn.forEach(l => merged.add(l));
+    return merged;
+  }, [withdrawnDateLabels, localWithdrawn]);
 
   // PIX/Wise modal state
   const [pixModalGroup, setPixModalGroup] = useState<PaymentGroup | null>(null);
@@ -40,20 +45,6 @@ export default function PagamentosPage() {
   const [savingPix, setSavingPix] = useState(false);
 
   const supabase = createClient();
-
-  // Load existing withdraw requests to mark groups as already requested
-  useEffect(() => {
-    if (!affiliate?.id) return;
-    fetch("/api/withdraw?affiliateId=" + affiliate.id)
-      .then(res => res.json())
-      .then(data => {
-        if (data.dateLabels && data.dateLabels.length > 0) {
-          setWithdrawnGroups(new Set(data.dateLabels));
-        }
-      })
-      .catch(() => {})
-      .finally(() => setWithdrawsLoaded(true));
-  }, [affiliate?.id]);
 
   const hasPayoutInfo = !!(affiliate?.payout_pix_key || affiliate?.payout_wise_details);
 
@@ -115,7 +106,7 @@ export default function PagamentosPage() {
       });
 
       if (res.ok) {
-        setWithdrawnGroups(prev => new Set(prev).add(group.dateLabel));
+        setLocalWithdrawn(prev => new Set(prev).add(group.dateLabel));
       }
     } catch {
       // silently fail
@@ -318,7 +309,7 @@ export default function PagamentosPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {group.status === "available" && withdrawsLoaded && !withdrawnGroups.has(group.dateLabel) && (
+                        {group.status === "available" && !withdrawnGroups.has(group.dateLabel) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

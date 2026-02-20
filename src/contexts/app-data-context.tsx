@@ -30,6 +30,7 @@ interface AppData {
   transactions: Transaction[];
   payouts: MonthlyPayout[];
   summary: AffiliateSummary | null;
+  withdrawnDateLabels: Set<string>;
 
   // State
   isLoading: boolean;
@@ -51,6 +52,7 @@ const defaultAppData: AppData = {
   transactions: [],
   payouts: [],
   summary: null,
+  withdrawnDateLabels: new Set(),
   isLoading: true,
   isInitialized: false,
   refetch: async () => {},
@@ -73,6 +75,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [payouts, setPayouts] = useState<MonthlyPayout[]>([]);
   const [summary, setSummary] = useState<AffiliateSummary | null>(null);
+  const [withdrawnDateLabels, setWithdrawnDateLabels] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -110,7 +113,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   // Fetch all affiliate data
   const fetchAffiliateData = useCallback(
     async (affiliateId: string) => {
-      const [linksRes, subscriptionsRes, transactionsRes, payoutsRes] = await Promise.all([
+      const [linksRes, subscriptionsRes, transactionsRes, payoutsRes, withdrawRes] = await Promise.all([
         supabase
           .from("affiliate_links")
           .select("*")
@@ -131,6 +134,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           .select("*")
           .eq("affiliate_id", affiliateId)
           .order("month", { ascending: false }),
+        supabase
+          .from("withdraw_requests")
+          .select("date_label")
+          .eq("affiliate_id", affiliateId),
       ]);
 
       const linksData = (linksRes.data || []) as AffiliateLink[];
@@ -138,11 +145,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       const txsData = (transactionsRes.data || []) as Transaction[];
       const paysData = (payoutsRes.data || []) as MonthlyPayout[];
 
+      const wLabels = new Set<string>();
+      (withdrawRes.data || []).forEach((r: { date_label: string | null }) => {
+        if (r.date_label) wLabels.add(r.date_label);
+      });
+
       setLinks(linksData);
       setSubscriptions(subsData);
       setTransactions(txsData);
       setPayouts(paysData);
       setSummary(calculateSummary(txsData, paysData, subsData));
+      setWithdrawnDateLabels(wLabels);
     },
     [supabase, calculateSummary]
   );
@@ -164,6 +177,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setTransactions([]);
         setPayouts([]);
         setSummary(null);
+        setWithdrawnDateLabels(new Set());
         return;
       }
 
@@ -226,6 +240,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setTransactions([]);
     setPayouts([]);
     setSummary(null);
+    setWithdrawnDateLabels(new Set());
   }, [supabase]);
 
   // Initial fetch
@@ -250,6 +265,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setTransactions([]);
         setPayouts([]);
         setSummary(null);
+        setWithdrawnDateLabels(new Set());
         setIsLoading(false);
       }
     });
@@ -269,6 +285,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     transactions,
     payouts,
     summary,
+    withdrawnDateLabels,
     isLoading,
     isInitialized,
     refetch: fetchAllData,
