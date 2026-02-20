@@ -427,9 +427,9 @@ export default function PagamentosPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-zinc-200" />
-                <span className="text-xs text-zinc-400">ou</span>
-                <div className="flex-1 h-px bg-zinc-200" />
+                <div className="flex-1 h-px bg-purple-200" />
+                <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-3 py-1 rounded-full">ou</span>
+                <div className="flex-1 h-px bg-purple-200" />
               </div>
 
               <div>
