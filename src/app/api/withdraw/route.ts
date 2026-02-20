@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 const ADMIN_EMAIL = "kinhonetovai@gmail.com";
 
@@ -15,7 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const { affiliateName, amount, dateLabel, pixKey, wiseEmail } = await request.json();
+    const { affiliateName, amount, dateLabel, pixKey, wiseEmail, affiliateId } = await request.json();
 
     if (!affiliateName || !amount) {
       return NextResponse.json(
@@ -52,6 +58,19 @@ export async function POST(request: NextRequest) {
         </div>
       `,
     });
+
+    // Save to database
+    if (affiliateId) {
+      await supabaseAdmin.from("withdraw_requests").insert({
+        affiliate_id: affiliateId,
+        affiliate_name: affiliateName,
+        affiliate_email: user.email,
+        amount_text: amount,
+        date_label: dateLabel || null,
+        pix_key: pixKey || null,
+        wise_email: wiseEmail || null,
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -90,6 +90,7 @@ export default function PagamentosPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          affiliateId: affiliate?.id,
           affiliateName: profile?.full_name || "Afiliado",
           amount: formatCurrency(group.totalCents / 100),
           dateLabel: group.dateLabel,

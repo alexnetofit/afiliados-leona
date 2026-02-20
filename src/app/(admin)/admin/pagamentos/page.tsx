@@ -2,8 +2,20 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { Card, Button, Badge, Select, Checkbox, LoadingScreen, EmptyState, MetricCard, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/index";
-import { Download, CheckCircle, Wallet, Users, Calendar } from "lucide-react";
+import { Download, CheckCircle, Wallet, Users, Calendar, ArrowUpRight } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
+
+interface WithdrawRequest {
+  id: string;
+  affiliate_name: string | null;
+  affiliate_email: string | null;
+  amount_text: string;
+  date_label: string | null;
+  pix_key: string | null;
+  wise_email: string | null;
+  status: "pending" | "paid" | "rejected";
+  created_at: string;
+}
 
 interface AffiliatePayoutData {
   affiliate_id: string;
@@ -26,6 +38,28 @@ export default function PagamentosPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paidPayouts, setPaidPayouts] = useState<Map<string, { paid_at: string }>>(new Map());
+
+  // Withdraw requests
+  const [withdrawRequests, setWithdrawRequests] = useState<WithdrawRequest[]>([]);
+  const [loadingWithdraws, setLoadingWithdraws] = useState(true);
+
+  useEffect(() => {
+    fetchWithdrawRequests();
+  }, []);
+
+  async function fetchWithdrawRequests() {
+    try {
+      const res = await fetch("/api/admin/withdraw-requests");
+      const data = await res.json();
+      if (res.ok) setWithdrawRequests(data.requests || []);
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingWithdraws(false);
+    }
+  }
+
+  const pendingWithdraws = withdrawRequests.filter(w => w.status === "pending");
 
   // Generate payout date options (day 05 and day 20 of each month for the next 12 months)
   const payoutDateOptions = useMemo(() => {
@@ -269,6 +303,79 @@ export default function PagamentosPage() {
             </Button>
           </div>
         )}
+
+        {/* Withdraw Requests */}
+        <Card noPadding>
+          <div className="p-6 border-b border-zinc-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
+                  <ArrowUpRight className="h-5 w-5 text-purple-600" />
+                  Solicitações de Saque
+                </h3>
+                <p className="text-sm text-zinc-500">
+                  {pendingWithdraws.length} pendente(s) de {withdrawRequests.length} total
+                </p>
+              </div>
+              {pendingWithdraws.length > 0 && (
+                <Badge variant="warning" size="sm">{pendingWithdraws.length} pendente(s)</Badge>
+              )}
+            </div>
+          </div>
+
+          {loadingWithdraws ? (
+            <div className="p-8 text-center text-sm text-zinc-400">Carregando...</div>
+          ) : withdrawRequests.length === 0 ? (
+            <EmptyState icon={ArrowUpRight} title="Nenhuma solicitação" description="As solicitações de saque dos afiliados aparecerão aqui" />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Afiliado</TableHead>
+                  <TableHead>Valor</TableHead>
+                  <TableHead>Liberação</TableHead>
+                  <TableHead>PIX</TableHead>
+                  <TableHead>Wise</TableHead>
+                  <TableHead>Data da solicitação</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {withdrawRequests.map((req) => (
+                  <TableRow key={req.id} className="hover:bg-zinc-50">
+                    <TableCell>
+                      <div>
+                        <p className="font-semibold text-zinc-900">{req.affiliate_name || "N/A"}</p>
+                        <p className="text-xs text-zinc-500">{req.affiliate_email || ""}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-bold text-zinc-900">{req.amount_text}</TableCell>
+                    <TableCell className="text-zinc-600">{req.date_label || "-"}</TableCell>
+                    <TableCell>
+                      <code className="text-xs bg-zinc-100 px-2 py-1 rounded">{req.pix_key || "-"}</code>
+                    </TableCell>
+                    <TableCell className="text-zinc-600">{req.wise_email || "-"}</TableCell>
+                    <TableCell className="text-zinc-500">
+                      {new Date(req.created_at).toLocaleDateString("pt-BR", {
+                        day: "2-digit", month: "2-digit", year: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                        timeZone: "America/Sao_Paulo",
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={req.status === "paid" ? "success" : req.status === "rejected" ? "default" : "warning"}
+                        dot
+                      >
+                        {req.status === "paid" ? "Pago" : req.status === "rejected" ? "Rejeitado" : "Pendente"}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
 
         {/* Table */}
         <Card noPadding>
