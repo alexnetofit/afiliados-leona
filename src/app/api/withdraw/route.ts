@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const { affiliateName, amount, dateLabel } = await request.json();
+    const { affiliateName, amount, dateLabel, pixKey, wiseEmail } = await request.json();
 
     if (!affiliateName || !amount) {
       return NextResponse.json(
@@ -23,6 +23,16 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const payoutLines: string[] = [];
+    if (pixKey) payoutLines.push(`<strong>PIX:</strong> ${pixKey}`);
+    if (wiseEmail) payoutLines.push(`<strong>Wise:</strong> ${wiseEmail}`);
+    const payoutHtml = payoutLines.length > 0
+      ? `<div style="background: #f4f4f5; border-radius: 8px; padding: 12px 16px; margin: 16px 0;">
+           <p style="color: #3f3f46; font-size: 14px; margin: 0 0 4px 0; font-weight: 600;">Dados para pagamento:</p>
+           ${payoutLines.map(l => `<p style="color: #52525b; font-size: 14px; margin: 2px 0;">${l}</p>`).join("")}
+         </div>`
+      : "";
 
     await resend.emails.send({
       from: "Leona Afiliados <onboarding@resend.dev>",
@@ -36,6 +46,7 @@ export async function POST(request: NextRequest) {
           </p>
           ${dateLabel ? `<p style="color: #71717a; font-size: 14px;">Referente à liberação de ${dateLabel}.</p>` : ""}
           <p style="color: #71717a; font-size: 14px;">Email do afiliado: ${user.email}</p>
+          ${payoutHtml}
           <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 20px 0;" />
           <p style="color: #a1a1aa; font-size: 12px;">Enviado automaticamente pelo sistema de afiliados Leona.</p>
         </div>
