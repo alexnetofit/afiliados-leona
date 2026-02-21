@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AppDataProvider, useAppData } from "@/contexts";
-import { Sidebar } from "@/components/layout/sidebar";
+import { Sidebar, MobileBottomNav } from "@/components/layout/sidebar";
 import { cn } from "@/lib/utils";
 
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
@@ -62,8 +62,11 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         user={profile ? { name: profile.full_name || "", email: user?.email } : undefined}
       />
 
-      {/* Main area - 220px sidebar width */}
-      <div className={cn("lg:pl-[220px] min-h-screen flex flex-col")}>
+      {/* Mobile bottom nav */}
+      <MobileBottomNav />
+
+      {/* Main area - 220px sidebar width, pb-16 for mobile bottom nav */}
+      <div className={cn("lg:pl-[220px] min-h-screen flex flex-col pb-16 lg:pb-0")}>
         {children}
       </div>
     </div>

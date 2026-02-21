@@ -24,6 +24,14 @@ const NAV_ITEMS = [
   { name: "Perfil", href: "/perfil", icon: User },
 ];
 
+const MOBILE_TABS = [
+  { name: "Home", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Links", href: "/links", icon: Link2 },
+  { name: "Vendas", href: "/vendas", icon: DollarSign },
+  { name: "Pagamentos", href: "/pagamentos", icon: Wallet },
+  { name: "Perfil", href: "/perfil", icon: User },
+];
+
 interface SidebarProps {
   open: boolean;
   onClose: () => void;
@@ -149,5 +157,35 @@ export function Sidebar({ open, onClose, onLogout, user }: SidebarProps) {
         </div>
       </aside>
     </>
+  );
+}
+
+export function MobileBottomNav() {
+  const pathname = usePathname();
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-white border-t border-zinc-200 safe-area-bottom">
+      <div className="flex items-center justify-around h-14">
+        {MOBILE_TABS.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex flex-col items-center justify-center gap-0.5 flex-1 h-full",
+                "transition-colors duration-100",
+                isActive ? "text-purple-600" : "text-zinc-400"
+              )}
+            >
+              <item.icon className="h-5 w-5" strokeWidth={isActive ? 2.25 : 1.75} />
+              <span className={cn("text-[10px]", isActive ? "font-semibold" : "font-medium")}>
+                {item.name}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
