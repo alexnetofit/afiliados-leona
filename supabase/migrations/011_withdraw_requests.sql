@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS withdraw_requests (
   pix_key TEXT,
   wise_email TEXT,
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'rejected')),
+  paid_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

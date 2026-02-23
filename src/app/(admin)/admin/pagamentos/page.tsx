@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { Card, Button, Badge, Select, Checkbox, LoadingScreen, EmptyState, MetricCard, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/index";
-import { Download, CheckCircle, Wallet, Users, Calendar, ArrowUpRight } from "lucide-react";
+import { Download, CheckCircle, Wallet, Users, Calendar, ArrowUpRight, Undo2 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
 interface WithdrawRequest {
@@ -42,6 +42,7 @@ export default function PagamentosPage() {
   // Withdraw requests
   const [withdrawRequests, setWithdrawRequests] = useState<WithdrawRequest[]>([]);
   const [loadingWithdraws, setLoadingWithdraws] = useState(true);
+  const [updatingWithdrawId, setUpdatingWithdrawId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchWithdrawRequests();
@@ -60,6 +61,29 @@ export default function PagamentosPage() {
   }
 
   const pendingWithdraws = withdrawRequests.filter(w => w.status === "pending");
+
+  async function updateWithdrawStatus(id: string, newStatus: "paid" | "pending") {
+    setUpdatingWithdrawId(id);
+    try {
+      const res = await fetch("/api/admin/withdraw-requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: newStatus }),
+      });
+      if (res.ok) {
+        setWithdrawRequests((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
+        );
+      } else {
+        const data = await res.json();
+        alert(data.error || "Erro ao atualizar status");
+      }
+    } catch {
+      alert("Erro ao atualizar status");
+    } finally {
+      setUpdatingWithdrawId(null);
+    }
+  }
 
   // Generate payout date options (day 05 and day 20 of each month for the next 12 months)
   const payoutDateOptions = useMemo(() => {
@@ -338,6 +362,7 @@ export default function PagamentosPage() {
                   <TableHead>Wise</TableHead>
                   <TableHead>Data da solicitação</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Ação</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -369,6 +394,29 @@ export default function PagamentosPage() {
                       >
                         {req.status === "paid" ? "Pago" : req.status === "rejected" ? "Rejeitado" : "Pendente"}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {req.status === "pending" ? (
+                        <Button
+                          size="sm"
+                          onClick={() => updateWithdrawStatus(req.id, "paid")}
+                          loading={updatingWithdrawId === req.id}
+                          icon={CheckCircle}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          Pago
+                        </Button>
+                      ) : req.status === "paid" ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => updateWithdrawStatus(req.id, "pending")}
+                          loading={updatingWithdrawId === req.id}
+                          icon={Undo2}
+                        >
+                          Voltar Pendente
+                        </Button>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))}
