@@ -3,12 +3,12 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 async function verifyAdmin() {
   const supabase = await createServerClient();
@@ -80,10 +80,10 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (status === "paid" && existing.affiliate_email) {
-      const emailResult = await resend.emails.send({
+      await resend.emails.send({
         from: "Leona Afiliados <onboarding@resend.dev>",
         to: existing.affiliate_email,
-        subject: "Seu saque foi processado! - Leona Afiliados",
+        subject: `PAGAMENTO REALIZADO: ${existing.affiliate_name || "Afiliado"}`,
         html: `
           <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 500px;">
             <h2 style="color: #18181b;">Saque Processado ✅</h2>
@@ -100,11 +100,10 @@ export async function PATCH(request: NextRequest) {
               </p>
             </div>
             <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 20px 0;" />
-            <p style="color: #a1a1aa; font-size: 12px;">Leona Afiliados - Sistema de comissões.</p>
+            <p style="color: #a1a1aa; font-size: 12px;">Enviado automaticamente pelo sistema de afiliados Leona.</p>
           </div>
         `,
       });
-      console.log("[ADMIN] Email result:", JSON.stringify(emailResult));
     }
 
     return NextResponse.json({ success: true });
