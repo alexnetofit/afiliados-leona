@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Dados incompletos" }, { status: 400 });
     }
 
-    await resend.emails.send({
+    const { data: emailData, error: emailError } = await resend.emails.send({
       from: "Leona Afiliados <onboarding@resend.dev>",
       to: affiliateEmail,
       subject: `PAGAMENTO REALIZADO: ${affiliateName || "Afiliado"}`,
@@ -60,7 +60,14 @@ export async function POST(request: NextRequest) {
       `,
     });
 
-    return NextResponse.json({ success: true });
+    if (emailError) {
+      return NextResponse.json(
+        { error: `Resend: ${emailError.message}`, details: emailError },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true, emailId: emailData?.id });
   } catch (error) {
     console.error("[NOTIFY-PAID] Error:", error);
     return NextResponse.json(

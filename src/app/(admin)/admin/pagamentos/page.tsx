@@ -90,11 +90,9 @@ export default function PagamentosPage() {
                 }),
               });
               const emailData = await emailRes.json();
-              if (!emailRes.ok) {
-                alert(`Erro ao enviar email: ${emailData.error || emailRes.status}`);
-              }
+              alert(`Email debug: status=${emailRes.status} response=${JSON.stringify(emailData)}`);
             } catch (emailErr) {
-              alert(`Erro ao enviar email: ${emailErr}`);
+              alert(`Erro fetch email: ${emailErr}`);
             }
           } else {
             alert("Email do afiliado não encontrado para notificação");
