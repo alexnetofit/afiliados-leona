@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { Resend } from "resend";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -59,16 +56,6 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
     }
 
-    const { data: existing, error: fetchError } = await supabaseAdmin
-      .from("withdraw_requests")
-      .select("*")
-      .eq("id", id)
-      .single();
-
-    if (fetchError || !existing) {
-      return NextResponse.json({ error: "Solicitação não encontrada" }, { status: 404 });
-    }
-
     const { error: updateError } = await supabaseAdmin
       .from("withdraw_requests")
       .update({ status })
@@ -77,33 +64,6 @@ export async function PATCH(request: NextRequest) {
     if (updateError) {
       console.error("[ADMIN] Error updating withdraw request:", updateError);
       return NextResponse.json({ error: `Erro ao atualizar: ${updateError.message}` }, { status: 500 });
-    }
-
-    if (status === "paid" && existing.affiliate_email) {
-      await resend.emails.send({
-        from: "Leona Afiliados <onboarding@resend.dev>",
-        to: existing.affiliate_email,
-        subject: `PAGAMENTO REALIZADO: ${existing.affiliate_name || "Afiliado"}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 500px;">
-            <h2 style="color: #18181b;">Saque Processado ✅</h2>
-            <p style="color: #3f3f46; font-size: 16px;">
-              Olá, <strong>${existing.affiliate_name || "Afiliado"}</strong>!
-            </p>
-            <p style="color: #3f3f46; font-size: 16px;">
-              Seu saque de <strong>${existing.amount_text}</strong> foi processado com sucesso.
-            </p>
-            ${existing.date_label ? `<p style="color: #71717a; font-size: 14px;">Referente à liberação de ${existing.date_label}.</p>` : ""}
-            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; margin: 16px 0;">
-              <p style="color: #166534; font-size: 14px; margin: 0; font-weight: 600;">
-                O valor foi enviado para a conta informada. Verifique seu extrato.
-              </p>
-            </div>
-            <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 20px 0;" />
-            <p style="color: #a1a1aa; font-size: 12px;">Enviado automaticamente pelo sistema de afiliados Leona.</p>
-          </div>
-        `,
-      });
     }
 
     return NextResponse.json({ success: true });

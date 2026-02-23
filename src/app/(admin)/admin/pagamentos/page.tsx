@@ -74,6 +74,22 @@ export default function PagamentosPage() {
         setWithdrawRequests((prev) =>
           prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
         );
+
+        if (newStatus === "paid") {
+          const req = withdrawRequests.find((r) => r.id === id);
+          if (req?.affiliate_email) {
+            await fetch("/api/admin/notify-paid", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                affiliateName: req.affiliate_name,
+                affiliateEmail: req.affiliate_email,
+                amount: req.amount_text,
+                dateLabel: req.date_label,
+              }),
+            });
+          }
+        }
       } else {
         const data = await res.json();
         alert(data.error || "Erro ao atualizar status");
