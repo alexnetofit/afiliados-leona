@@ -78,24 +78,16 @@ export default function PagamentosPage() {
         if (newStatus === "paid") {
           const req = withdrawRequests.find((r) => r.id === id);
           if (req?.affiliate_email) {
-            try {
-              const emailRes = await fetch("/api/admin/notify-paid", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  affiliateName: req.affiliate_name,
-                  affiliateEmail: req.affiliate_email,
-                  amount: req.amount_text,
-                  dateLabel: req.date_label,
-                }),
-              });
-              const emailData = await emailRes.json();
-              alert(`Email debug: status=${emailRes.status} response=${JSON.stringify(emailData)}`);
-            } catch (emailErr) {
-              alert(`Erro fetch email: ${emailErr}`);
-            }
-          } else {
-            alert("Email do afiliado não encontrado para notificação");
+            await fetch("/api/admin/notify-paid", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                affiliateName: req.affiliate_name,
+                affiliateEmail: req.affiliate_email,
+                amount: req.amount_text,
+                dateLabel: req.date_label,
+              }),
+            });
           }
         }
       } else {
