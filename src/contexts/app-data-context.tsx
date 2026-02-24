@@ -113,7 +113,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   // Fetch all affiliate data
   const fetchAffiliateData = useCallback(
     async (affiliateId: string) => {
-      const [linksRes, subscriptionsRes, transactionsRes, payoutsRes, withdrawRes] = await Promise.all([
+      const [linksRes, subscriptionsRes, transactionsRes, payoutsRes] = await Promise.all([
         supabase
           .from("affiliate_links")
           .select("*")
@@ -134,21 +134,24 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           .select("*")
           .eq("affiliate_id", affiliateId)
           .order("month", { ascending: false }),
-        supabase
-          .from("withdraw_requests")
-          .select("date_label")
-          .eq("affiliate_id", affiliateId),
       ]);
+
+      // Fetch withdrawn date labels via API (bypasses RLS)
+      let wLabels = new Set<string>();
+      try {
+        const wRes = await fetch(`/api/withdraw/status?affiliateId=${affiliateId}`);
+        if (wRes.ok) {
+          const wData = await wRes.json();
+          wLabels = new Set<string>(wData.dateLabels || []);
+        }
+      } catch {
+        // silently fail
+      }
 
       const linksData = (linksRes.data || []) as AffiliateLink[];
       const subsData = (subscriptionsRes.data || []) as Subscription[];
       const txsData = (transactionsRes.data || []) as Transaction[];
       const paysData = (payoutsRes.data || []) as MonthlyPayout[];
-
-      const wLabels = new Set<string>();
-      (withdrawRes.data || []).forEach((r: { date_label: string | null }) => {
-        if (r.date_label) wLabels.add(r.date_label);
-      });
 
       setLinks(linksData);
       setSubscriptions(subsData);

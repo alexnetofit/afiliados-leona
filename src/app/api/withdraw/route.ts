@@ -59,14 +59,25 @@ export async function POST(request: NextRequest) {
       `,
     });
 
-    // Save to database
-    if (affiliateId) {
+    // Save to database (prevent duplicates)
+    if (affiliateId && dateLabel) {
+      const { data: existing } = await supabaseAdmin
+        .from("withdraw_requests")
+        .select("id")
+        .eq("affiliate_id", affiliateId)
+        .eq("date_label", dateLabel)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        return NextResponse.json({ success: true, duplicate: true });
+      }
+
       await supabaseAdmin.from("withdraw_requests").insert({
         affiliate_id: affiliateId,
         affiliate_name: affiliateName,
         affiliate_email: user.email,
         amount_text: amount,
-        date_label: dateLabel || null,
+        date_label: dateLabel,
         pix_key: pixKey || null,
         wise_email: wiseEmail || null,
       });
