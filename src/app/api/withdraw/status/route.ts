@@ -23,13 +23,13 @@ export async function GET(request: NextRequest) {
 
     const { data } = await supabaseAdmin
       .from("withdraw_requests")
-      .select("date_label, status, paid_at")
+      .select("date_label, status, paid_at, amount_text")
       .eq("affiliate_id", affiliateId);
 
-    const withdraws: Record<string, { status: string; paid_at: string | null }> = {};
-    (data || []).forEach((r: { date_label: string | null; status: string; paid_at: string | null }) => {
+    const withdraws: Record<string, { status: string; paid_at: string | null; amount_text: string | null }> = {};
+    (data || []).forEach((r: { date_label: string | null; status: string; paid_at: string | null; amount_text: string | null }) => {
       if (r.date_label) {
-        withdraws[r.date_label] = { status: r.status, paid_at: r.paid_at };
+        withdraws[r.date_label] = { status: r.status, paid_at: r.paid_at, amount_text: r.amount_text };
       }
     });
 

@@ -35,7 +35,7 @@ export default function PagamentosPage() {
   const withdrawnGroups = useMemo(() => {
     const merged = new Map(withdrawnDateLabels);
     localWithdrawn.forEach(l => {
-      if (!merged.has(l)) merged.set(l, { status: "pending", paid_at: null });
+      if (!merged.has(l)) merged.set(l, { status: "pending", paid_at: null, amount_text: null });
     });
     return merged;
   }, [withdrawnDateLabels, localWithdrawn]);
@@ -199,12 +199,12 @@ export default function PagamentosPage() {
     return Array.from(groups.values()).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
   }, [transactions, paidMonths, subscriptionNames]);
 
-  // Summary metrics
+  // Summary metrics (consider withdraw_requests paid status)
   const totalPaid = paymentGroups
-    .filter(g => g.status === "paid")
+    .filter(g => g.status === "paid" || (g.status === "available" && withdrawnGroups.get(g.dateLabel)?.status === "paid"))
     .reduce((sum, g) => sum + g.totalCents, 0);
   const totalAvailable = paymentGroups
-    .filter(g => g.status === "available")
+    .filter(g => g.status === "available" && withdrawnGroups.get(g.dateLabel)?.status !== "paid")
     .reduce((sum, g) => sum + g.totalCents, 0);
   const totalPending = paymentGroups
     .filter(g => g.status === "pending")

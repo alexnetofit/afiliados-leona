@@ -30,7 +30,7 @@ interface AppData {
   transactions: Transaction[];
   payouts: MonthlyPayout[];
   summary: AffiliateSummary | null;
-  withdrawnDateLabels: Map<string, { status: string; paid_at: string | null }>;
+  withdrawnDateLabels: Map<string, { status: string; paid_at: string | null; amount_text: string | null }>;
 
   // State
   isLoading: boolean;
@@ -75,7 +75,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [payouts, setPayouts] = useState<MonthlyPayout[]>([]);
   const [summary, setSummary] = useState<AffiliateSummary | null>(null);
-  const [withdrawnDateLabels, setWithdrawnDateLabels] = useState<Map<string, { status: string; paid_at: string | null }>>(new Map());
+  const [withdrawnDateLabels, setWithdrawnDateLabels] = useState<Map<string, { status: string; paid_at: string | null; amount_text: string | null }>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -83,25 +83,50 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   // Calculate summary from data
   const calculateSummary = useCallback(
-    (txs: Transaction[], pays: MonthlyPayout[], subs: Subscription[]): AffiliateSummary => {
+    (
+      txs: Transaction[],
+      pays: MonthlyPayout[],
+      subs: Subscription[],
+      wLabels: Map<string, { status: string; paid_at: string | null; amount_text: string | null }>
+    ): AffiliateSummary => {
       const now = new Date();
 
       const pendingCents = txs
         .filter((t) => t.type === "commission" && t.available_at && new Date(t.available_at) > now)
         .reduce((sum, t) => sum + t.commission_amount_cents, 0);
 
-      const availableCents = txs
-        .filter((t) => t.available_at && new Date(t.available_at) <= now)
-        .reduce((sum, t) => sum + t.commission_amount_cents, 0);
+      const availableTxs = txs.filter((t) => t.available_at && new Date(t.available_at) <= now);
+      const totalAvailableCents = availableTxs.reduce((sum, t) => sum + t.commission_amount_cents, 0);
 
-      const paidCents = pays
+      // Group available txs by dateLabel to match with withdraw requests
+      const centsByDateLabel = new Map<string, number>();
+      availableTxs.forEach((t) => {
+        const dateLabel = new Date(t.available_at!).toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          timeZone: "America/Sao_Paulo",
+        });
+        centsByDateLabel.set(dateLabel, (centsByDateLabel.get(dateLabel) || 0) + t.commission_amount_cents);
+      });
+
+      let withdrawPaidCents = 0;
+      wLabels.forEach((val, dateLabel) => {
+        if (val.status === "paid" && centsByDateLabel.has(dateLabel)) {
+          withdrawPaidCents += centsByDateLabel.get(dateLabel)!;
+        }
+      });
+
+      const monthlyPaidCents = pays
         .filter((p) => p.status === "paid")
         .reduce((sum, p) => sum + p.total_payable_cents, 0);
 
+      const totalPaidCents = monthlyPaidCents + withdrawPaidCents;
+
       return {
         pending_cents: pendingCents,
-        available_cents: Math.max(availableCents - paidCents, 0),
-        paid_cents: paidCents,
+        available_cents: Math.max(totalAvailableCents - totalPaidCents, 0),
+        paid_cents: totalPaidCents,
         total_trials: subs.filter((s) => s.is_trial || s.status === "trialing").length,
         total_subscriptions: subs.length,
         active_subscriptions: subs.filter((s) => s.status === "active").length,
@@ -137,13 +162,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       ]);
 
       // Fetch withdraw status via API (bypasses RLS)
-      let wLabels = new Map<string, { status: string; paid_at: string | null }>();
+      let wLabels = new Map<string, { status: string; paid_at: string | null; amount_text: string | null }>();
       try {
         const wRes = await fetch(`/api/withdraw/status?affiliateId=${affiliateId}`);
         if (wRes.ok) {
           const wData = await wRes.json();
           const withdraws = wData.withdraws || {};
-          wLabels = new Map(Object.entries(withdraws) as [string, { status: string; paid_at: string | null }][]);
+          wLabels = new Map(Object.entries(withdraws) as [string, { status: string; paid_at: string | null; amount_text: string | null }][]);
         }
       } catch {
         // silently fail
@@ -158,7 +183,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setSubscriptions(subsData);
       setTransactions(txsData);
       setPayouts(paysData);
-      setSummary(calculateSummary(txsData, paysData, subsData));
+      setSummary(calculateSummary(txsData, paysData, subsData, wLabels));
       setWithdrawnDateLabels(wLabels);
     },
     [supabase, calculateSummary]
