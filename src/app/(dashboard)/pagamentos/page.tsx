@@ -300,7 +300,13 @@ export default function PagamentosPage() {
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        {getStatusIcon(group.status)}
+                        {(() => {
+                          const w = withdrawnGroups.get(group.dateLabel);
+                          if (group.status === "available" && w?.status === "paid") {
+                            return <CheckCircle className="h-4 w-4 text-success-600" />;
+                          }
+                          return getStatusIcon(group.status);
+                        })()}
                         <div className="text-left">
                           <p className="text-sm font-medium text-zinc-900">
                             Liberação {group.dateLabel}
@@ -324,25 +330,26 @@ export default function PagamentosPage() {
                           </button>
                         )}
                         {group.status === "available" && withdrawnGroups.has(group.dateLabel) && withdrawnGroups.get(group.dateLabel)?.status === "paid" && (
-                          <span className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Pago {withdrawnGroups.get(group.dateLabel)?.paid_at
+                          <Badge variant="success" size="sm">
+                            Pago em {withdrawnGroups.get(group.dateLabel)?.paid_at
                               ? new Date(withdrawnGroups.get(group.dateLabel)!.paid_at!).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" })
                               : ""}
-                          </span>
+                          </Badge>
                         )}
                         {group.status === "available" && withdrawnGroups.has(group.dateLabel) && withdrawnGroups.get(group.dateLabel)?.status !== "paid" && (
                           <span className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-amber-700 bg-amber-50 rounded-full">
                             <Clock className="h-3 w-3" />
-                            Solicitado
+                            Saque solicitado
                           </span>
                         )}
-                        {getStatusBadge(group.status)}
+                        {!(group.status === "available" && withdrawnGroups.get(group.dateLabel)?.status === "paid") && getStatusBadge(group.status)}
                         <span className={cn(
                           "text-sm font-semibold",
-                          group.status === "paid" ? "text-success-600" :
-                          group.status === "available" ? "text-warning-600" :
-                          "text-zinc-700"
+                          group.status === "available" && withdrawnGroups.get(group.dateLabel)?.status === "paid"
+                            ? "text-success-600"
+                            : group.status === "paid" ? "text-success-600"
+                            : group.status === "available" ? "text-warning-600"
+                            : "text-zinc-700"
                         )}>
                           {formatCurrency(group.totalCents / 100)}
                         </span>
