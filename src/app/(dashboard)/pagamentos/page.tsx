@@ -33,8 +33,10 @@ export default function PagamentosPage() {
   const [localWithdrawn, setLocalWithdrawn] = useState<Set<string>>(new Set());
 
   const withdrawnGroups = useMemo(() => {
-    const merged = new Set(withdrawnDateLabels);
-    localWithdrawn.forEach(l => merged.add(l));
+    const merged = new Map(withdrawnDateLabels);
+    localWithdrawn.forEach(l => {
+      if (!merged.has(l)) merged.set(l, { status: "pending", paid_at: null });
+    });
     return merged;
   }, [withdrawnDateLabels, localWithdrawn]);
 
@@ -321,9 +323,17 @@ export default function PagamentosPage() {
                             {withdrawingGroup === group.dateKey ? "Solicitando..." : "Solicitar Saque"}
                           </button>
                         )}
-                        {group.status === "available" && withdrawnGroups.has(group.dateLabel) && (
+                        {group.status === "available" && withdrawnGroups.has(group.dateLabel) && withdrawnGroups.get(group.dateLabel)?.status === "paid" && (
                           <span className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full">
                             <CheckCircle2 className="h-3 w-3" />
+                            Pago {withdrawnGroups.get(group.dateLabel)?.paid_at
+                              ? new Date(withdrawnGroups.get(group.dateLabel)!.paid_at!).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" })
+                              : ""}
+                          </span>
+                        )}
+                        {group.status === "available" && withdrawnGroups.has(group.dateLabel) && withdrawnGroups.get(group.dateLabel)?.status !== "paid" && (
+                          <span className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-amber-700 bg-amber-50 rounded-full">
+                            <Clock className="h-3 w-3" />
                             Solicitado
                           </span>
                         )}

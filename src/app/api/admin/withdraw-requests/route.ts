@@ -56,9 +56,16 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
     }
 
+    const updateData: Record<string, unknown> = { status };
+    if (status === "paid") {
+      updateData.paid_at = new Date().toISOString();
+    } else if (status === "pending") {
+      updateData.paid_at = null;
+    }
+
     const { error: updateError } = await supabaseAdmin
       .from("withdraw_requests")
-      .update({ status })
+      .update(updateData)
       .eq("id", id);
 
     if (updateError) {

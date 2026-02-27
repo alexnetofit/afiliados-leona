@@ -30,7 +30,7 @@ interface AppData {
   transactions: Transaction[];
   payouts: MonthlyPayout[];
   summary: AffiliateSummary | null;
-  withdrawnDateLabels: Set<string>;
+  withdrawnDateLabels: Map<string, { status: string; paid_at: string | null }>;
 
   // State
   isLoading: boolean;
@@ -52,7 +52,7 @@ const defaultAppData: AppData = {
   transactions: [],
   payouts: [],
   summary: null,
-  withdrawnDateLabels: new Set(),
+  withdrawnDateLabels: new Map(),
   isLoading: true,
   isInitialized: false,
   refetch: async () => {},
@@ -75,7 +75,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [payouts, setPayouts] = useState<MonthlyPayout[]>([]);
   const [summary, setSummary] = useState<AffiliateSummary | null>(null);
-  const [withdrawnDateLabels, setWithdrawnDateLabels] = useState<Set<string>>(new Set());
+  const [withdrawnDateLabels, setWithdrawnDateLabels] = useState<Map<string, { status: string; paid_at: string | null }>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -136,13 +136,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           .order("month", { ascending: false }),
       ]);
 
-      // Fetch withdrawn date labels via API (bypasses RLS)
-      let wLabels = new Set<string>();
+      // Fetch withdraw status via API (bypasses RLS)
+      let wLabels = new Map<string, { status: string; paid_at: string | null }>();
       try {
         const wRes = await fetch(`/api/withdraw/status?affiliateId=${affiliateId}`);
         if (wRes.ok) {
           const wData = await wRes.json();
-          wLabels = new Set<string>(wData.dateLabels || []);
+          const withdraws = wData.withdraws || {};
+          wLabels = new Map(Object.entries(withdraws) as [string, { status: string; paid_at: string | null }][]);
         }
       } catch {
         // silently fail
@@ -180,7 +181,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setTransactions([]);
         setPayouts([]);
         setSummary(null);
-        setWithdrawnDateLabels(new Set());
+        setWithdrawnDateLabels(new Map());
         return;
       }
 
@@ -243,7 +244,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setTransactions([]);
     setPayouts([]);
     setSummary(null);
-    setWithdrawnDateLabels(new Set());
+    setWithdrawnDateLabels(new Map());
   }, [supabase]);
 
   // Initial fetch
@@ -268,7 +269,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setTransactions([]);
         setPayouts([]);
         setSummary(null);
-        setWithdrawnDateLabels(new Set());
+        setWithdrawnDateLabels(new Map());
         setIsLoading(false);
       }
     });

@@ -14,6 +14,7 @@ interface WithdrawRequest {
   pix_key: string | null;
   wise_email: string | null;
   status: "pending" | "paid" | "rejected";
+  paid_at: string | null;
   created_at: string;
 }
 
@@ -71,8 +72,9 @@ export default function PagamentosPage() {
         body: JSON.stringify({ id, status: newStatus }),
       });
       if (res.ok) {
+        const paidAt = newStatus === "paid" ? new Date().toISOString() : null;
         setWithdrawRequests((prev) =>
-          prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
+          prev.map((r) => (r.id === id ? { ...r, status: newStatus, paid_at: paidAt } : r))
         );
 
         if (newStatus === "paid") {
@@ -376,7 +378,8 @@ export default function PagamentosPage() {
                   <TableHead>Liberação</TableHead>
                   <TableHead>PIX</TableHead>
                   <TableHead>Wise</TableHead>
-                  <TableHead>Data da solicitação</TableHead>
+                  <TableHead>Solicitado em</TableHead>
+                  <TableHead>Pago em</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Ação</TableHead>
                 </TableRow>
@@ -396,12 +399,25 @@ export default function PagamentosPage() {
                       <code className="text-xs bg-zinc-100 px-2 py-1 rounded">{req.pix_key || "-"}</code>
                     </TableCell>
                     <TableCell className="text-zinc-600">{req.wise_email || "-"}</TableCell>
-                    <TableCell className="text-zinc-500">
+                    <TableCell className="text-zinc-500 text-sm">
                       {new Date(req.created_at).toLocaleDateString("pt-BR", {
                         day: "2-digit", month: "2-digit", year: "numeric",
                         hour: "2-digit", minute: "2-digit",
                         timeZone: "America/Sao_Paulo",
                       })}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {req.paid_at ? (
+                        <span className="text-emerald-600 font-medium">
+                          {new Date(req.paid_at).toLocaleDateString("pt-BR", {
+                            day: "2-digit", month: "2-digit", year: "numeric",
+                            hour: "2-digit", minute: "2-digit",
+                            timeZone: "America/Sao_Paulo",
+                          })}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge
