@@ -23,6 +23,7 @@ interface AppData {
   profile: Profile | null;
   affiliate: Affiliate | null;
   isAdmin: boolean;
+  isManager: boolean;
 
   // Affiliate data
   links: AffiliateLink[];
@@ -47,6 +48,7 @@ const defaultAppData: AppData = {
   profile: null,
   affiliate: null,
   isAdmin: false,
+  isManager: false,
   links: [],
   subscriptions: [],
   transactions: [],
@@ -76,6 +78,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [payouts, setPayouts] = useState<MonthlyPayout[]>([]);
   const [summary, setSummary] = useState<AffiliateSummary | null>(null);
   const [withdrawnDateLabels, setWithdrawnDateLabels] = useState<Map<string, { status: string; paid_at: string | null; amount_text: string | null }>>(new Map());
+  const [isManager, setIsManager] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -207,6 +210,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setPayouts([]);
         setSummary(null);
         setWithdrawnDateLabels(new Map());
+        setIsManager(false);
         return;
       }
 
@@ -235,6 +239,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
         if (typedAffiliate?.id) {
           await fetchAffiliateData(typedAffiliate.id);
+
+          try {
+            const { data: mgrCheck } = await supabase
+              .from("manager_affiliates")
+              .select("id")
+              .eq("manager_id", typedAffiliate.id)
+              .limit(1);
+            setIsManager(!!(mgrCheck && mgrCheck.length > 0));
+          } catch {
+            setIsManager(false);
+          }
         }
       }
     } catch (error) {
@@ -270,6 +285,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setPayouts([]);
     setSummary(null);
     setWithdrawnDateLabels(new Map());
+    setIsManager(false);
   }, [supabase]);
 
   // Initial fetch
@@ -295,6 +311,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setPayouts([]);
         setSummary(null);
         setWithdrawnDateLabels(new Map());
+        setIsManager(false);
         setIsLoading(false);
       }
     });
@@ -309,6 +326,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     profile,
     affiliate,
     isAdmin: profile?.role === "admin",
+    isManager,
     links,
     subscriptions,
     transactions,

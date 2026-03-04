@@ -5,12 +5,12 @@ import { useAppData } from "@/contexts";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
 import { Card, Button, Badge, LoadingScreen, Alert } from "@/components/ui/index";
-import { Link2, Copy, Check, Plus, Trash2, ExternalLink, Sparkles } from "lucide-react";
+import { Link2, Copy, Check, Plus, Trash2, ExternalLink, Sparkles, Crown } from "lucide-react";
 import { getAffiliateLink, copyToClipboard, cn } from "@/lib/utils";
 
 export default function LinksPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { affiliate, profile, links, refetchLinks, isLoading, isInitialized } = useAppData();
+  const { affiliate, profile, links, refetchLinks, isLoading, isInitialized, isManager } = useAppData();
   const [newAlias, setNewAlias] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
@@ -59,6 +59,9 @@ export default function LinksPage() {
   };
 
   const mainLink = affiliate?.affiliate_code ? getAffiliateLink(affiliate.affiliate_code) : "";
+  const managerLink = affiliate?.affiliate_code
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/register?mgr=${affiliate.affiliate_code}`
+    : "";
 
   return (
     <>
@@ -114,6 +117,56 @@ export default function LinksPage() {
               </code>
             </div>
           </Card>
+
+          {/* Manager Link Card */}
+          {isManager && managerLink && (
+            <Card className="bg-gradient-to-br from-orange-50/50 to-white">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center shadow-lg shadow-orange-500/20">
+                  <Crown className="h-7 w-7 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-zinc-900">Link de recrutamento</h3>
+                  <p className="text-sm text-zinc-500">Compartilhe para recrutar novos parceiros</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1 flex items-center gap-3 px-4 py-3.5 bg-orange-50/60 rounded-xl border-2 border-orange-200">
+                  <span className="text-sm text-zinc-700 truncate flex-1 font-medium">
+                    {managerLink}
+                  </span>
+                  <Badge className="bg-orange-100 text-orange-700" size="sm">
+                    Gerência
+                  </Badge>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => handleCopy(managerLink, "manager")}
+                    icon={copiedId === "manager" ? Check : Copy}
+                    variant={copiedId === "manager" ? "success" : "primary"}
+                    size="lg"
+                    className={copiedId !== "manager" ? "bg-orange-600 hover:bg-orange-700" : ""}
+                  >
+                    {copiedId === "manager" ? "Copiado!" : "Copiar"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => window.open(managerLink, "_blank")}
+                    icon={ExternalLink}
+                    size="lg"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center gap-2 text-sm">
+                <span className="text-zinc-500">Código:</span>
+                <code className="px-3 py-1.5 bg-orange-50 text-orange-700 rounded-lg font-mono font-semibold">
+                  {affiliate?.affiliate_code}
+                </code>
+              </div>
+            </Card>
+          )}
 
           {/* Custom Links */}
           <Card>

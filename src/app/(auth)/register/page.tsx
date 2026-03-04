@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -27,15 +27,21 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mgrCode, setMgrCode] = useState<string | null>(null);
   const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setMgrCode(params.get("mgr"));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    const { error: err } = await supabase.auth.signUp({
+    const { data: signUpData, error: err } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: name } },
@@ -45,6 +51,18 @@ export default function RegisterPage() {
       setError(err.message);
       setLoading(false);
       return;
+    }
+
+    if (mgrCode && signUpData?.user) {
+      try {
+        await fetch("/api/register-manager", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mgrCode, userId: signUpData.user.id }),
+        });
+      } catch {
+        /* best-effort */
+      }
     }
 
     router.push("/dashboard");

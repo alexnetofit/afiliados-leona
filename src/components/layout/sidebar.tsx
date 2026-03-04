@@ -12,25 +12,31 @@ import {
   User,
   LogOut,
   X,
+  Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAppData } from "@/contexts";
 
-const NAV_ITEMS = [
+const NAV_ITEMS_BEFORE = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Links", href: "/links", icon: Link2 },
   { name: "Vendas", href: "/vendas", icon: DollarSign },
   { name: "Assinaturas", href: "/assinaturas", icon: CreditCard },
   { name: "Pagamentos", href: "/pagamentos", icon: Wallet },
-  { name: "Perfil", href: "/perfil", icon: User },
 ];
 
-const MOBILE_TABS = [
+const GERENCIA_ITEM = { name: "Gerência", href: "/gerencia", icon: Crown };
+
+const PERFIL_ITEM = { name: "Perfil", href: "/perfil", icon: User };
+
+const MOBILE_TABS_BEFORE = [
   { name: "Home", href: "/dashboard", icon: LayoutDashboard },
   { name: "Links", href: "/links", icon: Link2 },
   { name: "Vendas", href: "/vendas", icon: DollarSign },
   { name: "Pagamentos", href: "/pagamentos", icon: Wallet },
-  { name: "Perfil", href: "/perfil", icon: User },
 ];
+
+const MOBILE_PERFIL = { name: "Perfil", href: "/perfil", icon: User };
 
 interface SidebarProps {
   open: boolean;
@@ -41,6 +47,13 @@ interface SidebarProps {
 
 export function Sidebar({ open, onClose, onLogout, user }: SidebarProps) {
   const pathname = usePathname();
+  const { isManager } = useAppData();
+
+  const navItems = [
+    ...NAV_ITEMS_BEFORE,
+    ...(isManager ? [GERENCIA_ITEM] : []),
+    PERFIL_ITEM,
+  ];
 
   const initials = user?.name
     ? user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
@@ -110,8 +123,9 @@ export function Sidebar({ open, onClose, onLogout, user }: SidebarProps) {
             Menu
           </p>
           <div className="space-y-0.5">
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const isActive = pathname === item.href;
+              const isGerencia = item.href === "/gerencia";
               return (
                 <Link
                   key={item.href}
@@ -121,15 +135,21 @@ export function Sidebar({ open, onClose, onLogout, user }: SidebarProps) {
                     "flex items-center gap-2.5 px-2.5 py-2 rounded-md",
                     "text-sm font-medium",
                     "transition-colors duration-100",
-                    isActive 
-                      ? "bg-primary-50 text-primary-700" 
-                      : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
+                    isGerencia
+                      ? isActive
+                        ? "bg-orange-50 text-orange-700"
+                        : "text-orange-600 hover:bg-orange-50/60 hover:text-orange-700"
+                      : isActive 
+                        ? "bg-primary-50 text-primary-700" 
+                        : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
                   )}
                 >
                   <item.icon 
                     className={cn(
                       "h-4 w-4",
-                      isActive ? "text-primary-600" : "text-zinc-400"
+                      isGerencia
+                        ? isActive ? "text-orange-600" : "text-orange-400"
+                        : isActive ? "text-primary-600" : "text-zinc-400"
                     )} 
                     strokeWidth={isActive ? 2 : 1.75} 
                   />
@@ -162,12 +182,20 @@ export function Sidebar({ open, onClose, onLogout, user }: SidebarProps) {
 
 export function MobileBottomNav() {
   const pathname = usePathname();
+  const { isManager } = useAppData();
+
+  const tabs = [
+    ...MOBILE_TABS_BEFORE,
+    ...(isManager ? [{ name: "Gerência", href: "/gerencia", icon: Crown }] : []),
+    MOBILE_PERFIL,
+  ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-white border-t border-zinc-200 safe-area-bottom">
       <div className="flex items-center justify-around h-14">
-        {MOBILE_TABS.map((item) => {
+        {tabs.map((item) => {
           const isActive = pathname === item.href;
+          const isGerencia = item.href === "/gerencia";
           return (
             <Link
               key={item.href}
@@ -175,7 +203,9 @@ export function MobileBottomNav() {
               className={cn(
                 "flex flex-col items-center justify-center gap-0.5 flex-1 h-full",
                 "transition-colors duration-100",
-                isActive ? "text-purple-600" : "text-zinc-400"
+                isGerencia
+                  ? isActive ? "text-orange-600" : "text-orange-400"
+                  : isActive ? "text-purple-600" : "text-zinc-400"
               )}
             >
               <item.icon className="h-5 w-5" strokeWidth={isActive ? 2.25 : 1.75} />

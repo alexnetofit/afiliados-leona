@@ -70,5 +70,6 @@ export const config = {
     '/assinaturas/:path*',
     '/pagamentos/:path*',
     '/perfil/:path*',
+    '/gerencia/:path*',
   ],
 };
