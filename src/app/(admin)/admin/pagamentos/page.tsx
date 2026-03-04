@@ -141,14 +141,14 @@ export default function PagamentosPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 mt-4">
-              <div className="relative flex-1">
+              <div className="relative flex-1 sm:min-w-[400px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Buscar por nome, email, valor, liberação..."
-                  className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300 transition-all"
+                  className="w-full pl-9 pr-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300 transition-all"
                 />
               </div>
               <Select
