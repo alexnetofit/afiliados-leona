@@ -135,75 +135,79 @@ export default function DashboardPage() {
                   <p className="text-[11px] text-zinc-400 mt-0.5">{uniqueCustomers} {uniqueCustomers === 1 ? "venda" : "vendas"}</p>
                 </div>
               </div>
-
-              {/* Tier progression */}
-              {(() => {
-                const sales = affiliate?.paid_subscriptions_count || 0;
-                const tiers = [
-                  { name: "Bronze", min: 0, percent: 30 },
-                  { name: "Prata", min: 20, percent: 35 },
-                  { name: "Ouro", min: 50, percent: 40 },
-                ];
-                const currentIdx = affiliate?.commission_tier ? affiliate.commission_tier - 1 : 0;
-                const nextTier = currentIdx < 2 ? tiers[currentIdx + 1] : null;
-                const prevMin = tiers[currentIdx].min;
-                const nextMin = nextTier ? nextTier.min : tiers[currentIdx].min;
-                const progress = nextTier
-                  ? Math.min(((sales - prevMin) / (nextMin - prevMin)) * 100, 100)
-                  : 100;
-
-                return (
-                  <div className="mt-3 pt-3 border-t border-zinc-100">
-                    {nextTier && (
-                      <div className="mb-2.5">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] text-zinc-500">
-                            {sales}/{nextMin} vendas
-                          </span>
-                          <span className="text-[10px] font-medium text-zinc-600">
-                            {nextTier.name} {nextTier.percent}%
-                          </span>
-                        </div>
-                        <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-primary-500 transition-all duration-500"
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                        <p className="text-[10px] text-zinc-400 mt-1">
-                          Faltam {nextMin - sales} vendas para {nextTier.name}
-                        </p>
-                      </div>
-                    )}
-                    {!nextTier && (
-                      <p className="text-[10px] text-amber-600 font-medium mb-2.5">
-                        Nível máximo atingido!
-                      </p>
-                    )}
-                    <div className="flex items-center gap-1">
-                      {tiers.map((t, i) => (
-                        <div key={t.name} className="flex items-center gap-1 flex-1">
-                          <div className={cn(
-                            "flex-1 text-center py-1 rounded text-[9px] font-medium",
-                            i <= currentIdx
-                              ? i === 2 ? "bg-amber-100 text-amber-700"
-                                : i === 1 ? "bg-zinc-200 text-zinc-700"
-                                : "bg-orange-100 text-orange-700"
-                              : "bg-zinc-50 text-zinc-400"
-                          )}>
-                            {t.name} {t.percent}%
-                            <span className="block text-[8px] font-normal opacity-70">
-                              {t.min === 0 ? "0" : t.min}+ vendas
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
             </Card>
           </div>
+
+          {/* Tier Progression Bar */}
+          {(() => {
+            const sales = affiliate?.paid_subscriptions_count || 0;
+            const tiers = [
+              { name: "Bronze", min: 0, percent: 30 },
+              { name: "Prata", min: 20, percent: 35 },
+              { name: "Ouro", min: 50, percent: 40 },
+            ];
+            const currentIdx = affiliate?.commission_tier ? affiliate.commission_tier - 1 : 0;
+            const nextTier = currentIdx < 2 ? tiers[currentIdx + 1] : null;
+            const prevMin = tiers[currentIdx].min;
+            const nextMin = nextTier ? nextTier.min : tiers[currentIdx].min;
+            const progress = nextTier
+              ? Math.min(((sales - prevMin) / (nextMin - prevMin)) * 100, 100)
+              : 100;
+
+            return (
+              <div className="bg-white border border-zinc-200 rounded-lg px-4 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                <div className="flex items-center gap-3 shrink-0">
+                  <Trophy className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
+                  <span className="text-xs font-medium text-zinc-600">Metas</span>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-1">
+                  {tiers.map((t, i) => {
+                    const isReached = i <= currentIdx;
+                    return (
+                      <div key={t.name} className="flex items-center gap-1.5 flex-1">
+                        <div className={cn(
+                          "flex-1 text-center py-1 px-1 rounded text-[10px] font-medium leading-tight",
+                          isReached
+                            ? i === 2 ? "bg-amber-100 text-amber-700"
+                              : i === 1 ? "bg-zinc-200 text-zinc-700"
+                              : "bg-orange-100 text-orange-700"
+                            : "bg-zinc-50 text-zinc-400"
+                        )}>
+                          {t.name} {t.percent}%
+                          <span className="hidden sm:inline text-[9px] font-normal opacity-70"> · {t.min}+ vendas</span>
+                        </div>
+                        {i < 2 && (
+                          <div className={cn(
+                            "w-3 h-px shrink-0",
+                            i < currentIdx ? "bg-zinc-300" : "bg-zinc-200"
+                          )} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {nextTier ? (
+                    <>
+                      <div className="w-20 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-primary-500 transition-all duration-500"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-zinc-500 whitespace-nowrap">
+                        {sales}/{nextMin} para {nextTier.name}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-[10px] text-amber-600 font-medium">Nível máximo!</span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Chart */}
           <Card>
