@@ -357,6 +357,40 @@ export async function GET(request: NextRequest) {
           description: "Comissão de venda (cron sync)",
         });
 
+        // Manager commission: check if affiliate has a manager
+        const { data: managerRel } = await supabaseAdmin
+          .from("manager_affiliates")
+          .select("manager_id, commission_percent")
+          .eq("affiliate_id", affiliateId)
+          .single();
+
+        if (managerRel) {
+          const mgrInvoiceId = `${invoice.id}_mgr`;
+          const { data: existingMgrTx } = await supabaseAdmin
+            .from("transactions")
+            .select("id")
+            .eq("stripe_invoice_id", mgrInvoiceId)
+            .single();
+
+          if (!existingMgrTx) {
+            const mgrCommission = Math.round(inv.amount_paid * managerRel.commission_percent / 100);
+            const customerName = customerObj?.name || customerId;
+            await supabaseAdmin.from("transactions").insert({
+              affiliate_id: managerRel.manager_id,
+              subscription_id: null,
+              stripe_invoice_id: mgrInvoiceId,
+              stripe_charge_id: inv.charge as string,
+              type: "commission",
+              amount_gross_cents: inv.amount_paid,
+              commission_percent: managerRel.commission_percent,
+              commission_amount_cents: mgrCommission,
+              paid_at: paidAt.toISOString(),
+              available_at: availableAt.toISOString(),
+              description: `Comissão de gerência - ${customerName}`,
+            });
+          }
+        }
+
         invoicesSynced++;
       }));
     }
