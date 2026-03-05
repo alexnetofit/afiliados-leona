@@ -39,7 +39,6 @@ export default function DashboardPage() {
     if (!transactions || transactions.length === 0 || pendingValue === 0) return null;
     
     const pendingTxs = transactions.filter(t => 
-      t.type === "commission" && 
       t.available_at && 
       new Date(t.available_at) > new Date()
     );
@@ -359,7 +358,7 @@ function generateChartData(transactions: Array<{ paid_at: string | null; commiss
   }
 
   transactions
-    .filter(t => t.type === "commission" && t.paid_at)
+    .filter(t => t.paid_at)
     .forEach(t => {
       const date = new Date(t.paid_at!);
       const key = date.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
