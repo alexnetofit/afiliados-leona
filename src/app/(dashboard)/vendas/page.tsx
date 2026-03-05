@@ -159,6 +159,7 @@ export default function VendasPage() {
                     {paginatedData.map((tx) => {
                       const neg = tx.commission_amount_cents < 0;
                       const avail = tx.available_at ? isDateAvailable(tx.available_at) : false;
+                      const isManagerTx = tx.description?.startsWith("Comissão de gerência");
                       const customerName = tx.subscription_id
                         ? subscriptionNames.get(tx.subscription_id)
                         : tx.description?.match(/\((.+)\)/)?.[1] || null;
@@ -173,9 +174,16 @@ export default function VendasPage() {
                                   {(customerName || "?")[0].toUpperCase()}
                                 </span>
                               </div>
-                              <span className="font-medium text-zinc-900">
-                                {customerName || "Cliente"}
-                              </span>
+                              <div>
+                                <span className="font-medium text-zinc-900">
+                                  {customerName || "Cliente"}
+                                </span>
+                                {isManagerTx && customerName && (
+                                  <p className="text-[10px] text-orange-600 font-medium">
+                                    via {customerName}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell className="text-zinc-600">
