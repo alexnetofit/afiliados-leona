@@ -102,7 +102,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       const now = new Date();
 
       const pendingCents = txs
-        .filter((t) => t.type === "commission" && t.available_at && new Date(t.available_at) > now)
+        .filter((t) => t.available_at && new Date(t.available_at) > now)
         .reduce((sum, t) => sum + t.commission_amount_cents, 0);
 
       const availableTxs = txs.filter((t) => t.available_at && new Date(t.available_at) <= now);

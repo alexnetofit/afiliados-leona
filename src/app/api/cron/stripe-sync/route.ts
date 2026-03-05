@@ -397,7 +397,7 @@ export async function GET(request: NextRequest) {
 
     console.log(`[CRON] ${invoicesSynced} invoices synced`);
 
-    // 4. Sync Refunds
+    // 4. Sync Refunds (match via customer + amount since charge.invoice is unavailable in API v2026)
     console.log("[CRON] Syncing refunds...");
     const refunds: Stripe.Refund[] = [];
     for await (const refund of stripe.refunds.list({
@@ -413,10 +413,12 @@ export async function GET(request: NextRequest) {
 
       const charge = typeof refund.charge === 'object' 
         ? refund.charge 
-        : await stripe.charges.retrieve(refund.charge);
-      
+        : await stripe.charges.retrieve(refund.charge as string);
+
       const customerId = charge.customer as string;
       if (!customerId) continue;
+
+      const chargeId = typeof refund.charge === 'string' ? refund.charge : refund.charge.id;
 
       const { data: customerAffiliate } = await supabaseAdmin
         .from("customer_affiliates")
@@ -426,40 +428,85 @@ export async function GET(request: NextRequest) {
 
       if (!customerAffiliate) continue;
 
-      const chargeId = typeof refund.charge === 'string' ? refund.charge : refund.charge.id;
-
-      const { data: originalTx } = await supabaseAdmin
+      // Find original commission: match by affiliate + gross amount + no existing refund
+      const { data: candidates } = await supabaseAdmin
         .from("transactions")
-        .select("commission_percent, subscription_id")
-        .eq("stripe_charge_id", chargeId)
+        .select("id, stripe_invoice_id, commission_percent, subscription_id, available_at")
+        .eq("affiliate_id", customerAffiliate.affiliate_id)
         .eq("type", "commission")
-        .single();
+        .eq("amount_gross_cents", charge.amount)
+        .order("paid_at", { ascending: false });
+
+      if (!candidates || candidates.length === 0) continue;
+
+      // Pick the first candidate that doesn't already have a refund
+      let originalTx = null;
+      for (const candidate of candidates) {
+        const refundKey = `${candidate.stripe_invoice_id}_refund`;
+        const { data: existingRefund } = await supabaseAdmin
+          .from("transactions")
+          .select("id")
+          .eq("stripe_invoice_id", refundKey)
+          .single();
+        if (!existingRefund) {
+          originalTx = candidate;
+          break;
+        }
+      }
 
       if (!originalTx) continue;
 
-      const { data: existingRefund } = await supabaseAdmin
-        .from("transactions")
-        .select("id")
-        .eq("stripe_charge_id", chargeId)
-        .eq("type", "refund")
-        .single();
-
-      if (existingRefund) continue;
-
+      const refundKey = `${originalTx.stripe_invoice_id}_refund`;
       const refundAmount = -Math.round(refund.amount * originalTx.commission_percent / 100);
 
       await supabaseAdmin.from("transactions").insert({
         affiliate_id: customerAffiliate.affiliate_id,
         subscription_id: originalTx.subscription_id,
+        stripe_invoice_id: refundKey,
         stripe_charge_id: chargeId,
         type: "refund",
         amount_gross_cents: -refund.amount,
         commission_percent: originalTx.commission_percent,
         commission_amount_cents: refundAmount,
-        paid_at: new Date().toISOString(),
-        available_at: new Date().toISOString(),
-        description: "Estorno de comissão (cron sync)",
+        paid_at: new Date(refund.created * 1000).toISOString(),
+        available_at: originalTx.available_at,
+        description: "Estorno de comissão",
       });
+
+      // Also refund manager commission if exists
+      const mgrKey = `${originalTx.stripe_invoice_id}_mgr`;
+      const mgrRefundKey = `${originalTx.stripe_invoice_id}_mgr_refund`;
+      const { data: mgrTx } = await supabaseAdmin
+        .from("transactions")
+        .select("id, affiliate_id, commission_percent, available_at")
+        .eq("stripe_invoice_id", mgrKey)
+        .eq("type", "commission")
+        .single();
+
+      if (mgrTx) {
+        const { data: existingMgrRefund } = await supabaseAdmin
+          .from("transactions")
+          .select("id")
+          .eq("stripe_invoice_id", mgrRefundKey)
+          .single();
+
+        if (!existingMgrRefund) {
+          const mgrRefundAmount = -Math.round(refund.amount * mgrTx.commission_percent / 100);
+          await supabaseAdmin.from("transactions").insert({
+            affiliate_id: mgrTx.affiliate_id,
+            subscription_id: null,
+            stripe_invoice_id: mgrRefundKey,
+            stripe_charge_id: chargeId,
+            type: "refund",
+            amount_gross_cents: -refund.amount,
+            commission_percent: mgrTx.commission_percent,
+            commission_amount_cents: mgrRefundAmount,
+            paid_at: new Date(refund.created * 1000).toISOString(),
+            available_at: mgrTx.available_at,
+            description: "Estorno de comissão de gerência",
+          });
+        }
+      }
 
       refundsSynced++;
     }

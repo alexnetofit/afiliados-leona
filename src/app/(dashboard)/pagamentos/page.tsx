@@ -139,22 +139,21 @@ export default function PagamentosPage() {
     return set;
   }, [payouts]);
 
-  // Group commission transactions by available_at date
+  // Group all transactions (commissions + refunds/disputes) by available_at date
   const paymentGroups = useMemo((): PaymentGroup[] => {
-    const commissions = (transactions || []).filter(t => t.type === "commission" && t.available_at);
+    const allTxs = (transactions || []).filter(t => t.available_at);
     
     const groups = new Map<string, PaymentGroup>();
     const now = new Date();
 
-    commissions.forEach(tx => {
+    allTxs.forEach(tx => {
       const availDate = new Date(tx.available_at!);
-      // Use São Paulo timezone to avoid UTC offset issues (e.g. 20/02 showing as 19/02)
       const brtDate = new Intl.DateTimeFormat("en-CA", {
         timeZone: "America/Sao_Paulo",
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
-      }).format(availDate); // "YYYY-MM-DD"
+      }).format(availDate);
       const dateKey = brtDate;
       
       if (!groups.has(dateKey)) {
@@ -165,7 +164,6 @@ export default function PagamentosPage() {
           timeZone: "America/Sao_Paulo",
         });
         
-        // Check if paid via monthly_payouts (match by month YYYY-MM)
         const monthKey = dateKey.slice(0, 7);
         const isPaid = paidMonths.has(monthKey);
         const isAvailable = availDate <= now;
@@ -195,7 +193,6 @@ export default function PagamentosPage() {
       });
     });
 
-    // Sort by date descending (most recent first)
     return Array.from(groups.values()).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
   }, [transactions, paidMonths, subscriptionNames]);
 
@@ -312,7 +309,7 @@ export default function PagamentosPage() {
                             Liberação {group.dateLabel}
                           </p>
                           <p className="text-xs text-zinc-500">
-                            {group.transactions.length} {group.transactions.length === 1 ? "comissão" : "comissões"}
+                            {group.transactions.length} {group.transactions.length === 1 ? "transação" : "transações"}
                           </p>
                         </div>
                       </div>
@@ -368,33 +365,47 @@ export default function PagamentosPage() {
                           <TableHeader>
                             <TableRow>
                               <TableHead>Cliente</TableHead>
-                              <TableHead>Data da venda</TableHead>
+                              <TableHead>Data</TableHead>
                               <TableHead className="text-right">Valor</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {group.transactions.map((tx) => (
-                              <TableRow key={tx.id}>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <div className="h-7 w-7 rounded-full bg-primary-50 flex items-center justify-center text-xs font-bold text-primary-600">
-                                      {(tx.customerName || "?")[0].toUpperCase()}
+                            {group.transactions.map((tx) => {
+                              const isNeg = tx.commission_amount_cents < 0;
+                              return (
+                                <TableRow key={tx.id}>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <div className={cn(
+                                        "h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold",
+                                        isNeg ? "bg-error-50 text-error-600" : "bg-primary-50 text-primary-600"
+                                      )}>
+                                        {(tx.customerName || "?")[0].toUpperCase()}
+                                      </div>
+                                      <div>
+                                        <span className="text-sm text-zinc-700">
+                                          {tx.customerName || "Cliente"}
+                                        </span>
+                                        {isNeg && (
+                                          <p className="text-[10px] text-error-500 font-medium">Estorno</p>
+                                        )}
+                                      </div>
                                     </div>
-                                    <span className="text-sm text-zinc-700">
-                                      {tx.customerName || "Cliente"}
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-sm text-zinc-500">
-                                  {tx.paid_at
-                                    ? new Date(tx.paid_at).toLocaleDateString("pt-BR")
-                                    : "-"}
-                                </TableCell>
-                                <TableCell className="text-right text-sm font-medium text-success-600">
-                                  +{formatCurrency(tx.commission_amount_cents / 100)}
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                                  </TableCell>
+                                  <TableCell className="text-sm text-zinc-500">
+                                    {tx.paid_at
+                                      ? new Date(tx.paid_at).toLocaleDateString("pt-BR")
+                                      : "-"}
+                                  </TableCell>
+                                  <TableCell className={cn(
+                                    "text-right text-sm font-medium",
+                                    isNeg ? "text-error-600" : "text-success-600"
+                                  )}>
+                                    {isNeg ? "-" : "+"}{formatCurrency(Math.abs(tx.commission_amount_cents) / 100)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       </div>

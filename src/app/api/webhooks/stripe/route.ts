@@ -306,38 +306,95 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   const customerId = charge.customer as string;
   if (!customerId) return;
 
-  const affiliateId = await getAffiliateForCustomer(customerId);
-  if (!affiliateId) return;
-
-  // Find original transaction
-  const { data: originalTx } = await supabase
-    .from("transactions")
-    .select("*")
-    .eq("stripe_charge_id", charge.id)
-    .eq("type", "commission")
+  const { data: customerAffiliate } = await supabase
+    .from("customer_affiliates")
+    .select("affiliate_id")
+    .eq("stripe_customer_id", customerId)
     .single();
+
+  if (!customerAffiliate) return;
+
+  const refundedAmount = charge.amount_refunded;
+
+  // Match original commission by affiliate + gross amount (charge.invoice unavailable in API v2026)
+  const { data: candidates } = await supabase
+    .from("transactions")
+    .select("id, stripe_invoice_id, commission_percent, subscription_id, available_at")
+    .eq("affiliate_id", customerAffiliate.affiliate_id)
+    .eq("type", "commission")
+    .eq("amount_gross_cents", charge.amount)
+    .order("paid_at", { ascending: false });
+
+  if (!candidates || candidates.length === 0) return;
+
+  let originalTx = null;
+  for (const candidate of candidates) {
+    const refundKey = `${candidate.stripe_invoice_id}_refund`;
+    const { data: existing } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("stripe_invoice_id", refundKey)
+      .single();
+    if (!existing) {
+      originalTx = candidate;
+      break;
+    }
+  }
 
   if (!originalTx) return;
 
-  // Calculate refunded amount
-  const refundedAmount = charge.amount_refunded;
+  const refundKey = `${originalTx.stripe_invoice_id}_refund`;
   const commissionRefund = Math.round(refundedAmount * originalTx.commission_percent / 100);
 
-  // Create negative transaction
   await supabase.from("transactions").insert({
-    affiliate_id: affiliateId,
+    affiliate_id: customerAffiliate.affiliate_id,
     subscription_id: originalTx.subscription_id,
+    stripe_invoice_id: refundKey,
     stripe_charge_id: charge.id,
     type: "refund",
     amount_gross_cents: -refundedAmount,
     commission_percent: originalTx.commission_percent,
     commission_amount_cents: -commissionRefund,
     paid_at: new Date().toISOString(),
-    available_at: new Date().toISOString(), // Immediate debit
-    description: "Estorno de comissão - Refund",
+    available_at: originalTx.available_at,
+    description: "Estorno de comissão",
   });
 
-  // Mark subscription as having refund
+  // Refund manager commission if exists
+  const mgrKey = `${originalTx.stripe_invoice_id}_mgr`;
+  const mgrRefundKey = `${originalTx.stripe_invoice_id}_mgr_refund`;
+  const { data: mgrTx } = await supabase
+    .from("transactions")
+    .select("id, affiliate_id, commission_percent, available_at")
+    .eq("stripe_invoice_id", mgrKey)
+    .eq("type", "commission")
+    .single();
+
+  if (mgrTx) {
+    const { data: existingMgrRefund } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("stripe_invoice_id", mgrRefundKey)
+      .single();
+
+    if (!existingMgrRefund) {
+      const mgrRefundAmount = Math.round(refundedAmount * mgrTx.commission_percent / 100);
+      await supabase.from("transactions").insert({
+        affiliate_id: mgrTx.affiliate_id,
+        subscription_id: null,
+        stripe_invoice_id: mgrRefundKey,
+        stripe_charge_id: charge.id,
+        type: "refund",
+        amount_gross_cents: -refundedAmount,
+        commission_percent: mgrTx.commission_percent,
+        commission_amount_cents: -mgrRefundAmount,
+        paid_at: new Date().toISOString(),
+        available_at: mgrTx.available_at,
+        description: "Estorno de comissão de gerência",
+      });
+    }
+  }
+
   if (originalTx.subscription_id) {
     await supabase
       .from("subscriptions")
@@ -351,37 +408,60 @@ async function handleDisputeCreated(dispute: Stripe.Dispute) {
   const customerId = charge.customer as string;
   if (!customerId) return;
 
-  const affiliateId = await getAffiliateForCustomer(customerId);
-  if (!affiliateId) return;
-
-  // Find original transaction
-  const { data: originalTx } = await supabase
-    .from("transactions")
-    .select("*")
-    .eq("stripe_charge_id", dispute.charge)
-    .eq("type", "commission")
+  const { data: customerAffiliate } = await supabase
+    .from("customer_affiliates")
+    .select("affiliate_id")
+    .eq("stripe_customer_id", customerId)
     .single();
+
+  if (!customerAffiliate) return;
+
+  const disputeAmount = dispute.amount;
+
+  // Match original commission by affiliate + gross amount
+  const { data: candidates } = await supabase
+    .from("transactions")
+    .select("id, stripe_invoice_id, commission_percent, subscription_id, available_at")
+    .eq("affiliate_id", customerAffiliate.affiliate_id)
+    .eq("type", "commission")
+    .eq("amount_gross_cents", charge.amount)
+    .order("paid_at", { ascending: false });
+
+  if (!candidates || candidates.length === 0) return;
+
+  let originalTx = null;
+  for (const candidate of candidates) {
+    const disputeKey = `${candidate.stripe_invoice_id}_dispute`;
+    const { data: existing } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("stripe_invoice_id", disputeKey)
+      .single();
+    if (!existing) {
+      originalTx = candidate;
+      break;
+    }
+  }
 
   if (!originalTx) return;
 
-  // Create negative transaction for dispute
-  const disputeAmount = dispute.amount;
+  const disputeKey = `${originalTx.stripe_invoice_id}_dispute`;
   const commissionDeduction = Math.round(disputeAmount * originalTx.commission_percent / 100);
 
   await supabase.from("transactions").insert({
-    affiliate_id: affiliateId,
+    affiliate_id: customerAffiliate.affiliate_id,
     subscription_id: originalTx.subscription_id,
+    stripe_invoice_id: disputeKey,
     stripe_charge_id: dispute.charge as string,
     type: "dispute",
     amount_gross_cents: -disputeAmount,
     commission_percent: originalTx.commission_percent,
     commission_amount_cents: -commissionDeduction,
     paid_at: new Date().toISOString(),
-    available_at: new Date().toISOString(),
+    available_at: originalTx.available_at,
     description: "Estorno de comissão - Disputa",
   });
 
-  // Mark subscription as having dispute
   if (originalTx.subscription_id) {
     await supabase
       .from("subscriptions")

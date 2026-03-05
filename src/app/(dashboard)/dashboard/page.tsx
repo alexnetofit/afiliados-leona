@@ -294,7 +294,8 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-1.5">
-                {transactions.filter(t => t.type === "commission").slice(0, 5).map((tx) => {
+                {transactions.slice(0, 5).map((tx) => {
+                  const isRefund = tx.type === "refund" || tx.type === "dispute";
                   const isAvailable = tx.available_at && new Date(tx.available_at) <= new Date();
                   return (
                     <div 
@@ -304,27 +305,35 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2.5">
                         <div className={cn(
                           "h-8 w-8 rounded-md flex items-center justify-center",
+                          isRefund ? "bg-error-50" :
                           isAvailable ? "bg-success-50" : "bg-warning-50"
                         )}>
-                          {isAvailable ? (
+                          {isRefund ? (
+                            <TrendingUp className="h-4 w-4 text-error-600 rotate-180" />
+                          ) : isAvailable ? (
                             <ArrowUpRight className="h-4 w-4 text-success-600" />
                           ) : (
                             <Clock className="h-4 w-4 text-warning-600" />
                           )}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-zinc-900">Comissão</p>
+                          <p className="text-sm font-medium text-zinc-900">
+                            {isRefund ? "Estorno" : "Comissão"}
+                          </p>
                           <p className="text-[11px] text-zinc-500">
                             {tx.paid_at ? new Date(tx.paid_at).toLocaleDateString("pt-BR") : "-"}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-semibold text-success-600">
-                          +{formatCurrency(tx.commission_amount_cents / 100)}
+                        <p className={cn(
+                          "text-sm font-semibold",
+                          isRefund ? "text-error-600" : "text-success-600"
+                        )}>
+                          {isRefund ? "-" : "+"}{formatCurrency(Math.abs(tx.commission_amount_cents) / 100)}
                         </p>
-                        <Badge size="sm" variant={isAvailable ? "success" : "warning"}>
-                          {isAvailable ? "Disponível" : "Pendente"}
+                        <Badge size="sm" variant={isRefund ? "error" : isAvailable ? "success" : "warning"}>
+                          {isRefund ? "Estorno" : isAvailable ? "Disponível" : "Pendente"}
                         </Badge>
                       </div>
                     </div>
