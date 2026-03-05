@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { useAppData } from "@/contexts";
-import type { Subscription } from "@/types";
+import type { ManagedSubscription } from "@/contexts/app-data-context";
 import { Header } from "@/components/layout/header";
 import { Card, Badge, LoadingScreen, Select, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyState, Button, Input } from "@/components/ui/index";
 import { AlertTriangle, RefreshCcw, Users, UserCheck, UserX, AlertCircle, Clock, Search, ChevronLeft, ChevronRight } from "lucide-react";
@@ -18,39 +18,19 @@ const STATUS_MAP = {
 
 const ITEMS_PER_PAGE = 10;
 
-interface ManagedSubscription extends Subscription {
-  managed_affiliate_name?: string;
-}
-
 export default function AssinaturasPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { profile, subscriptions, isLoading, isInitialized, isManager } = useAppData();
+  const { profile, subscriptions, managedSubscriptions, isLoading, isInitialized } = useAppData();
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [managedSubs, setManagedSubs] = useState<ManagedSubscription[]>([]);
-
-  const fetchManagedSubs = useCallback(async () => {
-    if (!isManager) return;
-    try {
-      const res = await fetch("/api/manager/subscriptions");
-      if (res.ok) {
-        const data = await res.json();
-        setManagedSubs(data.subscriptions || []);
-      }
-    } catch { /* silently fail */ }
-  }, [isManager]);
-
-  useEffect(() => {
-    if (isInitialized) fetchManagedSubs();
-  }, [isInitialized, fetchManagedSubs]);
 
   const allSubscriptions: ManagedSubscription[] = useMemo(() => {
-    const own = (subscriptions || []).map((s) => ({ ...s, managed_affiliate_name: undefined }));
-    return [...own, ...managedSubs].sort(
+    const own: ManagedSubscription[] = (subscriptions || []).map((s) => ({ ...s }));
+    return [...own, ...managedSubscriptions].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-  }, [subscriptions, managedSubs]);
+  }, [subscriptions, managedSubscriptions]);
 
   const filtered = useMemo(() => {
     let result: ManagedSubscription[] = allSubscriptions;

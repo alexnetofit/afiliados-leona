@@ -17,6 +17,10 @@ import type {
 // Types
 // ============================================
 
+export interface ManagedSubscription extends Subscription {
+  managed_affiliate_name?: string;
+}
+
 interface AppData {
   // User data
   user: User | null;
@@ -28,6 +32,7 @@ interface AppData {
   // Affiliate data
   links: AffiliateLink[];
   subscriptions: Subscription[];
+  managedSubscriptions: ManagedSubscription[];
   transactions: Transaction[];
   payouts: MonthlyPayout[];
   summary: AffiliateSummary | null;
@@ -51,6 +56,7 @@ const defaultAppData: AppData = {
   isManager: false,
   links: [],
   subscriptions: [],
+  managedSubscriptions: [],
   transactions: [],
   payouts: [],
   summary: null,
@@ -74,6 +80,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [affiliate, setAffiliate] = useState<Affiliate | null>(null);
   const [links, setLinks] = useState<AffiliateLink[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [managedSubscriptions, setManagedSubscriptions] = useState<ManagedSubscription[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [payouts, setPayouts] = useState<MonthlyPayout[]>([]);
   const [summary, setSummary] = useState<AffiliateSummary | null>(null);
@@ -206,6 +213,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setAffiliate(null);
         setLinks([]);
         setSubscriptions([]);
+        setManagedSubscriptions([]);
         setTransactions([]);
         setPayouts([]);
         setSummary(null);
@@ -238,18 +246,23 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setAffiliate(typedAffiliate);
 
         if (typedAffiliate?.id) {
-          await fetchAffiliateData(typedAffiliate.id);
-
-          try {
-            const { data: mgrCheck } = await supabase
+          const [, mgrResult, managedSubsResult] = await Promise.all([
+            fetchAffiliateData(typedAffiliate.id),
+            supabase
               .from("manager_affiliates")
               .select("id")
               .eq("manager_id", typedAffiliate.id)
-              .limit(1);
-            setIsManager(!!(mgrCheck && mgrCheck.length > 0));
-          } catch {
-            setIsManager(false);
-          }
+              .limit(1),
+            fetch("/api/manager/subscriptions")
+              .then((r) => (r.ok ? r.json() : { subscriptions: [] }))
+              .catch(() => ({ subscriptions: [] })),
+          ]);
+
+          const userIsManager = !!(mgrResult.data && mgrResult.data.length > 0);
+          setIsManager(userIsManager);
+          setManagedSubscriptions(
+            userIsManager ? (managedSubsResult.subscriptions || []) : []
+          );
         }
       }
     } catch (error) {
@@ -286,6 +299,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setSummary(null);
     setWithdrawnDateLabels(new Map());
     setIsManager(false);
+    setManagedSubscriptions([]);
   }, [supabase]);
 
   // Initial fetch
@@ -312,6 +326,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setSummary(null);
         setWithdrawnDateLabels(new Map());
         setIsManager(false);
+        setManagedSubscriptions([]);
         setIsLoading(false);
       }
     });
@@ -329,6 +344,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     isManager,
     links,
     subscriptions,
+    managedSubscriptions,
     transactions,
     payouts,
     summary,
