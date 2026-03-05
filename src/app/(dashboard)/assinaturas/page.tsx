@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useAppData } from "@/contexts";
+import type { Subscription } from "@/types";
 import { Header } from "@/components/layout/header";
 import { Card, Badge, LoadingScreen, Select, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyState, Button, Input } from "@/components/ui/index";
 import { AlertTriangle, RefreshCcw, Users, UserCheck, UserX, AlertCircle, Clock, Search, ChevronLeft, ChevronRight } from "lucide-react";
@@ -17,15 +18,42 @@ const STATUS_MAP = {
 
 const ITEMS_PER_PAGE = 10;
 
+interface ManagedSubscription extends Subscription {
+  managed_affiliate_name?: string;
+}
+
 export default function AssinaturasPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { profile, subscriptions, isLoading, isInitialized } = useAppData();
+  const { profile, subscriptions, isLoading, isInitialized, isManager } = useAppData();
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [managedSubs, setManagedSubs] = useState<ManagedSubscription[]>([]);
+
+  const fetchManagedSubs = useCallback(async () => {
+    if (!isManager) return;
+    try {
+      const res = await fetch("/api/manager/subscriptions");
+      if (res.ok) {
+        const data = await res.json();
+        setManagedSubs(data.subscriptions || []);
+      }
+    } catch { /* silently fail */ }
+  }, [isManager]);
+
+  useEffect(() => {
+    if (isInitialized) fetchManagedSubs();
+  }, [isInitialized, fetchManagedSubs]);
+
+  const allSubscriptions: ManagedSubscription[] = useMemo(() => {
+    const own = (subscriptions || []).map((s) => ({ ...s, managed_affiliate_name: undefined }));
+    return [...own, ...managedSubs].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [subscriptions, managedSubs]);
 
   const filtered = useMemo(() => {
-    let result = subscriptions || [];
+    let result: ManagedSubscription[] = allSubscriptions;
     
     // Filter by status
     if (statusFilter !== "all") {
@@ -42,7 +70,7 @@ export default function AssinaturasPage() {
     }
     
     return result;
-  }, [subscriptions, statusFilter, search]);
+  }, [allSubscriptions, statusFilter, search]);
 
   // Pagination
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
@@ -57,7 +85,7 @@ export default function AssinaturasPage() {
   }, [statusFilter, search]);
 
   const stats = useMemo(() => {
-    const subs = subscriptions || [];
+    const subs = allSubscriptions;
     return {
       trialing: subs.filter(s => s.status === "trialing").length,
       active: subs.filter(s => s.status === "active").length,
@@ -65,7 +93,7 @@ export default function AssinaturasPage() {
       refund: subs.filter(s => s.has_refund).length,
       dispute: subs.filter(s => s.has_dispute).length,
     };
-  }, [subscriptions]);
+  }, [allSubscriptions]);
 
   // Only show loading on first load, not on navigation
   if (isLoading && !isInitialized) {
@@ -175,7 +203,14 @@ export default function AssinaturasPage() {
                                   {(sub.customer_name || "C")[0].toUpperCase()}
                                 </span>
                               </div>
-                              <span className="font-semibold text-zinc-900">{sub.customer_name || "Cliente"}</span>
+                              <div>
+                                <span className="font-semibold text-zinc-900">{sub.customer_name || "Cliente"}</span>
+                                {(sub as ManagedSubscription).managed_affiliate_name && (
+                                  <p className="text-[10px] text-orange-600 font-medium">
+                                    via {(sub as ManagedSubscription).managed_affiliate_name}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell>

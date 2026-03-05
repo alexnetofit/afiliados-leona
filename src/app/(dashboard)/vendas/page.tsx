@@ -159,7 +159,9 @@ export default function VendasPage() {
                     {paginatedData.map((tx) => {
                       const neg = tx.commission_amount_cents < 0;
                       const avail = tx.available_at ? isDateAvailable(tx.available_at) : false;
-                      const customerName = tx.subscription_id ? subscriptionNames.get(tx.subscription_id) : null;
+                      const customerName = tx.subscription_id
+                        ? subscriptionNames.get(tx.subscription_id)
+                        : tx.description?.match(/\((.+)\)/)?.[1] || null;
                       const isRefundOrDispute = tx.type === "refund" || tx.type === "dispute";
                       
                       return (
