@@ -68,14 +68,16 @@ function getProfitShares(periodLabel: string): ProfitShare[] {
   if (y > 2026 || (y === 2026 && m >= 7)) {
     return [
       { name: "Alex", percent: 40 },
-      { name: "Dai e Fabiano", percent: 20 },
+      { name: "Dai", percent: 10 },
+      { name: "Fabiano", percent: 10 },
       { name: "Ericson", percent: 20 },
     ];
   }
   if (y === 2026 && (m === 5 || m === 6)) {
     return [
       { name: "Alex", percent: 40 },
-      { name: "Dai e Fabiano", percent: 20 },
+      { name: "Dai", percent: 10 },
+      { name: "Fabiano", percent: 10 },
       { name: "Ericson", percent: 20 },
       { name: "Caique", percent: 5, isCost: true },
     ];
@@ -83,7 +85,8 @@ function getProfitShares(periodLabel: string): ProfitShare[] {
   if (y === 2026 && m === 4) {
     return [
       { name: "Alex", percent: 40 },
-      { name: "Dai e Fabiano", percent: 20 },
+      { name: "Dai", percent: 10 },
+      { name: "Fabiano", percent: 10 },
       { name: "Ericson", percent: 20 },
       { name: "Caique", percent: 7.5, isCost: true },
     ];
@@ -91,7 +94,8 @@ function getProfitShares(periodLabel: string): ProfitShare[] {
   // Jan, Fev, Mar 2026
   return [
     { name: "Alex", percent: 38 },
-    { name: "Dai e Fabiano", percent: 15 },
+    { name: "Dai", percent: 7.5 },
+    { name: "Fabiano", percent: 7.5 },
     { name: "Ericson", percent: 22 },
     { name: "Caique", percent: 10 },
   ];
