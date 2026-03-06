@@ -116,14 +116,9 @@ interface PeriodData {
   label: string;
   startDate: string;
   endDate: string;
-  stripeRevenueBrlCents: number;
-  stripeRevenueUsdCents: number;
-  abacateRevenueCents: number;
-  usdBrlRate: number;
   affiliateCostCents: number;
   manualCosts: Array<{ id: string; category: string; description: string | null; amount_cents: number }>;
   manualCostsTotalCents: number;
-  revenueCached: boolean;
 }
 
 // --------------- route ---------------
@@ -172,22 +167,6 @@ export async function GET(request: NextRequest) {
 
     const stripeBrlCents = Math.round(stripeUsdCents * usdBrlRate);
 
-    const currentPeriod = getPeriodLabel(new Date());
-    const isPast = revenueParam !== currentPeriod;
-
-    if (isPast) {
-      await Promise.resolve(
-        supabaseAdmin.from("period_revenue").upsert({
-          period_label: revenueParam,
-          stripe_revenue_usd_cents: stripeUsdCents,
-          stripe_revenue_brl_cents: stripeBrlCents,
-          abacate_revenue_cents: abacateCents,
-          usd_brl_rate: usdBrlRate,
-          cached_at: new Date().toISOString(),
-        })
-      ).catch((e) => console.error("Error caching period_revenue:", e));
-    }
-
     return NextResponse.json({
       period: revenueParam,
       stripeRevenueUsdCents: stripeUsdCents,
@@ -209,7 +188,7 @@ export async function GET(request: NextRequest) {
   const globalStart = allRanges[allRanges.length - 1].start;
   const globalEnd = allRanges[0].end;
 
-  const [allTxs, allCosts, cachedRevenue] = await Promise.all([
+  const [allTxs, allCosts] = await Promise.all([
     supabaseAdmin
       .from("transactions")
       .select("commission_amount_cents, paid_at")
@@ -223,18 +202,7 @@ export async function GET(request: NextRequest) {
         .in("period_label", periods)
         .order("created_at", { ascending: true })
     ).then((r) => r.data || []).catch(() => [] as Array<{ id: string; category: string; description: string | null; amount_cents: number; period_label: string }>),
-    Promise.resolve(
-      supabaseAdmin
-        .from("period_revenue")
-        .select("period_label, stripe_revenue_usd_cents, stripe_revenue_brl_cents, abacate_revenue_cents, usd_brl_rate")
-        .in("period_label", periods)
-    ).then((r) => r.data || []).catch(() => [] as Array<{ period_label: string; stripe_revenue_usd_cents: number; stripe_revenue_brl_cents: number; abacate_revenue_cents: number; usd_brl_rate: number }>),
   ]);
-
-  const revenueMap = new Map(
-    (cachedRevenue as Array<{ period_label: string; stripe_revenue_usd_cents: number; stripe_revenue_brl_cents: number; abacate_revenue_cents: number; usd_brl_rate: number }>)
-      .map((r) => [r.period_label, r])
-  );
 
   const results: PeriodData[] = allRanges.map(({ label, start, end }) => {
     const startMs = start.getTime();
@@ -252,21 +220,13 @@ export async function GET(request: NextRequest) {
       .map(({ id, category, description, amount_cents }) => ({ id, category, description, amount_cents }));
     const manualCostsTotalCents = manualCosts.reduce((sum, c) => sum + c.amount_cents, 0);
 
-    const cached = revenueMap.get(label);
-    const isCurrent = label === currentPeriod;
-
     return {
       label,
       startDate: start.toISOString().split("T")[0],
       endDate: end.toISOString().split("T")[0],
-      stripeRevenueBrlCents: cached && !isCurrent ? cached.stripe_revenue_brl_cents : 0,
-      stripeRevenueUsdCents: cached && !isCurrent ? cached.stripe_revenue_usd_cents : 0,
-      abacateRevenueCents: cached && !isCurrent ? cached.abacate_revenue_cents : 0,
-      usdBrlRate: cached && !isCurrent ? cached.usd_brl_rate : 0,
       affiliateCostCents,
       manualCosts,
       manualCostsTotalCents,
-      revenueCached: !isCurrent && !!cached,
     };
   });
 

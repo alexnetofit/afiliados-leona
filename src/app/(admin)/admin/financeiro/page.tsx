@@ -32,6 +32,31 @@ interface Period {
   revenueCached: boolean;
 }
 
+interface RevenueCache {
+  stripeRevenueBrlCents: number;
+  stripeRevenueUsdCents: number;
+  abacateRevenueCents: number;
+  usdBrlRate: number;
+}
+
+const LS_KEY = "fin_revenue_cache";
+
+function readRevenueCache(): Record<string, RevenueCache> {
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function writeRevenueCache(label: string, data: RevenueCache) {
+  try {
+    const cache = readRevenueCache();
+    cache[label] = data;
+    localStorage.setItem(LS_KEY, JSON.stringify(cache));
+  } catch { /* */ }
+}
+
 const COST_CATEGORIES = [
   "Infraestrutura", "Marketing", "Pessoal", "Ferramentas", "Impostos", "Outro",
 ];
@@ -51,22 +76,35 @@ export default function FinanceiroPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const didInit = useRef(false);
 
+  const applyLocalCache = useCallback((periodsData: Period[], cp: string) => {
+    const cache = readRevenueCache();
+    return periodsData.map((p) => {
+      if (p.label === cp) return p;
+      const cached = cache[p.label];
+      if (cached) {
+        return { ...p, ...cached, revenueCached: true };
+      }
+      return p;
+    });
+  }, []);
+
   const fetchPeriods = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/financeiro");
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
-      setPeriods(data.periods);
+      const withCache = applyLocalCache(data.periods, data.currentPeriod);
+      setPeriods(withCache);
       setFormatLabels(data.formatLabel);
       setCurrentPeriod(data.currentPeriod);
-      return data as { currentPeriod: string; periods: Period[] };
+      return data.currentPeriod as string;
     } catch (e) {
       console.error("fetchPeriods error:", e);
       return null;
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [applyLocalCache]);
 
   const fetchRevenue = useCallback(async (label: string) => {
     setLoadingRevenue((prev) => ({ ...prev, [label]: true }));
@@ -74,18 +112,16 @@ export default function FinanceiroPage() {
       const res = await fetch(`/api/admin/financeiro?revenue=${label}`);
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
+      const rev: RevenueCache = {
+        stripeRevenueBrlCents: data.stripeRevenueBrlCents,
+        stripeRevenueUsdCents: data.stripeRevenueUsdCents,
+        abacateRevenueCents: data.abacateRevenueCents,
+        usdBrlRate: data.usdBrlRate,
+      };
+      writeRevenueCache(label, rev);
       setPeriods((prev) =>
         prev.map((p) =>
-          p.label === label
-            ? {
-                ...p,
-                stripeRevenueBrlCents: data.stripeRevenueBrlCents,
-                stripeRevenueUsdCents: data.stripeRevenueUsdCents,
-                abacateRevenueCents: data.abacateRevenueCents,
-                usdBrlRate: data.usdBrlRate,
-                revenueCached: true,
-              }
-            : p
+          p.label === label ? { ...p, ...rev, revenueCached: true } : p
         )
       );
     } catch (e) {
@@ -98,10 +134,8 @@ export default function FinanceiroPage() {
   useEffect(() => {
     if (didInit.current) return;
     didInit.current = true;
-
-    fetchPeriods().then((data) => {
-      if (!data) return;
-      fetchRevenue(data.currentPeriod);
+    fetchPeriods().then((cp) => {
+      if (cp) fetchRevenue(cp);
     });
   }, [fetchPeriods, fetchRevenue]);
 
@@ -183,13 +217,12 @@ export default function FinanceiroPage() {
             const isExpanded = expandedPeriod === period.label;
             const isCurrent = period.label === currentPeriod;
             const isLoadingRev = loadingRevenue[period.label];
-            const hasRevData = period.revenueCached || (period.stripeRevenueBrlCents > 0 || period.abacateRevenueCents > 0);
+            const hasRevData = period.revenueCached;
             const affiliatePercent = totalRevenue > 0 ? ((period.affiliateCostCents / totalRevenue) * 100).toFixed(1) : "0";
             const marginPercent = totalRevenue > 0 ? ((profit / totalRevenue) * 100).toFixed(1) : "0";
 
             return (
               <Card key={period.label} noPadding>
-                {/* Header */}
                 <button
                   onClick={() => setExpandedPeriod(isExpanded ? null : period.label)}
                   className="w-full p-4 flex items-center justify-between hover:bg-zinc-50 transition-colors"
@@ -217,31 +250,33 @@ export default function FinanceiroPage() {
                         <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                         <span className="text-xs hidden sm:inline">Buscando...</span>
                       </div>
-                    ) : (
+                    ) : hasRevData ? (
                       <div className="hidden sm:flex items-center gap-6 text-right">
                         <div>
                           <p className="text-[10px] text-zinc-400">Faturamento</p>
-                          <p className="text-sm font-semibold text-success-600">
-                            {hasRevData ? formatCurrency(totalRevenue / 100) : "—"}
-                          </p>
+                          <p className="text-sm font-semibold text-success-600">{formatCurrency(totalRevenue / 100)}</p>
                         </div>
                         <div>
                           <p className="text-[10px] text-zinc-400">Custos</p>
-                          <p className="text-sm font-semibold text-error-600">
-                            {formatCurrency(totalCosts / 100)}
-                          </p>
+                          <p className="text-sm font-semibold text-error-600">{formatCurrency(totalCosts / 100)}</p>
                         </div>
                         <div>
                           <p className="text-[10px] text-zinc-400">Lucro</p>
-                          <p className={cn("text-sm font-semibold", hasRevData ? (profit >= 0 ? "text-primary-600" : "text-error-600") : "text-zinc-400")}>
-                            {hasRevData ? formatCurrency(profit / 100) : "—"}
+                          <p className={cn("text-sm font-semibold", profit >= 0 ? "text-primary-600" : "text-error-600")}>
+                            {formatCurrency(profit / 100)}
                           </p>
                         </div>
-                        {hasRevData && (
-                          <Badge variant={profit >= 0 ? "success" : "error"} size="sm">
-                            {marginPercent}% margem
-                          </Badge>
-                        )}
+                        <Badge variant={profit >= 0 ? "success" : "error"} size="sm">
+                          {marginPercent}% margem
+                        </Badge>
+                      </div>
+                    ) : (
+                      <div className="hidden sm:flex items-center gap-4 text-right">
+                        <div>
+                          <p className="text-[10px] text-zinc-400">Custos afiliados</p>
+                          <p className="text-sm font-semibold text-warning-600">{formatCurrency(period.affiliateCostCents / 100)}</p>
+                        </div>
+                        <Badge variant="default" size="sm">Faturamento pendente</Badge>
                       </div>
                     )}
                     {isExpanded
@@ -250,10 +285,29 @@ export default function FinanceiroPage() {
                   </div>
                 </button>
 
-                {/* Expanded */}
                 {isExpanded && (
                   <div className="border-t border-zinc-100 p-4 space-y-4">
-                    {/* Revenue cards */}
+                    {!hasRevData && !isLoadingRev && (
+                      <div className="flex items-center justify-center py-3 px-4 rounded-lg bg-amber-50 border border-amber-200">
+                        <p className="text-sm text-amber-700 mr-3">Faturamento ainda não carregado.</p>
+                        <Button
+                          size="xs"
+                          variant="secondary"
+                          icon={RefreshCw}
+                          onClick={() => fetchRevenue(period.label)}
+                        >
+                          Buscar agora
+                        </Button>
+                      </div>
+                    )}
+
+                    {isLoadingRev && (
+                      <div className="flex items-center justify-center gap-2 py-4 text-zinc-500">
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        <span className="text-sm">Buscando faturamento na Stripe e AbacatePay...</span>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className={cn("p-3 rounded-lg border", hasRevData ? "bg-success-50 border-success-100" : "bg-zinc-50 border-zinc-200")}>
                         <p className={cn("text-[10px] font-medium uppercase tracking-wider", hasRevData ? "text-success-600" : "text-zinc-400")}>
@@ -289,20 +343,14 @@ export default function FinanceiroPage() {
                       </div>
                     </div>
 
-                    {/* Refresh button */}
-                    <div className="flex justify-end">
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        icon={RefreshCw}
-                        loading={isLoadingRev}
-                        onClick={() => fetchRevenue(period.label)}
-                      >
-                        {isCurrent ? "Atualizar faturamento" : "Recalcular faturamento"}
-                      </Button>
-                    </div>
+                    {hasRevData && !isLoadingRev && (
+                      <div className="flex justify-end">
+                        <Button size="xs" variant="ghost" icon={RefreshCw} onClick={() => fetchRevenue(period.label)}>
+                          {isCurrent ? "Atualizar faturamento" : "Recalcular faturamento"}
+                        </Button>
+                      </div>
+                    )}
 
-                    {/* Manual Costs */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <h4 className="text-sm font-semibold text-zinc-700">Custos manuais</h4>
@@ -377,7 +425,6 @@ export default function FinanceiroPage() {
                       )}
                     </div>
 
-                    {/* Period Summary */}
                     <div className="p-3 rounded-lg bg-zinc-900 text-white">
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
                         <div>
