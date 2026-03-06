@@ -50,12 +50,12 @@ async function fetchUsdBrlRate(): Promise<number> {
   try {
     const res = await fetch(
       "https://economia.awesomeapi.com.br/json/last/USD-BRL",
-      { next: { revalidate: 3600 } }
+      { cache: "no-store" }
     );
     const json = await res.json();
-    return parseFloat(json.USDBRL?.bid || "5.50");
+    return parseFloat(json.USDBRL?.bid || "0");
   } catch {
-    return 5.50;
+    return 0;
   }
 }
 
