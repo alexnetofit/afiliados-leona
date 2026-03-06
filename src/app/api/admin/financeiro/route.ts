@@ -164,10 +164,20 @@ export async function GET(request: NextRequest) {
     ]);
 
     let abacateCents = 0;
+    console.log(`[AbacatePay] Total saques retornados: ${abacateList.length}`);
+    if (abacateList.length > 0) {
+      console.log(`[AbacatePay] Exemplo:`, JSON.stringify(abacateList[0]));
+      console.log(`[AbacatePay] Statuses:`, [...new Set(abacateList.map(w => w.status))]);
+    }
     for (const w of abacateList) {
-      if (w.status !== "COMPLETE" || w.devMode) continue;
+      if (w.devMode) continue;
       const t = new Date(w.createdAt).getTime();
-      if (t >= startMs && t <= endMs) abacateCents += w.amount || 0;
+      if (t >= startMs && t <= endMs) {
+        console.log(`[AbacatePay] Saque no período: status=${w.status} amount=${w.amount} date=${w.createdAt}`);
+        if (w.status === "COMPLETE" || w.status === "PAID") {
+          abacateCents += w.amount || 0;
+        }
+      }
     }
 
     const stripeBrlCents = Math.round(stripeUsdCents * usdBrlRate);
