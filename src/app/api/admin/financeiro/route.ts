@@ -223,11 +223,12 @@ export async function GET(request: NextRequest) {
         .in("period_label", periods)
         .order("created_at", { ascending: true })
     ).then((r) => r.data || []).catch(() => [] as Array<{ id: string; category: string; description: string | null; amount_cents: number; period_label: string }>),
-    supabaseAdmin
-      .from("period_revenue")
-      .select("period_label, stripe_revenue_usd_cents, stripe_revenue_brl_cents, abacate_revenue_cents, usd_brl_rate")
-      .in("period_label", periods)
-      .then((r) => (r.data || []) as CachedRev[])
+    Promise.resolve(
+      supabaseAdmin
+        .from("period_revenue")
+        .select("period_label, stripe_revenue_usd_cents, stripe_revenue_brl_cents, abacate_revenue_cents, usd_brl_rate")
+        .in("period_label", periods)
+    ).then((r) => (r.data || []) as CachedRev[])
       .catch(() => [] as CachedRev[]),
   ]);
 
