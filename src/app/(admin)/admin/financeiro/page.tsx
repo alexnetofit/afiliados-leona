@@ -153,17 +153,19 @@ export default function FinanceiroPage() {
       const res = await fetch(`/api/admin/financeiro?revenue=${label}`);
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
-      const rev: RevenueCache = {
-        stripeRevenueBrlCents: data.stripeRevenueBrlCents,
-        stripeRevenueUsdCents: data.stripeRevenueUsdCents,
-        abacateRevenueCents: data.abacateRevenueCents,
-        usdBrlRate: data.usdBrlRate,
-      };
-      writeRevenueCache(label, rev);
       setPeriods((prev) =>
-        prev.map((p) =>
-          p.label === label ? { ...p, ...rev, revenueCached: true } : p
-        )
+        prev.map((p) => {
+          if (p.label !== label) return p;
+          const keepAbacate = p.abacateRevenueCents > 0;
+          const rev: RevenueCache = {
+            stripeRevenueBrlCents: data.stripeRevenueBrlCents,
+            stripeRevenueUsdCents: data.stripeRevenueUsdCents,
+            abacateRevenueCents: keepAbacate ? p.abacateRevenueCents : data.abacateRevenueCents,
+            usdBrlRate: data.usdBrlRate,
+          };
+          writeRevenueCache(label, rev);
+          return { ...p, ...rev, revenueCached: true };
+        })
       );
     } catch (e) {
       console.error(`fetchRevenue(${label}) error:`, e);
