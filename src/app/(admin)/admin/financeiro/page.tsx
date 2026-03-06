@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/index";
 import {
   DollarSign, TrendingUp, TrendingDown, Wallet, Plus, Trash2,
-  ChevronDown, ChevronRight, BarChart3, X, RefreshCw,
+  ChevronDown, ChevronRight, BarChart3, X, RefreshCw, Pencil, Check,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
@@ -74,6 +74,8 @@ export default function FinanceiroPage() {
   const [newAmount, setNewAmount] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [editingAbacate, setEditingAbacate] = useState<string | null>(null);
+  const [abacateInput, setAbacateInput] = useState("");
   const didInit = useRef(false);
 
   const applyLocalFallback = useCallback((periodsData: Period[], cp: string) => {
@@ -177,6 +179,25 @@ export default function FinanceiroPage() {
     } catch { /* */ } finally {
       setSaving(false);
     }
+  };
+
+  const handleSaveAbacate = (label: string) => {
+    const cents = Math.round(parseFloat(abacateInput || "0") * 100);
+    setPeriods((prev) =>
+      prev.map((p) => {
+        if (p.label !== label) return p;
+        const updated = { ...p, abacateRevenueCents: cents, revenueCached: true };
+        writeRevenueCache(label, {
+          stripeRevenueBrlCents: p.stripeRevenueBrlCents,
+          stripeRevenueUsdCents: p.stripeRevenueUsdCents,
+          abacateRevenueCents: cents,
+          usdBrlRate: p.usdBrlRate,
+        });
+        return updated;
+      })
+    );
+    setEditingAbacate(null);
+    setAbacateInput("");
   };
 
   const handleDeleteCost = async (id: string) => {
@@ -341,11 +362,46 @@ export default function FinanceiroPage() {
                           <p className="text-lg font-bold text-zinc-300 mt-1">—</p>
                         )}
                       </div>
-                      <div className={cn("p-3 rounded-lg border", hasRevData ? "bg-emerald-50 border-emerald-100" : "bg-zinc-50 border-zinc-200")}>
-                        <p className={cn("text-[10px] font-medium uppercase tracking-wider", hasRevData ? "text-emerald-600" : "text-zinc-400")}>AbacatePay</p>
-                        <p className={cn("text-lg font-bold mt-1", hasRevData ? "text-emerald-700" : "text-zinc-300")}>
-                          {hasRevData ? formatCurrency(period.abacateRevenueCents / 100) : "—"}
-                        </p>
+                      <div className={cn("p-3 rounded-lg border relative", hasRevData ? "bg-emerald-50 border-emerald-100" : "bg-zinc-50 border-zinc-200")}>
+                        <div className="flex items-center justify-between">
+                          <p className={cn("text-[10px] font-medium uppercase tracking-wider", hasRevData ? "text-emerald-600" : "text-zinc-400")}>AbacatePay</p>
+                          {editingAbacate !== period.label ? (
+                            <button
+                              onClick={() => {
+                                setEditingAbacate(period.label);
+                                setAbacateInput(period.abacateRevenueCents > 0 ? (period.abacateRevenueCents / 100).toFixed(2) : "");
+                              }}
+                              className="p-0.5 rounded hover:bg-emerald-100 text-emerald-400 hover:text-emerald-600 transition-colors"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleSaveAbacate(period.label)}
+                              className="p-0.5 rounded hover:bg-emerald-100 text-emerald-600 transition-colors"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        {editingAbacate === period.label ? (
+                          <div className="mt-1 flex items-center gap-1">
+                            <span className="text-sm font-bold text-emerald-700">R$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={abacateInput}
+                              onChange={(e) => setAbacateInput(e.target.value)}
+                              onKeyDown={(e) => e.key === "Enter" && handleSaveAbacate(period.label)}
+                              className="w-full text-lg font-bold text-emerald-700 bg-white border border-emerald-200 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                              autoFocus
+                            />
+                          </div>
+                        ) : (
+                          <p className={cn("text-lg font-bold mt-1", hasRevData || period.abacateRevenueCents > 0 ? "text-emerald-700" : "text-zinc-300")}>
+                            {period.abacateRevenueCents > 0 ? formatCurrency(period.abacateRevenueCents / 100) : hasRevData ? "R$ 0,00" : "—"}
+                          </p>
+                        )}
                       </div>
                       <div className="p-3 rounded-lg bg-warning-50 border border-warning-100">
                         <p className="text-[10px] font-medium text-warning-600 uppercase tracking-wider">
