@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Card, MetricCard, LoadingScreen, Button, Input, Select, Badge,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@/components/ui/index";
 import {
   DollarSign, TrendingUp, TrendingDown, Wallet, Plus, Trash2,
-  ChevronDown, ChevronRight, BarChart3, X, Loader2,
+  ChevronDown, ChevronRight, BarChart3, X, RefreshCw,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
@@ -29,6 +29,11 @@ interface Period {
   manualCostsTotalCents: number;
 }
 
+interface RevenueData {
+  stripeRevenueCents: number;
+  abacateRevenueCents: number;
+}
+
 const COST_CATEGORIES = [
   "Infraestrutura",
   "Marketing",
@@ -41,9 +46,10 @@ const COST_CATEGORIES = [
 export default function FinanceiroPage() {
   const [periods, setPeriods] = useState<Period[]>([]);
   const [formatLabels, setFormatLabels] = useState<Record<string, string>>({});
+  const [currentPeriod, setCurrentPeriod] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [monthsLoaded, setMonthsLoaded] = useState(1);
+  const [revenueCache, setRevenueCache] = useState<Record<string, RevenueData>>({});
+  const [loadingRevenue, setLoadingRevenue] = useState<Record<string, boolean>>({});
   const [expandedPeriod, setExpandedPeriod] = useState<string | null>(null);
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [newCategory, setNewCategory] = useState("Infraestrutura");
@@ -51,35 +57,56 @@ export default function FinanceiroPage() {
   const [newAmount, setNewAmount] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const initialLoadDone = useRef(false);
 
-  const fetchData = useCallback(async (months = 1, append = false) => {
+  const fetchPeriods = useCallback(async () => {
     try {
-      const res = await fetch(`/api/admin/financeiro?months=${months}`);
+      const res = await fetch("/api/admin/financeiro");
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
-      if (append) {
-        setPeriods(data.periods);
-      } else {
-        setPeriods(data.periods);
-      }
-      setFormatLabels((prev) => ({ ...prev, ...data.formatLabel }));
-      setMonthsLoaded(months);
+      setPeriods(data.periods);
+      setFormatLabels(data.formatLabel);
+      setCurrentPeriod(data.currentPeriod);
+      return data.currentPeriod as string;
     } catch (e) {
       console.error("Error fetching financeiro:", e);
+      return null;
     } finally {
       setIsLoading(false);
-      setLoadingMore(false);
+    }
+  }, []);
+
+  const fetchRevenue = useCallback(async (periodLabel: string) => {
+    setLoadingRevenue((prev) => ({ ...prev, [periodLabel]: true }));
+    try {
+      const res = await fetch(`/api/admin/financeiro?revenue=${periodLabel}`);
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      const revenue: RevenueData = {
+        stripeRevenueCents: data.stripeRevenueCents,
+        abacateRevenueCents: data.abacateRevenueCents,
+      };
+      setRevenueCache((prev) => ({ ...prev, [periodLabel]: revenue }));
+    } catch (e) {
+      console.error(`Error fetching revenue for ${periodLabel}:`, e);
+    } finally {
+      setLoadingRevenue((prev) => ({ ...prev, [periodLabel]: false }));
     }
   }, []);
 
   useEffect(() => {
-    fetchData(1);
-  }, [fetchData]);
+    if (initialLoadDone.current) return;
+    initialLoadDone.current = true;
+    fetchPeriods().then((cp) => {
+      if (cp) fetchRevenue(cp);
+    });
+  }, [fetchPeriods, fetchRevenue]);
 
-  const handleLoadMore = async () => {
-    setLoadingMore(true);
-    await fetchData(monthsLoaded + 3, true);
+  const getRevenue = (label: string): RevenueData => {
+    return revenueCache[label] || { stripeRevenueCents: 0, abacateRevenueCents: 0 };
   };
+
+  const hasRevenue = (label: string) => label in revenueCache;
 
   const handleAddCost = async (periodLabel: string) => {
     if (!newAmount || parseFloat(newAmount) <= 0) return;
@@ -100,7 +127,7 @@ export default function FinanceiroPage() {
         setNewDescription("");
         setNewAmount("");
         setNewCategory("Infraestrutura");
-        await fetchData(monthsLoaded);
+        await fetchPeriods();
       }
     } catch {
       // silently fail
@@ -113,7 +140,7 @@ export default function FinanceiroPage() {
     setDeleting(id);
     try {
       const res = await fetch(`/api/admin/costs?id=${id}`, { method: "DELETE" });
-      if (res.ok) await fetchData(monthsLoaded);
+      if (res.ok) await fetchPeriods();
     } catch {
       // silently fail
     } finally {
@@ -125,7 +152,8 @@ export default function FinanceiroPage() {
 
   const totals = periods.reduce(
     (acc, p) => {
-      const totalRevenue = p.stripeRevenueCents + p.abacateRevenueCents;
+      const rev = getRevenue(p.label);
+      const totalRevenue = rev.stripeRevenueCents + rev.abacateRevenueCents;
       const totalCosts = p.affiliateCostCents + p.manualCostsTotalCents;
       acc.revenue += totalRevenue;
       acc.affiliateCosts += p.affiliateCostCents;
@@ -177,10 +205,14 @@ export default function FinanceiroPage() {
         {/* Periods */}
         <div className="space-y-3">
           {periods.map((period) => {
-            const totalRevenue = period.stripeRevenueCents + period.abacateRevenueCents;
+            const rev = getRevenue(period.label);
+            const totalRevenue = rev.stripeRevenueCents + rev.abacateRevenueCents;
             const totalCosts = period.affiliateCostCents + period.manualCostsTotalCents;
             const profit = totalRevenue - totalCosts;
             const isExpanded = expandedPeriod === period.label;
+            const isCurrent = period.label === currentPeriod;
+            const revenueLoaded = hasRevenue(period.label);
+            const isLoadingRev = loadingRevenue[period.label];
             const affiliatePercent = totalRevenue > 0
               ? ((period.affiliateCostCents / totalRevenue) * 100).toFixed(1)
               : "0";
@@ -196,13 +228,24 @@ export default function FinanceiroPage() {
                   className="w-full p-4 flex items-center justify-between hover:bg-zinc-50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-lg bg-zinc-100 flex items-center justify-center">
-                      <BarChart3 className="h-4 w-4 text-zinc-600" />
+                    <div className={cn(
+                      "h-9 w-9 rounded-lg flex items-center justify-center",
+                      isCurrent ? "bg-primary-100" : "bg-zinc-100"
+                    )}>
+                      <BarChart3 className={cn(
+                        "h-4 w-4",
+                        isCurrent ? "text-primary-600" : "text-zinc-600"
+                      )} />
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-semibold text-zinc-900">
-                        {formatLabels[period.label] || period.label}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-zinc-900">
+                          {formatLabels[period.label] || period.label}
+                        </p>
+                        {isCurrent && (
+                          <Badge variant="primary" size="sm">Atual</Badge>
+                        )}
+                      </div>
                       <p className="text-[11px] text-zinc-400">
                         {new Date(period.startDate + "T12:00:00").toLocaleDateString("pt-BR")} — {new Date(period.endDate + "T12:00:00").toLocaleDateString("pt-BR")}
                       </p>
@@ -211,30 +254,54 @@ export default function FinanceiroPage() {
 
                   <div className="flex items-center gap-4">
                     <div className="hidden sm:flex items-center gap-6 text-right">
-                      <div>
-                        <p className="text-[10px] text-zinc-400">Faturamento</p>
-                        <p className="text-sm font-semibold text-success-600">
-                          {formatCurrency(totalRevenue / 100)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-zinc-400">Custos</p>
-                        <p className="text-sm font-semibold text-error-600">
-                          {formatCurrency(totalCosts / 100)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-zinc-400">Lucro</p>
-                        <p className={cn(
-                          "text-sm font-semibold",
-                          profit >= 0 ? "text-primary-600" : "text-error-600"
-                        )}>
-                          {formatCurrency(profit / 100)}
-                        </p>
-                      </div>
-                      <Badge variant={profit >= 0 ? "success" : "error"} size="sm">
-                        {marginPercent}% margem
-                      </Badge>
+                      {revenueLoaded ? (
+                        <>
+                          <div>
+                            <p className="text-[10px] text-zinc-400">Faturamento</p>
+                            <p className="text-sm font-semibold text-success-600">
+                              {formatCurrency(totalRevenue / 100)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-zinc-400">Custos</p>
+                            <p className="text-sm font-semibold text-error-600">
+                              {formatCurrency(totalCosts / 100)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-zinc-400">Lucro</p>
+                            <p className={cn(
+                              "text-sm font-semibold",
+                              profit >= 0 ? "text-primary-600" : "text-error-600"
+                            )}>
+                              {formatCurrency(profit / 100)}
+                            </p>
+                          </div>
+                          <Badge variant={profit >= 0 ? "success" : "error"} size="sm">
+                            {marginPercent}% margem
+                          </Badge>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <p className="text-[10px] text-zinc-400">Custos afiliados</p>
+                            <p className="text-sm font-semibold text-warning-600">
+                              {formatCurrency(period.affiliateCostCents / 100)}
+                            </p>
+                          </div>
+                          {period.manualCostsTotalCents > 0 && (
+                            <div>
+                              <p className="text-[10px] text-zinc-400">Outros custos</p>
+                              <p className="text-sm font-semibold text-error-600">
+                                {formatCurrency(period.manualCostsTotalCents / 100)}
+                              </p>
+                            </div>
+                          )}
+                          <Badge variant="default" size="sm">
+                            Sem faturamento
+                          </Badge>
+                        </>
+                      )}
                     </div>
                     {isExpanded ? (
                       <ChevronDown className="h-4 w-4 text-zinc-400" />
@@ -247,27 +314,89 @@ export default function FinanceiroPage() {
                 {/* Expanded Detail */}
                 {isExpanded && (
                   <div className="border-t border-zinc-100 p-4 space-y-4">
+                    {/* Revenue Section */}
+                    {!revenueLoaded && !isLoadingRev && (
+                      <div className="flex items-center justify-center py-4">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={RefreshCw}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fetchRevenue(period.label);
+                          }}
+                        >
+                          Carregar faturamento deste período
+                        </Button>
+                      </div>
+                    )}
+
+                    {isLoadingRev && (
+                      <div className="flex items-center justify-center gap-2 py-4 text-zinc-500">
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        <span className="text-sm">Buscando faturamento na Stripe e AbacatePay...</span>
+                      </div>
+                    )}
+
                     {/* Revenue Breakdown */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="p-3 rounded-lg bg-success-50 border border-success-100">
-                        <p className="text-[10px] font-medium text-success-600 uppercase tracking-wider">Stripe</p>
-                        <p className="text-lg font-bold text-success-700 mt-1">
-                          {formatCurrency(period.stripeRevenueCents / 100)}
+                      <div className={cn(
+                        "p-3 rounded-lg border",
+                        revenueLoaded
+                          ? "bg-success-50 border-success-100"
+                          : "bg-zinc-50 border-zinc-200"
+                      )}>
+                        <p className={cn(
+                          "text-[10px] font-medium uppercase tracking-wider",
+                          revenueLoaded ? "text-success-600" : "text-zinc-400"
+                        )}>Stripe</p>
+                        <p className={cn(
+                          "text-lg font-bold mt-1",
+                          revenueLoaded ? "text-success-700" : "text-zinc-300"
+                        )}>
+                          {revenueLoaded ? formatCurrency(rev.stripeRevenueCents / 100) : "—"}
                         </p>
                       </div>
-                      <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
-                        <p className="text-[10px] font-medium text-emerald-600 uppercase tracking-wider">AbacatePay</p>
-                        <p className="text-lg font-bold text-emerald-700 mt-1">
-                          {formatCurrency(period.abacateRevenueCents / 100)}
+                      <div className={cn(
+                        "p-3 rounded-lg border",
+                        revenueLoaded
+                          ? "bg-emerald-50 border-emerald-100"
+                          : "bg-zinc-50 border-zinc-200"
+                      )}>
+                        <p className={cn(
+                          "text-[10px] font-medium uppercase tracking-wider",
+                          revenueLoaded ? "text-emerald-600" : "text-zinc-400"
+                        )}>AbacatePay</p>
+                        <p className={cn(
+                          "text-lg font-bold mt-1",
+                          revenueLoaded ? "text-emerald-700" : "text-zinc-300"
+                        )}>
+                          {revenueLoaded ? formatCurrency(rev.abacateRevenueCents / 100) : "—"}
                         </p>
                       </div>
                       <div className="p-3 rounded-lg bg-warning-50 border border-warning-100">
-                        <p className="text-[10px] font-medium text-warning-600 uppercase tracking-wider">Afiliados ({affiliatePercent}%)</p>
+                        <p className="text-[10px] font-medium text-warning-600 uppercase tracking-wider">
+                          Afiliados {revenueLoaded && totalRevenue > 0 ? `(${affiliatePercent}%)` : ""}
+                        </p>
                         <p className="text-lg font-bold text-warning-700 mt-1">
                           {formatCurrency(period.affiliateCostCents / 100)}
                         </p>
                       </div>
                     </div>
+
+                    {/* Reload revenue button (for already loaded periods) */}
+                    {revenueLoaded && !isLoadingRev && (
+                      <div className="flex justify-end">
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          icon={RefreshCw}
+                          onClick={() => fetchRevenue(period.label)}
+                        >
+                          Atualizar faturamento
+                        </Button>
+                      </div>
+                    )}
 
                     {/* Manual Costs */}
                     <div>
@@ -391,8 +520,11 @@ export default function FinanceiroPage() {
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
                         <div>
                           <p className="text-[10px] text-zinc-400 uppercase">Faturamento</p>
-                          <p className="text-base font-bold text-success-400 mt-0.5">
-                            {formatCurrency(totalRevenue / 100)}
+                          <p className={cn(
+                            "text-base font-bold mt-0.5",
+                            revenueLoaded ? "text-success-400" : "text-zinc-500"
+                          )}>
+                            {revenueLoaded ? formatCurrency(totalRevenue / 100) : "—"}
                           </p>
                         </div>
                         <div>
@@ -411,9 +543,9 @@ export default function FinanceiroPage() {
                           <p className="text-[10px] text-zinc-400 uppercase">Lucro</p>
                           <p className={cn(
                             "text-base font-bold mt-0.5",
-                            profit >= 0 ? "text-white" : "text-error-400"
+                            !revenueLoaded ? "text-zinc-500" : profit >= 0 ? "text-white" : "text-error-400"
                           )}>
-                            {formatCurrency(profit / 100)}
+                            {revenueLoaded ? formatCurrency(profit / 100) : "—"}
                           </p>
                         </div>
                       </div>
@@ -423,21 +555,6 @@ export default function FinanceiroPage() {
               </Card>
             );
           })}
-
-          {/* Load More */}
-          {monthsLoaded < 12 && (
-            <div className="flex justify-center pt-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleLoadMore}
-                loading={loadingMore}
-                icon={loadingMore ? Loader2 : undefined}
-              >
-                {loadingMore ? "Carregando..." : "Carregar mais meses"}
-              </Button>
-            </div>
-          )}
         </div>
       </div>
     </div>

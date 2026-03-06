@@ -14,37 +14,35 @@ const supabaseAdmin = createClient(
 
 const ABACATEPAY_API_KEY = process.env.ABACATEPAY_API_KEY;
 
-interface AbacateBilling {
+interface AbacateWithdraw {
   id: string;
   amount: number;
   status: string;
   devMode: boolean;
   createdAt: string;
-  updatedAt: string;
 }
 
-let abacateBillingsCache: AbacateBilling[] | null = null;
+let abacateWithdrawCache: AbacateWithdraw[] | null = null;
 let abacateCacheTime = 0;
 
-async function fetchAbacateBillings(): Promise<AbacateBilling[]> {
+async function fetchAbacateWithdraws(): Promise<AbacateWithdraw[]> {
   if (!ABACATEPAY_API_KEY) return [];
 
-  // Cache for 5 minutes
-  if (abacateBillingsCache && Date.now() - abacateCacheTime < 5 * 60 * 1000) {
-    return abacateBillingsCache;
+  if (abacateWithdrawCache && Date.now() - abacateCacheTime < 5 * 60 * 1000) {
+    return abacateWithdrawCache;
   }
 
   try {
-    const res = await fetch("https://api.abacatepay.com/v1/billing/list", {
+    const res = await fetch("https://api.abacatepay.com/v1/withdraw/list", {
       headers: { Authorization: `Bearer ${ABACATEPAY_API_KEY}` },
     });
     if (!res.ok) throw new Error(`AbacatePay ${res.status}`);
     const json = await res.json();
-    abacateBillingsCache = (json.data || []) as AbacateBilling[];
+    abacateWithdrawCache = (json.data || []) as AbacateWithdraw[];
     abacateCacheTime = Date.now();
-    return abacateBillingsCache;
+    return abacateWithdrawCache;
   } catch (e) {
-    console.error("Error fetching AbacatePay billings:", e);
+    console.error("Error fetching AbacatePay withdraws:", e);
     return [];
   }
 }
@@ -97,26 +95,73 @@ function formatPeriodLabel(label: string): string {
   return `${monthNames[month - 1]} ${year}`;
 }
 
-export async function GET(request: NextRequest) {
+async function verifyAdmin(): Promise<boolean> {
   const supabase = await createServerClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+  if (!user) return false;
   const { data: profile } = await supabaseAdmin
     .from("profiles")
     .select("role")
     .eq("id", user.id)
     .single();
-  if (profile?.role !== "admin") {
+  return profile?.role === "admin";
+}
+
+// GET /api/admin/financeiro - returns all periods with DB-only data (fast)
+// GET /api/admin/financeiro?revenue=2026-02 - fetches live Stripe/AbacatePay revenue for a specific period
+export async function GET(request: NextRequest) {
+  if (!(await verifyAdmin())) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const monthsParam = request.nextUrl.searchParams.get("months") || "6";
-  const numMonths = Math.min(parseInt(monthsParam), 12);
+  const revenueParam = request.nextUrl.searchParams.get("revenue");
 
+  // === Mode 1: Fetch live revenue for a specific period ===
+  if (revenueParam) {
+    const { start, end } = getPeriodRange(revenueParam);
+    const startTs = Math.floor(start.getTime() / 1000);
+    const endTs = Math.floor(end.getTime() / 1000);
+
+    const [stripePayoutsTotal, abacateWithdraws] = await Promise.all([
+      (async () => {
+        let total = 0;
+        try {
+          for await (const payout of stripe.payouts.list({
+            created: { gte: startTs, lte: endTs },
+            status: "paid",
+            limit: 100,
+          })) {
+            total += payout.amount;
+          }
+        } catch (e) {
+          console.error(`Error fetching Stripe payouts for ${revenueParam}:`, e);
+        }
+        return total;
+      })(),
+      fetchAbacateWithdraws(),
+    ]);
+
+    let abacateRevenueCents = 0;
+    const startMs = start.getTime();
+    const endMs = end.getTime();
+    for (const w of abacateWithdraws) {
+      if (w.status !== "COMPLETE" || w.devMode) continue;
+      const t = new Date(w.createdAt).getTime();
+      if (t >= startMs && t <= endMs) abacateRevenueCents += w.amount || 0;
+    }
+
+    return NextResponse.json({
+      period: revenueParam,
+      stripeRevenueCents: stripePayoutsTotal,
+      abacateRevenueCents,
+    });
+  }
+
+  // === Mode 2: Load all periods with DB data only (fast) ===
   const now = new Date();
   const currentPeriod = getPeriodLabel(now);
 
+  const numMonths = 8;
   const periods: string[] = [];
   const [curYear, curMonth] = currentPeriod.split("-").map(Number);
   for (let i = 0; i < numMonths; i++) {
@@ -126,35 +171,12 @@ export async function GET(request: NextRequest) {
     periods.push(`${y}-${String(m).padStart(2, "0")}`);
   }
 
-  // Calculate the full date range (oldest start to newest end)
   const allRanges = periods.map((label) => ({ label, ...getPeriodRange(label) }));
   const globalStart = allRanges[allRanges.length - 1].start;
   const globalEnd = allRanges[0].end;
-  const globalStartTs = Math.floor(globalStart.getTime() / 1000);
-  const globalEndTs = Math.floor(globalEnd.getTime() / 1000);
 
-  // Fetch all data in parallel: Stripe invoices, AbacatePay, transactions, manual costs
-  const [stripeInvoices, abacateBillings, allTxs, allCosts] = await Promise.all([
-    // Single Stripe call for entire range
-    (async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const invoices: Array<{ amount_paid: number; created: number }> = [];
-      try {
-        for await (const invoice of stripe.invoices.list({
-          created: { gte: globalStartTs, lte: globalEndTs },
-          status: "paid",
-          limit: 100,
-        })) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const inv = invoice as any;
-          invoices.push({ amount_paid: inv.amount_paid || 0, created: inv.created });
-        }
-      } catch (e) {
-        console.error("Error fetching Stripe invoices:", e);
-      }
-      return invoices;
-    })(),
-    fetchAbacateBillings(),
+  // Only DB queries - no Stripe calls, very fast
+  const [allTxs, allCosts] = await Promise.all([
     supabaseAdmin
       .from("transactions")
       .select("commission_amount_cents, paid_at")
@@ -172,21 +194,9 @@ export async function GET(request: NextRequest) {
       .catch(() => [] as Array<{ id: string; category: string; description: string | null; amount_cents: number; period_label: string }>),
   ]);
 
-  // Distribute fetched data into periods
   const results: PeriodData[] = allRanges.map(({ label, start, end }) => {
     const startMs = start.getTime();
     const endMs = end.getTime();
-
-    const stripeRevenueCents = stripeInvoices
-      .filter((inv) => inv.created * 1000 >= startMs && inv.created * 1000 <= endMs)
-      .reduce((sum, inv) => sum + inv.amount_paid, 0);
-
-    let abacateRevenueCents = 0;
-    for (const billing of abacateBillings) {
-      if (billing.status !== "PAID" || billing.devMode) continue;
-      const t = new Date(billing.createdAt).getTime();
-      if (t >= startMs && t <= endMs) abacateRevenueCents += billing.amount || 0;
-    }
 
     const affiliateCostCents = (allTxs as Array<{ commission_amount_cents: number; paid_at: string }>)
       .filter((tx) => {
@@ -204,8 +214,8 @@ export async function GET(request: NextRequest) {
       label,
       startDate: start.toISOString().split("T")[0],
       endDate: end.toISOString().split("T")[0],
-      stripeRevenueCents,
-      abacateRevenueCents,
+      stripeRevenueCents: 0,
+      abacateRevenueCents: 0,
       affiliateCostCents,
       manualCosts,
       manualCostsTotalCents,
@@ -213,6 +223,7 @@ export async function GET(request: NextRequest) {
   });
 
   return NextResponse.json({
+    currentPeriod,
     periods: results,
     formatLabel: Object.fromEntries(periods.map((p) => [p, formatPeriodLabel(p)])),
   });
