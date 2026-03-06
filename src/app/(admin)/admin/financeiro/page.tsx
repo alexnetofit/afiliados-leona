@@ -140,6 +140,22 @@ export default function FinanceiroPage() {
   const handleAddCost = async (periodLabel: string) => {
     if (!newAmount || parseFloat(newAmount) <= 0) return;
     setSaving(true);
+
+    const isTax = newCategory === "Impostos";
+    let amountCents: number;
+    let description: string | null;
+
+    if (isTax) {
+      const period = periods.find((p) => p.label === periodLabel);
+      const abacate = period?.abacateRevenueCents || 0;
+      const pct = parseFloat(newAmount);
+      amountCents = Math.round(abacate * pct / 100);
+      description = `${pct}% sobre AbacatePay (R$ ${(abacate / 100).toFixed(2)})`;
+    } else {
+      amountCents = Math.round(parseFloat(newAmount) * 100);
+      description = newDescription || null;
+    }
+
     try {
       const res = await fetch("/api/admin/costs", {
         method: "POST",
@@ -147,8 +163,8 @@ export default function FinanceiroPage() {
         body: JSON.stringify({
           period_label: periodLabel,
           category: newCategory,
-          description: newDescription || null,
-          amount_cents: Math.round(parseFloat(newAmount) * 100),
+          description,
+          amount_cents: amountCents,
         }),
       });
       if (res.ok) {
@@ -363,23 +379,62 @@ export default function FinanceiroPage() {
                         </Button>
                       </div>
 
-                      {addingTo === period.label && (
-                        <div className="p-3 mb-3 border border-zinc-200 rounded-lg bg-zinc-50 space-y-3">
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <Select
-                              value={newCategory}
-                              onChange={(e) => setNewCategory(e.target.value)}
-                              options={COST_CATEGORIES.map((c) => ({ value: c, label: c }))}
-                            />
-                            <Input placeholder="Descrição (opcional)" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} />
-                            <Input placeholder="Valor (R$)" type="number" step="0.01" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
+                      {addingTo === period.label && (() => {
+                        const isTax = newCategory === "Impostos";
+                        const taxBase = period.abacateRevenueCents;
+                        const taxPreview = isTax && newAmount ? Math.round(taxBase * parseFloat(newAmount || "0") / 100) : 0;
+                        const canSaveTax = isTax && taxBase > 0;
+
+                        return (
+                          <div className="p-3 mb-3 border border-zinc-200 rounded-lg bg-zinc-50 space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <Select
+                                value={newCategory}
+                                onChange={(e) => { setNewCategory(e.target.value); setNewAmount(""); setNewDescription(""); }}
+                                options={COST_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                              />
+                              {isTax ? (
+                                <div className="sm:col-span-2 space-y-1">
+                                  <Input
+                                    placeholder="Alíquota (%)"
+                                    type="number"
+                                    step="0.01"
+                                    value={newAmount}
+                                    onChange={(e) => setNewAmount(e.target.value)}
+                                  />
+                                  {!hasRevData && (
+                                    <p className="text-[11px] text-amber-600">Carregue o faturamento primeiro para calcular impostos</p>
+                                  )}
+                                  {hasRevData && taxBase === 0 && (
+                                    <p className="text-[11px] text-zinc-400">Nenhum saque AbacatePay neste período</p>
+                                  )}
+                                  {taxPreview > 0 && (
+                                    <p className="text-[11px] text-zinc-500">
+                                      {newAmount}% sobre {formatCurrency(taxBase / 100)} = <span className="font-semibold text-error-600">{formatCurrency(taxPreview / 100)}</span>
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <>
+                                  <Input placeholder="Descrição (opcional)" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} />
+                                  <Input placeholder="Valor (R$)" type="number" step="0.01" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
+                                </>
+                              )}
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <Button size="xs" variant="ghost" onClick={() => setAddingTo(null)}>Cancelar</Button>
+                              <Button
+                                size="xs"
+                                loading={saving}
+                                onClick={() => handleAddCost(period.label)}
+                                disabled={!newAmount || parseFloat(newAmount) <= 0 || (isTax && !canSaveTax)}
+                              >
+                                Salvar
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex justify-end gap-2">
-                            <Button size="xs" variant="ghost" onClick={() => setAddingTo(null)}>Cancelar</Button>
-                            <Button size="xs" loading={saving} onClick={() => handleAddCost(period.label)} disabled={!newAmount || parseFloat(newAmount) <= 0}>Salvar</Button>
-                          </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {period.manualCosts.length === 0 && addingTo !== period.label ? (
                         <p className="text-xs text-zinc-400 py-2">Nenhum custo manual neste período</p>
