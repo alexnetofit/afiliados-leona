@@ -276,14 +276,14 @@ export default function FinanceiroPage() {
   if (isLoading) return <LoadingScreen message="Carregando financeiro..." />;
 
   const getStripeBrl = (p: Period) => {
-    if (p.label === currentPeriod && dolarHoje && p.stripeRevenueUsdCents > 0) {
+    if (dolarHoje && p.stripeRevenueUsdCents > 0) {
       return Math.round(p.stripeRevenueUsdCents * dolarHoje);
     }
     return p.stripeRevenueBrlCents;
   };
 
   const getRate = (p: Period) => {
-    if (p.label === currentPeriod && dolarHoje) return dolarHoje;
+    if (dolarHoje) return dolarHoje;
     return p.usdBrlRate;
   };
 
