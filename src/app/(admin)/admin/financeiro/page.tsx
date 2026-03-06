@@ -99,16 +99,9 @@ export default function FinanceiroPage() {
     if (didInit.current) return;
     didInit.current = true;
 
-    fetchPeriods().then(async (data) => {
+    fetchPeriods().then((data) => {
       if (!data) return;
-      // Fetch current month live
-      await fetchRevenue(data.currentPeriod);
-      // Auto-fetch past months without cache (sequentially to avoid hammering)
-      for (const p of data.periods) {
-        if (p.label !== data.currentPeriod && !p.revenueCached) {
-          await fetchRevenue(p.label);
-        }
-      }
+      fetchRevenue(data.currentPeriod);
     });
   }, [fetchPeriods, fetchRevenue]);
 
