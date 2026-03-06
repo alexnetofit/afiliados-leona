@@ -161,11 +161,13 @@ export async function GET(request: NextRequest) {
       .gte("paid_at", globalStart.toISOString())
       .lte("paid_at", globalEnd.toISOString())
       .then((r) => r.data || []),
-    supabaseAdmin
-      .from("admin_costs")
-      .select("id, category, description, amount_cents, period_label")
-      .in("period_label", periods)
-      .order("created_at", { ascending: true })
+    Promise.resolve(
+      supabaseAdmin
+        .from("admin_costs")
+        .select("id, category, description, amount_cents, period_label")
+        .in("period_label", periods)
+        .order("created_at", { ascending: true })
+    )
       .then((r) => r.data || [])
       .catch(() => [] as Array<{ id: string; category: string; description: string | null; amount_cents: number; period_label: string }>),
   ]);
