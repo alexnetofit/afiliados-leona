@@ -13,6 +13,9 @@ const supabaseAdmin = createClient(
 );
 
 const ABACATEPAY_API_KEY = process.env.ABACATEPAY_API_KEY;
+const FIRST_PERIOD = "2026-01";
+
+// --------------- helpers ---------------
 
 interface AbacateWithdraw {
   id: string;
@@ -22,93 +25,109 @@ interface AbacateWithdraw {
   createdAt: string;
 }
 
-let abacateWithdrawCache: AbacateWithdraw[] | null = null;
-let abacateCacheTime = 0;
+let abacateCache: AbacateWithdraw[] | null = null;
+let abacateCacheTs = 0;
 
 async function fetchAbacateWithdraws(): Promise<AbacateWithdraw[]> {
   if (!ABACATEPAY_API_KEY) return [];
-
-  if (abacateWithdrawCache && Date.now() - abacateCacheTime < 5 * 60 * 1000) {
-    return abacateWithdrawCache;
-  }
-
+  if (abacateCache && Date.now() - abacateCacheTs < 5 * 60 * 1000) return abacateCache;
   try {
     const res = await fetch("https://api.abacatepay.com/v1/withdraw/list", {
       headers: { Authorization: `Bearer ${ABACATEPAY_API_KEY}` },
     });
     if (!res.ok) throw new Error(`AbacatePay ${res.status}`);
     const json = await res.json();
-    abacateWithdrawCache = (json.data || []) as AbacateWithdraw[];
-    abacateCacheTime = Date.now();
-    return abacateWithdrawCache;
+    abacateCache = (json.data || []) as AbacateWithdraw[];
+    abacateCacheTs = Date.now();
+    return abacateCache;
   } catch (e) {
-    console.error("Error fetching AbacatePay withdraws:", e);
+    console.error("AbacatePay withdraw error:", e);
     return [];
   }
 }
 
-interface PeriodData {
-  label: string;
-  startDate: string;
-  endDate: string;
-  stripeRevenueCents: number;
-  abacateRevenueCents: number;
-  affiliateCostCents: number;
-  manualCosts: Array<{
-    id: string;
-    category: string;
-    description: string | null;
-    amount_cents: number;
-  }>;
-  manualCostsTotalCents: number;
+async function fetchUsdBrlRate(): Promise<number> {
+  try {
+    const res = await fetch(
+      "https://economia.awesomeapi.com.br/json/last/USD-BRL",
+      { next: { revalidate: 3600 } }
+    );
+    const json = await res.json();
+    return parseFloat(json.USDBRL?.bid || "5.50");
+  } catch {
+    return 5.50;
+  }
 }
 
 function getPeriodRange(label: string): { start: Date; end: Date } {
   const [year, month] = label.split("-").map(Number);
-  const start = new Date(Date.UTC(year, month - 1, 6, 0, 0, 0));
-  const end = new Date(Date.UTC(year, month, 5, 23, 59, 59));
-  return { start, end };
+  return {
+    start: new Date(Date.UTC(year, month - 1, 6, 0, 0, 0)),
+    end: new Date(Date.UTC(year, month, 5, 23, 59, 59)),
+  };
 }
 
 function getPeriodLabel(date: Date): string {
   const day = date.getUTCDate();
   let year = date.getUTCFullYear();
-  let month = date.getUTCMonth(); // 0-indexed
-
+  let month = date.getUTCMonth();
   if (day <= 5) {
     month -= 1;
-    if (month < 0) {
-      month = 11;
-      year -= 1;
-    }
+    if (month < 0) { month = 11; year -= 1; }
   }
-
   return `${year}-${String(month + 1).padStart(2, "0")}`;
 }
 
 function formatPeriodLabel(label: string): string {
   const [year, month] = label.split("-").map(Number);
-  const monthNames = [
-    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+  const names = [
+    "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
   ];
-  return `${monthNames[month - 1]} ${year}`;
+  return `${names[month - 1]} ${year}`;
+}
+
+function generatePeriods(): string[] {
+  const current = getPeriodLabel(new Date());
+  const [curY, curM] = current.split("-").map(Number);
+  const [firstY, firstM] = FIRST_PERIOD.split("-").map(Number);
+  const periods: string[] = [];
+  let y = curY, m = curM;
+  while (y > firstY || (y === firstY && m >= firstM)) {
+    periods.push(`${y}-${String(m).padStart(2, "0")}`);
+    m--;
+    if (m <= 0) { m = 12; y--; }
+  }
+  return periods;
 }
 
 async function verifyAdmin(): Promise<boolean> {
   const supabase = await createServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return false;
-  const { data: profile } = await supabaseAdmin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-  return profile?.role === "admin";
+  const { data: p } = await supabaseAdmin
+    .from("profiles").select("role").eq("id", user.id).single();
+  return p?.role === "admin";
 }
 
-// GET /api/admin/financeiro - returns all periods with DB-only data (fast)
-// GET /api/admin/financeiro?revenue=2026-02 - fetches live Stripe/AbacatePay revenue for a specific period
+// --------------- types ---------------
+
+interface PeriodData {
+  label: string;
+  startDate: string;
+  endDate: string;
+  stripeRevenueBrlCents: number;
+  stripeRevenueUsdCents: number;
+  abacateRevenueCents: number;
+  usdBrlRate: number;
+  affiliateCostCents: number;
+  manualCosts: Array<{ id: string; category: string; description: string | null; amount_cents: number }>;
+  manualCostsTotalCents: number;
+  revenueCached: boolean;
+}
+
+// --------------- route ---------------
+
 export async function GET(request: NextRequest) {
   if (!(await verifyAdmin())) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -116,13 +135,15 @@ export async function GET(request: NextRequest) {
 
   const revenueParam = request.nextUrl.searchParams.get("revenue");
 
-  // === Mode 1: Fetch live revenue for a specific period ===
+  // === Mode 1: Fetch live revenue for a specific period, save to DB ===
   if (revenueParam) {
     const { start, end } = getPeriodRange(revenueParam);
     const startTs = Math.floor(start.getTime() / 1000);
     const endTs = Math.floor(end.getTime() / 1000);
+    const startMs = start.getTime();
+    const endMs = end.getTime();
 
-    const [stripePayoutsTotal, abacateWithdraws] = await Promise.all([
+    const [stripeUsdCents, abacateList, usdBrlRate] = await Promise.all([
       (async () => {
         let total = 0;
         try {
@@ -134,49 +155,61 @@ export async function GET(request: NextRequest) {
             total += payout.amount;
           }
         } catch (e) {
-          console.error(`Error fetching Stripe payouts for ${revenueParam}:`, e);
+          console.error(`Stripe payouts error (${revenueParam}):`, e);
         }
         return total;
       })(),
       fetchAbacateWithdraws(),
+      fetchUsdBrlRate(),
     ]);
 
-    let abacateRevenueCents = 0;
-    const startMs = start.getTime();
-    const endMs = end.getTime();
-    for (const w of abacateWithdraws) {
+    let abacateCents = 0;
+    for (const w of abacateList) {
       if (w.status !== "COMPLETE" || w.devMode) continue;
       const t = new Date(w.createdAt).getTime();
-      if (t >= startMs && t <= endMs) abacateRevenueCents += w.amount || 0;
+      if (t >= startMs && t <= endMs) abacateCents += w.amount || 0;
+    }
+
+    const stripeBrlCents = Math.round(stripeUsdCents * usdBrlRate);
+
+    const currentPeriod = getPeriodLabel(new Date());
+    const isPast = revenueParam !== currentPeriod;
+
+    if (isPast) {
+      await Promise.resolve(
+        supabaseAdmin.from("period_revenue").upsert({
+          period_label: revenueParam,
+          stripe_revenue_usd_cents: stripeUsdCents,
+          stripe_revenue_brl_cents: stripeBrlCents,
+          abacate_revenue_cents: abacateCents,
+          usd_brl_rate: usdBrlRate,
+          cached_at: new Date().toISOString(),
+        })
+      ).catch((e) => console.error("Error caching period_revenue:", e));
     }
 
     return NextResponse.json({
       period: revenueParam,
-      stripeRevenueCents: stripePayoutsTotal,
-      abacateRevenueCents,
+      stripeRevenueUsdCents: stripeUsdCents,
+      stripeRevenueBrlCents: stripeBrlCents,
+      abacateRevenueCents: abacateCents,
+      usdBrlRate,
     });
   }
 
-  // === Mode 2: Load all periods with DB data only (fast) ===
-  const now = new Date();
-  const currentPeriod = getPeriodLabel(now);
+  // === Mode 2: Load all periods from DB (fast) ===
+  const currentPeriod = getPeriodLabel(new Date());
+  const periods = generatePeriods();
 
-  const numMonths = 8;
-  const periods: string[] = [];
-  const [curYear, curMonth] = currentPeriod.split("-").map(Number);
-  for (let i = 0; i < numMonths; i++) {
-    let m = curMonth - i;
-    let y = curYear;
-    while (m <= 0) { m += 12; y -= 1; }
-    periods.push(`${y}-${String(m).padStart(2, "0")}`);
+  if (periods.length === 0) {
+    return NextResponse.json({ currentPeriod, periods: [], formatLabel: {} });
   }
 
   const allRanges = periods.map((label) => ({ label, ...getPeriodRange(label) }));
   const globalStart = allRanges[allRanges.length - 1].start;
   const globalEnd = allRanges[0].end;
 
-  // Only DB queries - no Stripe calls, very fast
-  const [allTxs, allCosts] = await Promise.all([
+  const [allTxs, allCosts, cachedRevenue] = await Promise.all([
     supabaseAdmin
       .from("transactions")
       .select("commission_amount_cents, paid_at")
@@ -189,10 +222,19 @@ export async function GET(request: NextRequest) {
         .select("id, category, description, amount_cents, period_label")
         .in("period_label", periods)
         .order("created_at", { ascending: true })
-    )
-      .then((r) => r.data || [])
-      .catch(() => [] as Array<{ id: string; category: string; description: string | null; amount_cents: number; period_label: string }>),
+    ).then((r) => r.data || []).catch(() => [] as Array<{ id: string; category: string; description: string | null; amount_cents: number; period_label: string }>),
+    Promise.resolve(
+      supabaseAdmin
+        .from("period_revenue")
+        .select("period_label, stripe_revenue_usd_cents, stripe_revenue_brl_cents, abacate_revenue_cents, usd_brl_rate")
+        .in("period_label", periods)
+    ).then((r) => r.data || []).catch(() => [] as Array<{ period_label: string; stripe_revenue_usd_cents: number; stripe_revenue_brl_cents: number; abacate_revenue_cents: number; usd_brl_rate: number }>),
   ]);
+
+  const revenueMap = new Map(
+    (cachedRevenue as Array<{ period_label: string; stripe_revenue_usd_cents: number; stripe_revenue_brl_cents: number; abacate_revenue_cents: number; usd_brl_rate: number }>)
+      .map((r) => [r.period_label, r])
+  );
 
   const results: PeriodData[] = allRanges.map(({ label, start, end }) => {
     const startMs = start.getTime();
@@ -210,15 +252,21 @@ export async function GET(request: NextRequest) {
       .map(({ id, category, description, amount_cents }) => ({ id, category, description, amount_cents }));
     const manualCostsTotalCents = manualCosts.reduce((sum, c) => sum + c.amount_cents, 0);
 
+    const cached = revenueMap.get(label);
+    const isCurrent = label === currentPeriod;
+
     return {
       label,
       startDate: start.toISOString().split("T")[0],
       endDate: end.toISOString().split("T")[0],
-      stripeRevenueCents: 0,
-      abacateRevenueCents: 0,
+      stripeRevenueBrlCents: cached && !isCurrent ? cached.stripe_revenue_brl_cents : 0,
+      stripeRevenueUsdCents: cached && !isCurrent ? cached.stripe_revenue_usd_cents : 0,
+      abacateRevenueCents: cached && !isCurrent ? cached.abacate_revenue_cents : 0,
+      usdBrlRate: cached && !isCurrent ? cached.usd_brl_rate : 0,
       affiliateCostCents,
       manualCosts,
       manualCostsTotalCents,
+      revenueCached: !isCurrent && !!cached,
     };
   });
 
