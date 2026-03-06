@@ -61,6 +61,42 @@ const COST_CATEGORIES = [
   "Infraestrutura", "Marketing", "Pessoal", "Ferramentas", "Impostos", "Outro",
 ];
 
+interface ProfitShare { name: string; percent: number; isCost?: boolean }
+
+function getProfitShares(periodLabel: string): ProfitShare[] {
+  const [y, m] = periodLabel.split("-").map(Number);
+  if (y > 2026 || (y === 2026 && m >= 7)) {
+    return [
+      { name: "Alex", percent: 40 },
+      { name: "Dai e Fabiano", percent: 20 },
+      { name: "Ericson", percent: 20 },
+    ];
+  }
+  if (y === 2026 && (m === 5 || m === 6)) {
+    return [
+      { name: "Alex", percent: 40 },
+      { name: "Dai e Fabiano", percent: 20 },
+      { name: "Ericson", percent: 20 },
+      { name: "Caique", percent: 5, isCost: true },
+    ];
+  }
+  if (y === 2026 && m === 4) {
+    return [
+      { name: "Alex", percent: 40 },
+      { name: "Dai e Fabiano", percent: 20 },
+      { name: "Ericson", percent: 20 },
+      { name: "Caique", percent: 7.5, isCost: true },
+    ];
+  }
+  // Jan, Fev, Mar 2026
+  return [
+    { name: "Alex", percent: 38 },
+    { name: "Dai e Fabiano", percent: 15 },
+    { name: "Ericson", percent: 22 },
+    { name: "Caique", percent: 10 },
+  ];
+}
+
 export default function FinanceiroPage() {
   const [periods, setPeriods] = useState<Period[]>([]);
   const [formatLabels, setFormatLabels] = useState<Record<string, string>>({});
@@ -558,6 +594,61 @@ export default function FinanceiroPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Distribuição de Lucro */}
+                    {hasRevData && profit !== 0 && (() => {
+                      const shares = getProfitShares(period.label);
+                      const costShares = shares.filter((s) => s.isCost);
+                      const costShareTotal = costShares.reduce((sum, s) => sum + Math.round(profit * s.percent / 100), 0);
+                      const distributableProfit = profit - costShareTotal;
+                      const profitShares = shares.filter((s) => !s.isCost);
+
+                      return (
+                        <div className="p-3 rounded-lg border border-zinc-200 bg-zinc-50 space-y-2">
+                          <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Distribuição do Lucro</p>
+                          <div className="space-y-1.5">
+                            {costShares.length > 0 && (
+                              <>
+                                {costShares.map((s) => {
+                                  const val = Math.round(profit * s.percent / 100);
+                                  return (
+                                    <div key={s.name} className="flex items-center justify-between py-1 px-2 rounded bg-amber-50 border border-amber-100">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs font-medium text-amber-700">{s.name}</span>
+                                        <Badge variant="warning" size="sm">{s.percent}% (custo)</Badge>
+                                      </div>
+                                      <span className="text-sm font-bold text-amber-700">{formatCurrency(val / 100)}</span>
+                                    </div>
+                                  );
+                                })}
+                                <div className="flex justify-end">
+                                  <p className="text-[10px] text-zinc-400">
+                                    Lucro distribuível: <span className="font-semibold text-zinc-600">{formatCurrency(distributableProfit / 100)}</span>
+                                  </p>
+                                </div>
+                              </>
+                            )}
+                            {profitShares.map((s) => {
+                              const val = Math.round(distributableProfit * s.percent / 100);
+                              return (
+                                <div key={s.name} className="flex items-center justify-between py-1.5 px-2 rounded bg-white border border-zinc-100">
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-6 w-6 rounded-full bg-primary-100 flex items-center justify-center">
+                                      <span className="text-[10px] font-bold text-primary-600">{s.name[0]}</span>
+                                    </div>
+                                    <span className="text-sm font-medium text-zinc-700">{s.name}</span>
+                                    <span className="text-[10px] text-zinc-400">{s.percent}%</span>
+                                  </div>
+                                  <span className={cn("text-sm font-bold", val >= 0 ? "text-success-600" : "text-error-600")}>
+                                    {formatCurrency(val / 100)}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </Card>
