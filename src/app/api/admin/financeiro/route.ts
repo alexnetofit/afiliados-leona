@@ -12,6 +12,43 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const ABACATEPAY_API_KEY = process.env.ABACATEPAY_API_KEY;
+
+interface AbacateBilling {
+  id: string;
+  amount: number;
+  status: string;
+  devMode: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+let abacateBillingsCache: AbacateBilling[] | null = null;
+let abacateCacheTime = 0;
+
+async function fetchAbacateBillings(): Promise<AbacateBilling[]> {
+  if (!ABACATEPAY_API_KEY) return [];
+
+  // Cache for 5 minutes
+  if (abacateBillingsCache && Date.now() - abacateCacheTime < 5 * 60 * 1000) {
+    return abacateBillingsCache;
+  }
+
+  try {
+    const res = await fetch("https://api.abacatepay.com/v1/billing/list", {
+      headers: { Authorization: `Bearer ${ABACATEPAY_API_KEY}` },
+    });
+    if (!res.ok) throw new Error(`AbacatePay ${res.status}`);
+    const json = await res.json();
+    abacateBillingsCache = (json.data || []) as AbacateBilling[];
+    abacateCacheTime = Date.now();
+    return abacateBillingsCache;
+  } catch (e) {
+    console.error("Error fetching AbacatePay billings:", e);
+    return [];
+  }
+}
+
 interface PeriodData {
   label: string;
   startDate: string;
@@ -91,6 +128,9 @@ export async function GET(request: NextRequest) {
 
   const results: PeriodData[] = [];
 
+  // Pre-fetch AbacatePay billings (single call, cached)
+  const abacateBillings = await fetchAbacateBillings();
+
   for (const label of periods) {
     const { start, end } = getPeriodRange(label);
     const startTs = Math.floor(start.getTime() / 1000);
@@ -109,6 +149,16 @@ export async function GET(request: NextRequest) {
       }
     } catch (e) {
       console.error(`Error fetching Stripe invoices for ${label}:`, e);
+    }
+
+    // 1b. AbacatePay revenue: paid billings in the period
+    let abacateRevenueCents = 0;
+    for (const billing of abacateBillings) {
+      if (billing.status !== "PAID" || billing.devMode) continue;
+      const billingDate = new Date(billing.createdAt);
+      if (billingDate >= start && billingDate <= end) {
+        abacateRevenueCents += billing.amount || 0;
+      }
     }
 
     // 2. Affiliate costs: commission transactions in the period (from our DB)
@@ -144,7 +194,7 @@ export async function GET(request: NextRequest) {
       startDate: start.toISOString().split("T")[0],
       endDate: end.toISOString().split("T")[0],
       stripeRevenueCents,
-      abacateRevenueCents: 0,
+      abacateRevenueCents,
       affiliateCostCents,
       manualCosts,
       manualCostsTotalCents,

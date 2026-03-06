@@ -245,11 +245,8 @@ export default function FinanceiroPage() {
                       <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
                         <p className="text-[10px] font-medium text-emerald-600 uppercase tracking-wider">AbacatePay</p>
                         <p className="text-lg font-bold text-emerald-700 mt-1">
-                          {period.abacateRevenueCents > 0
-                            ? formatCurrency(period.abacateRevenueCents / 100)
-                            : "—"}
+                          {formatCurrency(period.abacateRevenueCents / 100)}
                         </p>
-                        <p className="text-[10px] text-emerald-500 mt-0.5">Em breve</p>
                       </div>
                       <div className="p-3 rounded-lg bg-warning-50 border border-warning-100">
                         <p className="text-[10px] font-medium text-warning-600 uppercase tracking-wider">Afiliados ({affiliatePercent}%)</p>
