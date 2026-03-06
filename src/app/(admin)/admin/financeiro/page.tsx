@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/index";
 import {
   DollarSign, TrendingUp, TrendingDown, Wallet, Plus, Trash2,
-  ChevronDown, ChevronRight, BarChart3, X,
+  ChevronDown, ChevronRight, BarChart3, X, Loader2,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
@@ -42,6 +42,8 @@ export default function FinanceiroPage() {
   const [periods, setPeriods] = useState<Period[]>([]);
   const [formatLabels, setFormatLabels] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [monthsLoaded, setMonthsLoaded] = useState(1);
   const [expandedPeriod, setExpandedPeriod] = useState<string | null>(null);
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [newCategory, setNewCategory] = useState("Infraestrutura");
@@ -50,23 +52,34 @@ export default function FinanceiroPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (months = 1, append = false) => {
     try {
-      const res = await fetch("/api/admin/financeiro?months=6");
+      const res = await fetch(`/api/admin/financeiro?months=${months}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
-      setPeriods(data.periods);
-      setFormatLabels(data.formatLabel);
+      if (append) {
+        setPeriods(data.periods);
+      } else {
+        setPeriods(data.periods);
+      }
+      setFormatLabels((prev) => ({ ...prev, ...data.formatLabel }));
+      setMonthsLoaded(months);
     } catch (e) {
       console.error("Error fetching financeiro:", e);
     } finally {
       setIsLoading(false);
+      setLoadingMore(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
+    fetchData(1);
   }, [fetchData]);
+
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    await fetchData(monthsLoaded + 3, true);
+  };
 
   const handleAddCost = async (periodLabel: string) => {
     if (!newAmount || parseFloat(newAmount) <= 0) return;
@@ -87,7 +100,7 @@ export default function FinanceiroPage() {
         setNewDescription("");
         setNewAmount("");
         setNewCategory("Infraestrutura");
-        await fetchData();
+        await fetchData(monthsLoaded);
       }
     } catch {
       // silently fail
@@ -100,7 +113,7 @@ export default function FinanceiroPage() {
     setDeleting(id);
     try {
       const res = await fetch(`/api/admin/costs?id=${id}`, { method: "DELETE" });
-      if (res.ok) await fetchData();
+      if (res.ok) await fetchData(monthsLoaded);
     } catch {
       // silently fail
     } finally {
@@ -410,6 +423,21 @@ export default function FinanceiroPage() {
               </Card>
             );
           })}
+
+          {/* Load More */}
+          {monthsLoaded < 12 && (
+            <div className="flex justify-center pt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleLoadMore}
+                loading={loadingMore}
+                icon={loadingMore ? Loader2 : undefined}
+              >
+                {loadingMore ? "Carregando..." : "Carregar mais meses"}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>

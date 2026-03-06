@@ -126,70 +126,79 @@ export async function GET(request: NextRequest) {
     periods.push(`${y}-${String(m).padStart(2, "0")}`);
   }
 
-  const results: PeriodData[] = [];
+  // Calculate the full date range (oldest start to newest end)
+  const allRanges = periods.map((label) => ({ label, ...getPeriodRange(label) }));
+  const globalStart = allRanges[allRanges.length - 1].start;
+  const globalEnd = allRanges[0].end;
+  const globalStartTs = Math.floor(globalStart.getTime() / 1000);
+  const globalEndTs = Math.floor(globalEnd.getTime() / 1000);
 
-  // Pre-fetch AbacatePay billings (single call, cached)
-  const abacateBillings = await fetchAbacateBillings();
-
-  for (const label of periods) {
-    const { start, end } = getPeriodRange(label);
-    const startTs = Math.floor(start.getTime() / 1000);
-    const endTs = Math.floor(end.getTime() / 1000);
-
-    // 1. Stripe revenue: paid invoices in the period
-    let stripeRevenueCents = 0;
-    try {
-      for await (const invoice of stripe.invoices.list({
-        created: { gte: startTs, lte: endTs },
-        status: "paid",
-        limit: 100,
-      })) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        stripeRevenueCents += (invoice as any).amount_paid || 0;
+  // Fetch all data in parallel: Stripe invoices, AbacatePay, transactions, manual costs
+  const [stripeInvoices, abacateBillings, allTxs, allCosts] = await Promise.all([
+    // Single Stripe call for entire range
+    (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const invoices: Array<{ amount_paid: number; created: number }> = [];
+      try {
+        for await (const invoice of stripe.invoices.list({
+          created: { gte: globalStartTs, lte: globalEndTs },
+          status: "paid",
+          limit: 100,
+        })) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const inv = invoice as any;
+          invoices.push({ amount_paid: inv.amount_paid || 0, created: inv.created });
+        }
+      } catch (e) {
+        console.error("Error fetching Stripe invoices:", e);
       }
-    } catch (e) {
-      console.error(`Error fetching Stripe invoices for ${label}:`, e);
-    }
+      return invoices;
+    })(),
+    fetchAbacateBillings(),
+    supabaseAdmin
+      .from("transactions")
+      .select("commission_amount_cents, paid_at")
+      .gte("paid_at", globalStart.toISOString())
+      .lte("paid_at", globalEnd.toISOString())
+      .then((r) => r.data || []),
+    supabaseAdmin
+      .from("admin_costs")
+      .select("id, category, description, amount_cents, period_label")
+      .in("period_label", periods)
+      .order("created_at", { ascending: true })
+      .then((r) => r.data || [])
+      .catch(() => [] as Array<{ id: string; category: string; description: string | null; amount_cents: number; period_label: string }>),
+  ]);
 
-    // 1b. AbacatePay revenue: paid billings in the period
+  // Distribute fetched data into periods
+  const results: PeriodData[] = allRanges.map(({ label, start, end }) => {
+    const startMs = start.getTime();
+    const endMs = end.getTime();
+
+    const stripeRevenueCents = stripeInvoices
+      .filter((inv) => inv.created * 1000 >= startMs && inv.created * 1000 <= endMs)
+      .reduce((sum, inv) => sum + inv.amount_paid, 0);
+
     let abacateRevenueCents = 0;
     for (const billing of abacateBillings) {
       if (billing.status !== "PAID" || billing.devMode) continue;
-      const billingDate = new Date(billing.createdAt);
-      if (billingDate >= start && billingDate <= end) {
-        abacateRevenueCents += billing.amount || 0;
-      }
+      const t = new Date(billing.createdAt).getTime();
+      if (t >= startMs && t <= endMs) abacateRevenueCents += billing.amount || 0;
     }
 
-    // 2. Affiliate costs: commission transactions in the period (from our DB)
-    const { data: txs } = await supabaseAdmin
-      .from("transactions")
-      .select("commission_amount_cents, type")
-      .gte("paid_at", start.toISOString())
-      .lte("paid_at", end.toISOString());
+    const affiliateCostCents = (allTxs as Array<{ commission_amount_cents: number; paid_at: string }>)
+      .filter((tx) => {
+        const t = new Date(tx.paid_at).getTime();
+        return t >= startMs && t <= endMs;
+      })
+      .reduce((sum, tx) => sum + tx.commission_amount_cents, 0);
 
-    const affiliateCostCents = (txs || []).reduce(
-      (sum, t) => sum + t.commission_amount_cents,
-      0
-    );
+    const manualCosts = (allCosts as Array<{ id: string; category: string; description: string | null; amount_cents: number; period_label: string }>)
+      .filter((c) => c.period_label === label)
+      .map(({ id, category, description, amount_cents }) => ({ id, category, description, amount_cents }));
+    const manualCostsTotalCents = manualCosts.reduce((sum, c) => sum + c.amount_cents, 0);
 
-    // 3. Manual costs
-    let manualCosts: Array<{ id: string; category: string; description: string | null; amount_cents: number }> = [];
-    let manualCostsTotalCents = 0;
-    try {
-      const { data: costs } = await supabaseAdmin
-        .from("admin_costs")
-        .select("id, category, description, amount_cents")
-        .eq("period_label", label)
-        .order("created_at", { ascending: true });
-
-      manualCosts = (costs || []) as typeof manualCosts;
-      manualCostsTotalCents = manualCosts.reduce((sum, c) => sum + c.amount_cents, 0);
-    } catch {
-      // Table might not exist yet
-    }
-
-    results.push({
+    return {
       label,
       startDate: start.toISOString().split("T")[0],
       endDate: end.toISOString().split("T")[0],
@@ -198,8 +207,8 @@ export async function GET(request: NextRequest) {
       affiliateCostCents,
       manualCosts,
       manualCostsTotalCents,
-    });
-  }
+    };
+  });
 
   return NextResponse.json({
     periods: results,
