@@ -172,17 +172,35 @@ export default function FinanceiroPage() {
     }
   }, []);
 
+  const fetchDolar = useCallback(() => {
+    fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL")
+      .then((r) => r.json())
+      .then((j) => {
+        const rate = parseFloat(j.USDBRL?.bid || "0");
+        if (rate > 0) setDolarHoje(rate);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (didInit.current) return;
     didInit.current = true;
     fetchPeriods().then((cp) => {
       if (cp) fetchRevenue(cp);
     });
-    fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL")
-      .then((r) => r.json())
-      .then((j) => setDolarHoje(parseFloat(j.USDBRL?.bid || "0")))
-      .catch(() => {});
-  }, [fetchPeriods, fetchRevenue]);
+    fetchDolar();
+  }, [fetchPeriods, fetchRevenue, fetchDolar]);
+
+  useEffect(() => {
+    const onFocus = () => fetchDolar();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") fetchDolar();
+    });
+    return () => {
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [fetchDolar]);
 
   const handleAddCost = async (periodLabel: string) => {
     if (!newAmount || parseFloat(newAmount) <= 0) return;
@@ -257,9 +275,21 @@ export default function FinanceiroPage() {
 
   if (isLoading) return <LoadingScreen message="Carregando financeiro..." />;
 
+  const getStripeBrl = (p: Period) => {
+    if (p.label === currentPeriod && dolarHoje && p.stripeRevenueUsdCents > 0) {
+      return Math.round(p.stripeRevenueUsdCents * dolarHoje);
+    }
+    return p.stripeRevenueBrlCents;
+  };
+
+  const getRate = (p: Period) => {
+    if (p.label === currentPeriod && dolarHoje) return dolarHoje;
+    return p.usdBrlRate;
+  };
+
   const totals = periods.reduce(
     (acc, p) => {
-      const totalRevenue = p.stripeRevenueBrlCents + p.abacateRevenueCents;
+      const totalRevenue = getStripeBrl(p) + p.abacateRevenueCents;
       const totalCosts = p.affiliateCostCents + p.manualCostsTotalCents;
       acc.revenue += totalRevenue;
       acc.affiliateCosts += p.affiliateCostCents;
@@ -296,7 +326,9 @@ export default function FinanceiroPage() {
         {/* Periods */}
         <div className="space-y-3">
           {periods.map((period) => {
-            const totalRevenue = period.stripeRevenueBrlCents + period.abacateRevenueCents;
+            const stripeBrl = getStripeBrl(period);
+            const rate = getRate(period);
+            const totalRevenue = stripeBrl + period.abacateRevenueCents;
             const totalCosts = period.affiliateCostCents + period.manualCostsTotalCents;
             const profit = totalRevenue - totalCosts;
             const isExpanded = expandedPeriod === period.label;
@@ -401,11 +433,11 @@ export default function FinanceiroPage() {
                         {hasRevData ? (
                           <>
                             <p className="text-lg font-bold text-success-700 mt-1">
-                              {formatCurrency(period.stripeRevenueBrlCents / 100)}
+                              {formatCurrency(stripeBrl / 100)}
                             </p>
                             <p className="text-[10px] text-success-500 mt-0.5">
                               US$ {(period.stripeRevenueUsdCents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                              {period.usdBrlRate > 0 && ` × R$ ${period.usdBrlRate.toFixed(2)}`}
+                              {rate > 0 && ` × R$ ${rate.toFixed(2)}`}
                             </p>
                           </>
                         ) : (
