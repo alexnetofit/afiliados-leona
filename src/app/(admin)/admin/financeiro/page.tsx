@@ -116,6 +116,7 @@ export default function FinanceiroPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [editingAbacate, setEditingAbacate] = useState<string | null>(null);
   const [abacateInput, setAbacateInput] = useState("");
+  const [dolarHoje, setDolarHoje] = useState<number | null>(null);
   const didInit = useRef(false);
 
   const applyLocalFallback = useCallback((periodsData: Period[], cp: string) => {
@@ -177,6 +178,10 @@ export default function FinanceiroPage() {
     fetchPeriods().then((cp) => {
       if (cp) fetchRevenue(cp);
     });
+    fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL")
+      .then((r) => r.json())
+      .then((j) => setDolarHoje(parseFloat(j.USDBRL?.bid || "0")))
+      .catch(() => {});
   }, [fetchPeriods, fetchRevenue]);
 
   const handleAddCost = async (periodLabel: string) => {
@@ -271,7 +276,12 @@ export default function FinanceiroPage() {
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Financeiro</h1>
           <p className="text-sm text-zinc-500 mt-1">
-            Fechamento mensal (dia 06 a dia 05 do mês seguinte) &middot; Valores Stripe convertidos USD &rarr; BRL
+            Fechamento mensal (dia 06 a dia 05 do mês seguinte)
+            {dolarHoje && (
+              <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
+                Dólar comercial: R$ {dolarHoje.toFixed(2)}
+              </span>
+            )}
           </p>
         </div>
 
