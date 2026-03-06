@@ -76,14 +76,12 @@ export default function FinanceiroPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const didInit = useRef(false);
 
-  const applyLocalCache = useCallback((periodsData: Period[], cp: string) => {
+  const applyLocalFallback = useCallback((periodsData: Period[], cp: string) => {
     const cache = readRevenueCache();
     return periodsData.map((p) => {
-      if (p.label === cp) return p;
-      const cached = cache[p.label];
-      if (cached) {
-        return { ...p, ...cached, revenueCached: true };
-      }
+      if (p.label === cp || p.revenueCached) return p;
+      const local = cache[p.label];
+      if (local) return { ...p, ...local, revenueCached: true };
       return p;
     });
   }, []);
@@ -93,8 +91,8 @@ export default function FinanceiroPage() {
       const res = await fetch("/api/admin/financeiro");
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
-      const withCache = applyLocalCache(data.periods, data.currentPeriod);
-      setPeriods(withCache);
+      const merged = applyLocalFallback(data.periods, data.currentPeriod);
+      setPeriods(merged);
       setFormatLabels(data.formatLabel);
       setCurrentPeriod(data.currentPeriod);
       return data.currentPeriod as string;
@@ -104,7 +102,7 @@ export default function FinanceiroPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [applyLocalCache]);
+  }, [applyLocalFallback]);
 
   const fetchRevenue = useCallback(async (label: string) => {
     setLoadingRevenue((prev) => ({ ...prev, [label]: true }));
