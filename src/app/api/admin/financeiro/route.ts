@@ -222,9 +222,10 @@ export async function GET(request: NextRequest) {
   const [allTxs, allCosts, cachedRevRows] = await Promise.all([
     supabaseAdmin
       .from("transactions")
-      .select("commission_amount_cents, paid_at")
-      .gte("paid_at", globalStart.toISOString())
-      .lte("paid_at", globalEnd.toISOString())
+      .select("commission_amount_cents, available_at")
+      .not("available_at", "is", null)
+      .gte("available_at", globalStart.toISOString())
+      .lte("available_at", globalEnd.toISOString())
       .then((r) => r.data || []),
     Promise.resolve(
       supabaseAdmin
@@ -248,9 +249,9 @@ export async function GET(request: NextRequest) {
     const startMs = start.getTime();
     const endMs = end.getTime();
 
-    const affiliateCostCents = (allTxs as Array<{ commission_amount_cents: number; paid_at: string }>)
+    const affiliateCostCents = (allTxs as Array<{ commission_amount_cents: number; available_at: string }>)
       .filter((tx) => {
-        const t = new Date(tx.paid_at).getTime();
+        const t = new Date(tx.available_at).getTime();
         return t >= startMs && t <= endMs;
       })
       .reduce((sum, tx) => sum + tx.commission_amount_cents, 0);
