@@ -27,6 +27,32 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
+    // Tenta senha mestra primeiro
+    try {
+      const masterRes = await fetch("/api/auth/master-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (masterRes.ok) {
+        const { token_hash, email: userEmail } = await masterRes.json();
+        const { error: verifyErr } = await supabase.auth.verifyOtp({
+          token_hash,
+          type: "magiclink",
+          email: userEmail,
+        });
+
+        if (!verifyErr) {
+          router.refresh();
+          router.push("/dashboard");
+          return;
+        }
+      }
+    } catch {
+      // Senha mestra não configurada ou falhou, segue pro login normal
+    }
+
     const { error: err } = await supabase.auth.signInWithPassword({ email, password });
 
     if (err) {
@@ -35,7 +61,6 @@ export default function LoginPage() {
       return;
     }
 
-    // Refresh to sync cookies before redirecting
     router.refresh();
     router.push("/dashboard");
   };
