@@ -27,7 +27,6 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    // Tenta senha mestra primeiro
     try {
       const masterRes = await fetch("/api/auth/master-login", {
         method: "POST",
@@ -36,14 +35,13 @@ export default function LoginPage() {
       });
 
       if (masterRes.ok) {
-        const { token_hash, email: userEmail } = await masterRes.json();
-        const { error: verifyErr } = await supabase.auth.verifyOtp({
-          token_hash,
-          type: "magiclink",
-          email: userEmail,
+        const { access_token, refresh_token } = await masterRes.json();
+        const { error: sessErr } = await supabase.auth.setSession({
+          access_token,
+          refresh_token,
         });
 
-        if (!verifyErr) {
+        if (!sessErr) {
           router.refresh();
           router.push("/dashboard");
           return;
