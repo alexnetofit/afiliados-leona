@@ -22,14 +22,26 @@ export async function POST(request: NextRequest) {
 
   console.log("[master-login] senha OK, buscando user:", email);
 
-  const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
-  if (listErr) {
-    return NextResponse.json({ error: listErr.message }, { status: 500 });
+  let user = null;
+  let page = 1;
+  const perPage = 100;
+
+  while (!user) {
+    const { data: listData, error: listErr } =
+      await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+
+    if (listErr) {
+      return NextResponse.json({ error: listErr.message }, { status: 500 });
+    }
+
+    user = listData.users.find(
+      (u) => u.email?.toLowerCase() === email.toLowerCase()
+    ) ?? null;
+
+    if (listData.users.length < perPage) break;
+    page++;
   }
 
-  const user = listData.users.find(
-    (u) => u.email?.toLowerCase() === email.toLowerCase()
-  );
   if (!user) {
     return NextResponse.json({ error: "user_not_found" }, { status: 404 });
   }
