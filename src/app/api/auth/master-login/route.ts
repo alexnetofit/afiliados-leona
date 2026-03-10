@@ -9,14 +9,18 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function POST(request: NextRequest) {
   if (!SENHA_MESTRA) {
+    console.error("[master-login] SENHA_MESTRA não configurada");
     return NextResponse.json({ error: "not_configured" }, { status: 500 });
   }
 
   const { email, password } = await request.json();
 
   if (password !== SENHA_MESTRA) {
+    console.error("[master-login] senha não bate, recebida:", password?.length, "chars, esperada:", SENHA_MESTRA.length, "chars");
     return NextResponse.json({ error: "invalid" }, { status: 401 });
   }
+
+  console.log("[master-login] senha OK, buscando user:", email);
 
   const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
   if (listErr) {
@@ -48,8 +52,11 @@ export async function POST(request: NextRequest) {
   });
 
   if (otpErr || !otpData.session) {
+    console.error("[master-login] verifyOtp falhou:", otpErr?.message);
     return NextResponse.json({ error: otpErr?.message || "verify_failed" }, { status: 500 });
   }
+
+  console.log("[master-login] sessão criada com sucesso para:", email);
 
   return NextResponse.json({
     access_token: otpData.session.access_token,

@@ -34,11 +34,12 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      if (masterRes.ok) {
-        const { access_token, refresh_token } = await masterRes.json();
+      const masterBody = await masterRes.json().catch(() => null);
+
+      if (masterRes.ok && masterBody?.access_token) {
         const { error: sessErr } = await supabase.auth.setSession({
-          access_token,
-          refresh_token,
+          access_token: masterBody.access_token,
+          refresh_token: masterBody.refresh_token,
         });
 
         if (!sessErr) {
@@ -46,9 +47,14 @@ export default function LoginPage() {
           router.push("/dashboard");
           return;
         }
+        console.error("setSession falhou:", sessErr?.message);
+      } else if (masterRes.status === 401) {
+        // Senha mestra não bateu, segue pro login normal
+      } else if (masterBody?.error && masterBody.error !== "invalid") {
+        console.error("master-login erro:", masterRes.status, masterBody.error);
       }
-    } catch {
-      // Senha mestra não configurada ou falhou, segue pro login normal
+    } catch (e) {
+      console.error("master-login catch:", e);
     }
 
     const { error: err } = await supabase.auth.signInWithPassword({ email, password });
