@@ -256,7 +256,8 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   if (!affiliate) return;
 
   const commissionPercent = getCommissionPercent(affiliate.commission_tier);
-  const commissionAmount = Math.round(inv.amount_paid * commissionPercent / 100);
+  const netAmount = Math.round(inv.amount_paid * 0.93);
+  const commissionAmount = Math.round(netAmount * commissionPercent / 100);
 
   // Calculate available_at in BRT timezone
   const paidAt = inv.status_transitions?.paid_at 
@@ -344,7 +345,8 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   if (!originalTx) return;
 
   const refundKey = `${originalTx.stripe_invoice_id}_refund`;
-  const commissionRefund = Math.round(refundedAmount * originalTx.commission_percent / 100);
+  const netRefund = Math.round(refundedAmount * 0.93);
+  const commissionRefund = Math.round(netRefund * originalTx.commission_percent / 100);
 
   await supabase.from("transactions").insert({
     affiliate_id: customerAffiliate.affiliate_id,
@@ -378,7 +380,8 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
       .single();
 
     if (!existingMgrRefund) {
-      const mgrRefundAmount = Math.round(refundedAmount * mgrTx.commission_percent / 100);
+      const mgrNetRefund = Math.round(refundedAmount * 0.93);
+      const mgrRefundAmount = Math.round(mgrNetRefund * mgrTx.commission_percent / 100);
       await supabase.from("transactions").insert({
         affiliate_id: mgrTx.affiliate_id,
         subscription_id: null,
@@ -446,7 +449,8 @@ async function handleDisputeCreated(dispute: Stripe.Dispute) {
   if (!originalTx) return;
 
   const disputeKey = `${originalTx.stripe_invoice_id}_dispute`;
-  const commissionDeduction = Math.round(disputeAmount * originalTx.commission_percent / 100);
+  const netDispute = Math.round(disputeAmount * 0.93);
+  const commissionDeduction = Math.round(netDispute * originalTx.commission_percent / 100);
 
   await supabase.from("transactions").insert({
     affiliate_id: customerAffiliate.affiliate_id,

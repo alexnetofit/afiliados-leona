@@ -58,7 +58,7 @@ BEGIN
   WHERE id = p_affiliate_id;
   
   v_commission_percent := get_commission_percent(v_commission_tier);
-  v_commission_amount := ROUND(p_amount_gross_cents * v_commission_percent / 100.0);
+  v_commission_amount := ROUND(p_amount_gross_cents * 0.93 * v_commission_percent / 100.0);
   v_available_at := p_paid_at + INTERVAL '15 days';
   
   -- Criar transaction
@@ -136,7 +136,7 @@ BEGIN
     WHERE id = p_affiliate_id;
   END IF;
   
-  v_commission_amount := -1 * ROUND(p_amount_refunded_cents * v_original_percent / 100.0);
+  v_commission_amount := -1 * ROUND(p_amount_refunded_cents * 0.93 * v_original_percent / 100.0);
   
   -- Criar transaction negativa
   INSERT INTO transactions (

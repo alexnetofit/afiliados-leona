@@ -401,7 +401,8 @@ export async function POST(request: NextRequest) {
             if (!affiliate) return;
 
             const commissionPercent = getCommissionPercent(affiliate.commission_tier);
-            const commissionAmount = Math.round(inv.amount_paid * commissionPercent / 100);
+            const netAmount = Math.round(inv.amount_paid * 0.93);
+            const commissionAmount = Math.round(netAmount * commissionPercent / 100);
 
             const paidAt = inv.status_transitions?.paid_at 
               ? new Date(inv.status_transitions.paid_at * 1000) 
@@ -445,7 +446,8 @@ export async function POST(request: NextRequest) {
                 .single();
 
               if (!existingMgrTx) {
-                const mgrCommission = Math.round(inv.amount_paid * managerRel.commission_percent / 100);
+                const mgrNetAmount = Math.round(inv.amount_paid * 0.93);
+                const mgrCommission = Math.round(mgrNetAmount * managerRel.commission_percent / 100);
                 const customerName = customerObj?.name || customerId;
                 await supabaseAdmin.from("transactions").insert({
                   affiliate_id: managerRel.manager_id,
@@ -534,7 +536,8 @@ export async function POST(request: NextRequest) {
 
           if (existingRefund) continue;
 
-          const refundAmount = -Math.round(refund.amount * originalTx.commission_percent / 100);
+          const netRefund = Math.round(refund.amount * 0.93);
+          const refundAmount = -Math.round(netRefund * originalTx.commission_percent / 100);
 
           await supabaseAdmin.from("transactions").insert({
             affiliate_id: customerAffiliate.affiliate_id,

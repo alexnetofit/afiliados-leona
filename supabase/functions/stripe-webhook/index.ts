@@ -150,7 +150,8 @@ serve(async (req) => {
         if (!affiliate) break;
 
         const commissionPercent = getCommissionPercent(affiliate.commission_tier);
-        const commissionAmount = Math.round(invoice.amount_paid * commissionPercent / 100);
+        const netAmount = Math.round(invoice.amount_paid * 0.93);
+        const commissionAmount = Math.round(netAmount * commissionPercent / 100);
 
         const paidAt = invoice.status_transitions?.paid_at
           ? new Date(invoice.status_transitions.paid_at * 1000)
