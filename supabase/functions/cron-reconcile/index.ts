@@ -145,7 +145,8 @@ serve(async (req) => {
         if (!affiliate) continue;
 
         const commissionPercent = getCommissionPercent(affiliate.commission_tier);
-        const commissionAmount = Math.round(invoice.amount_paid * commissionPercent / 100);
+        const netAmount = Math.round(invoice.amount_paid * 0.93);
+        const commissionAmount = Math.round(netAmount * commissionPercent / 100);
 
         const paidAt = invoice.status_transitions?.paid_at
           ? new Date(invoice.status_transitions.paid_at * 1000)
@@ -239,7 +240,8 @@ serve(async (req) => {
 
         if (existingRefund) continue;
 
-        const refundAmount = -Math.round(refund.amount * originalTx.commission_percent / 100);
+        const netRefund = Math.round(refund.amount * 0.93);
+        const refundAmount = -Math.round(netRefund * originalTx.commission_percent / 100);
 
         await supabase.from("transactions").insert({
           affiliate_id: customerAffiliate.affiliate_id,
@@ -307,7 +309,8 @@ serve(async (req) => {
 
         if (existingDispute) continue;
 
-        const disputeAmount = -Math.round(dispute.amount * originalTx.commission_percent / 100);
+        const netDispute = Math.round(dispute.amount * 0.93);
+        const disputeAmount = -Math.round(netDispute * originalTx.commission_percent / 100);
 
         await supabase.from("transactions").insert({
           affiliate_id: customerAffiliate.affiliate_id,
