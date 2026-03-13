@@ -23,12 +23,7 @@ export default function DashboardPage() {
   const tierName = affiliate?.commission_tier === 3 ? "Ouro" : affiliate?.commission_tier === 2 ? "Prata" : "Bronze";
   const tierPercent = affiliate?.commission_tier === 3 ? 40 : affiliate?.commission_tier === 2 ? 35 : 30;
 
-  // Calcular clientes únicos (vendas = clientes diferentes que pagaram)
-  const uniqueCustomers = new Set(
-    (subscriptions || [])
-      .filter(s => s.status === "active" || s.status === "past_due" || s.status === "canceled")
-      .map(s => s.stripe_customer_id)
-  ).size;
+  const salesCount = affiliate?.paid_subscriptions_count || 0;
 
   const pendingValue = (summary?.pending_cents || 0) / 100;
   const availableValue = (summary?.available_cents || 0) / 100;
@@ -131,7 +126,7 @@ export default function DashboardPage() {
                     </Badge>
                     <span className="text-sm font-semibold text-zinc-900">{tierPercent}%</span>
                   </div>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">{uniqueCustomers} {uniqueCustomers === 1 ? "venda" : "vendas"}</p>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">{salesCount} {salesCount === 1 ? "venda" : "vendas"}</p>
                 </div>
               </div>
             </Card>
