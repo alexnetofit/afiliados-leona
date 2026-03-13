@@ -20,6 +20,25 @@ WHERE NOT EXISTS (
     AND t.available_at < (mp.month + INTERVAL '1 month')
 );
 
+-- Recalcular totais dos monthly_payouts pendentes com base nas transactions atualizadas
+UPDATE monthly_payouts mp
+SET
+  total_commission_cents = sub.total_commission,
+  total_negative_cents = sub.total_negative,
+  total_payable_cents = GREATEST(sub.total_commission - sub.total_negative, 0)
+FROM (
+  SELECT
+    t.affiliate_id,
+    date_trunc('month', t.available_at)::DATE AS month_start,
+    COALESCE(SUM(t.commission_amount_cents) FILTER (WHERE t.type = 'commission'), 0) AS total_commission,
+    COALESCE(SUM(ABS(t.commission_amount_cents)) FILTER (WHERE t.type IN ('refund', 'dispute')), 0) AS total_negative
+  FROM transactions t
+  GROUP BY t.affiliate_id, date_trunc('month', t.available_at)::DATE
+) sub
+WHERE mp.affiliate_id = sub.affiliate_id
+  AND mp.month = sub.month_start
+  AND mp.status != 'paid';
+
 -- Atualizar funções SQL para usar valor líquido
 
 CREATE OR REPLACE FUNCTION create_commission_transaction(
