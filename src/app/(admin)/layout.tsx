@@ -17,6 +17,7 @@ import {
   Shield,
   Mail,
   BarChart3,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { name: "Relatórios", href: "/admin/relatorios", icon: FileText },
   { name: "Pagamentos", href: "/admin/pagamentos", icon: Wallet },
   { name: "Financeiro", href: "/admin/financeiro", icon: BarChart3 },
+  { name: "Top Afiliados", href: "/admin/top-afiliados", icon: Star },
   { name: "Emails", href: "/admin/emails", icon: Mail },
   { name: "Configurações", href: "/admin/configuracoes", icon: Settings },
 ];
