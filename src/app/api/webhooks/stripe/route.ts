@@ -270,12 +270,24 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
     ? await getSubscriptionByStripeId(subscriptionId as string)
     : null;
 
+  // Extract charge ID: try inv.charge, then resolve via payment_intent
+  let chargeId: string | null = inv.charge || null;
+  if (!chargeId && inv.payment_intent) {
+    try {
+      const piId = typeof inv.payment_intent === "string" ? inv.payment_intent : inv.payment_intent.id;
+      const pi = await stripe.paymentIntents.retrieve(piId);
+      chargeId = (pi.latest_charge as string) || null;
+    } catch {
+      // silently continue without charge ID
+    }
+  }
+
   // Create transaction
   await supabase.from("transactions").insert({
     affiliate_id: affiliateId,
     subscription_id: subscriptionRecord?.id || null,
     stripe_invoice_id: invoice.id,
-    stripe_charge_id: inv.charge as string,
+    stripe_charge_id: chargeId,
     type: "commission",
     amount_gross_cents: inv.amount_paid,
     commission_percent: commissionPercent,
@@ -315,17 +327,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
 
   if (!customerAffiliate) return;
 
-  // Find original commission by stripe_charge_id (unique per charge)
-  const { data: originalTx } = await supabase
-    .from("transactions")
-    .select("id, stripe_invoice_id, commission_percent, subscription_id, available_at")
-    .eq("stripe_charge_id", charge.id)
-    .eq("type", "commission")
-    .single();
-
-  if (!originalTx) return;
-
-  // Check if refund already exists for this charge
+  // Check if refund already exists for this charge (idempotency)
   const { data: existingRefund } = await supabase
     .from("transactions")
     .select("id")
@@ -334,6 +336,54 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     .single();
 
   if (existingRefund) return;
+
+  // Find original commission: try by stripe_charge_id first
+  type OriginalTx = { id: string; stripe_invoice_id: string; commission_percent: number; subscription_id: string | null; available_at: string };
+  let originalTx: OriginalTx | null = null;
+  
+  const { data: byCharge } = await supabase
+    .from("transactions")
+    .select("id, stripe_invoice_id, commission_percent, subscription_id, available_at")
+    .eq("stripe_charge_id", charge.id)
+    .eq("type", "commission")
+    .single();
+  
+  if (byCharge) {
+    originalTx = byCharge;
+  } else {
+    // Fallback for v2026 API: match via customer → subscription → unrefunded commission
+    const { data: sub } = await supabase
+      .from("subscriptions")
+      .select("id")
+      .eq("affiliate_id", customerAffiliate.affiliate_id)
+      .eq("stripe_customer_id", customerId)
+      .single();
+
+    if (sub) {
+      const { data: commissions } = await supabase
+        .from("transactions")
+        .select("id, stripe_invoice_id, commission_percent, subscription_id, available_at")
+        .eq("subscription_id", sub.id)
+        .eq("type", "commission")
+        .order("paid_at", { ascending: false });
+
+      if (commissions) {
+        for (const comm of commissions) {
+          const { data: refundExists } = await supabase
+            .from("transactions")
+            .select("id")
+            .eq("stripe_invoice_id", `${comm.stripe_invoice_id}_refund`)
+            .single();
+          if (!refundExists) {
+            originalTx = comm;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (!originalTx) return;
 
   const refundedAmount = charge.amount_refunded;
   const netRefund = Math.round(refundedAmount * 0.93);
@@ -411,17 +461,7 @@ async function handleDisputeCreated(dispute: Stripe.Dispute) {
 
   if (!customerAffiliate) return;
 
-  // Find original commission by stripe_charge_id
-  const { data: originalTx } = await supabase
-    .from("transactions")
-    .select("id, stripe_invoice_id, commission_percent, subscription_id, available_at")
-    .eq("stripe_charge_id", chargeId)
-    .eq("type", "commission")
-    .single();
-
-  if (!originalTx) return;
-
-  // Check if dispute already exists for this charge
+  // Check if dispute already exists for this charge (idempotency)
   const { data: existingDispute } = await supabase
     .from("transactions")
     .select("id")
@@ -430,6 +470,53 @@ async function handleDisputeCreated(dispute: Stripe.Dispute) {
     .single();
 
   if (existingDispute) return;
+
+  // Find original commission: try by stripe_charge_id first
+  type DisputeOriginalTx = { id: string; stripe_invoice_id: string; commission_percent: number; subscription_id: string | null; available_at: string };
+  let originalTx: DisputeOriginalTx | null = null;
+  
+  const { data: byCharge } = await supabase
+    .from("transactions")
+    .select("id, stripe_invoice_id, commission_percent, subscription_id, available_at")
+    .eq("stripe_charge_id", chargeId)
+    .eq("type", "commission")
+    .single();
+  
+  if (byCharge) {
+    originalTx = byCharge;
+  } else {
+    const { data: sub } = await supabase
+      .from("subscriptions")
+      .select("id")
+      .eq("affiliate_id", customerAffiliate.affiliate_id)
+      .eq("stripe_customer_id", customerId)
+      .single();
+
+    if (sub) {
+      const { data: commissions } = await supabase
+        .from("transactions")
+        .select("id, stripe_invoice_id, commission_percent, subscription_id, available_at")
+        .eq("subscription_id", sub.id)
+        .eq("type", "commission")
+        .order("paid_at", { ascending: false });
+
+      if (commissions) {
+        for (const comm of commissions) {
+          const { data: disputeExists } = await supabase
+            .from("transactions")
+            .select("id")
+            .eq("stripe_invoice_id", `${comm.stripe_invoice_id}_dispute`)
+            .single();
+          if (!disputeExists) {
+            originalTx = comm;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (!originalTx) return;
 
   const disputeAmount = dispute.amount;
   const netDispute = Math.round(disputeAmount * 0.93);

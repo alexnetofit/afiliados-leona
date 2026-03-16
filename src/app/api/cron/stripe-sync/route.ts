@@ -344,11 +344,21 @@ export async function GET(request: NextRequest) {
           .eq("stripe_subscription_id", subscriptionId)
           .single() : { data: null };
 
+        // Extract charge ID: try inv.charge, then resolve via payment_intent
+        let chargeIdForInvoice: string | null = inv.charge || null;
+        if (!chargeIdForInvoice && inv.payment_intent) {
+          try {
+            const piId = typeof inv.payment_intent === "string" ? inv.payment_intent : inv.payment_intent.id;
+            const pi = await stripe.paymentIntents.retrieve(piId);
+            chargeIdForInvoice = (pi.latest_charge as string) || null;
+          } catch { /* continue without charge ID */ }
+        }
+
         await supabaseAdmin.from("transactions").insert({
           affiliate_id: affiliateId,
           subscription_id: subRecord?.id || null,
           stripe_invoice_id: invoice.id,
-          stripe_charge_id: inv.charge as string,
+          stripe_charge_id: chargeIdForInvoice,
           type: "commission",
           amount_gross_cents: inv.amount_paid,
           commission_percent: commissionPercent,
@@ -381,7 +391,7 @@ export async function GET(request: NextRequest) {
               affiliate_id: managerRel.manager_id,
               subscription_id: null,
               stripe_invoice_id: mgrInvoiceId,
-              stripe_charge_id: inv.charge as string,
+              stripe_charge_id: chargeIdForInvoice,
               type: "commission",
               amount_gross_cents: inv.amount_paid,
               commission_percent: managerRel.commission_percent,
@@ -430,13 +440,50 @@ export async function GET(request: NextRequest) {
 
       if (!customerAffiliate) continue;
 
-      // Find original commission by stripe_charge_id (unique per charge)
-      const { data: originalTx } = await supabaseAdmin
+      // Find original commission: try by stripe_charge_id first
+      let originalTx = null as { id: string; stripe_invoice_id: string; commission_percent: number; subscription_id: string | null; available_at: string } | null;
+      
+      const { data: byCharge } = await supabaseAdmin
         .from("transactions")
         .select("id, stripe_invoice_id, commission_percent, subscription_id, available_at")
         .eq("stripe_charge_id", chargeId)
         .eq("type", "commission")
         .single();
+      
+      if (byCharge) {
+        originalTx = byCharge;
+      } else {
+        // Fallback for v2026 API: match via customer → subscription → unrefunded commission
+        const { data: sub } = await supabaseAdmin
+          .from("subscriptions")
+          .select("id")
+          .eq("affiliate_id", customerAffiliate.affiliate_id)
+          .eq("stripe_customer_id", customerId)
+          .single();
+
+        if (sub) {
+          const { data: commissions } = await supabaseAdmin
+            .from("transactions")
+            .select("id, stripe_invoice_id, commission_percent, subscription_id, available_at")
+            .eq("subscription_id", sub.id)
+            .eq("type", "commission")
+            .order("paid_at", { ascending: false });
+
+          if (commissions) {
+            for (const comm of commissions) {
+              const { data: refundExists } = await supabaseAdmin
+                .from("transactions")
+                .select("id")
+                .eq("stripe_invoice_id", `${comm.stripe_invoice_id}_refund`)
+                .single();
+              if (!refundExists) {
+                originalTx = comm;
+                break;
+              }
+            }
+          }
+        }
+      }
 
       if (!originalTx) continue;
 
