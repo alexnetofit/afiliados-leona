@@ -44,10 +44,8 @@ interface TopAffiliateData {
     refundCents: number;
     totalCents: number;
     releasedCents: number;
-    releasedUsdCents: number;
     pendingCents: number;
   };
-  usdRate: number;
   wise: {
     totalSpentCents: number;
     transactions: WiseTx[];
@@ -61,7 +59,18 @@ export default function TopAfiliadosPage() {
   const [loading, setLoading] = useState(true);
   const [wiseLoading, setWiseLoading] = useState(false);
   const [error, setError] = useState("");
+  const [usdRate, setUsdRate] = useState(0);
   const didInit = useRef(false);
+
+  const fetchUsdRate = useCallback(async () => {
+    try {
+      const res = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL");
+      if (res.ok) {
+        const json = await res.json();
+        setUsdRate(parseFloat(json.USDBRL?.ask || "0"));
+      }
+    } catch { /* silently fail */ }
+  }, []);
 
   const fetchData = useCallback(async (withWise = false) => {
     try {
@@ -79,8 +88,8 @@ export default function TopAfiliadosPage() {
     if (didInit.current) return;
     didInit.current = true;
     setLoading(true);
-    fetchData(true).finally(() => setLoading(false));
-  }, [fetchData]);
+    Promise.all([fetchData(true), fetchUsdRate()]).finally(() => setLoading(false));
+  }, [fetchData, fetchUsdRate]);
 
   const handleRefreshWise = async () => {
     setWiseLoading(true);
@@ -99,10 +108,11 @@ export default function TopAfiliadosPage() {
     );
   }
 
-  const { affiliate, commission, wise, wiseConfigured, usdRate, transactions } = data;
+  const { affiliate, commission, wise, wiseConfigured, transactions } = data;
   const tierName = affiliate.tier === 3 ? "Ouro" : affiliate.tier === 2 ? "Prata" : "Bronze";
   const usedCents = wise?.totalSpentCents || 0;
-  const availableCents = Math.max(commission.releasedUsdCents - usedCents, 0);
+  const releasedUsdCents = usdRate > 0 ? Math.round(commission.releasedCents / usdRate) : 0;
+  const availableCents = Math.max(releasedUsdCents - usedCents, 0);
 
   const wiseTxs = wise?.transactions || [];
 
@@ -179,9 +189,11 @@ export default function TopAfiliadosPage() {
             <p className="text-2xl font-bold text-green-600">
               {formatCurrency(commission.releasedCents / 100)}
             </p>
-            <p className="text-xs text-zinc-400 mt-1">
-              ≈ {formatCurrency(commission.releasedUsdCents / 100, "USD")} (câmbio {usdRate.toFixed(2)})
-            </p>
+            {usdRate > 0 && (
+              <p className="text-xs text-zinc-400 mt-1">
+                ≈ {formatCurrency(releasedUsdCents / 100, "USD")} (câmbio {usdRate.toFixed(2)})
+              </p>
+            )}
             {commission.pendingCents > 0 && (
               <p className="text-xs text-zinc-400 mt-0.5">
                 + {formatCurrency(commission.pendingCents / 100)} pendente

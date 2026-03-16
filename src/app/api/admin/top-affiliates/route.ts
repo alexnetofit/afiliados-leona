@@ -184,20 +184,6 @@ export async function GET(request: NextRequest) {
 
   const wiseConfigured = !!(WISE_API_TOKEN && WISE_PROFILE_ID && WISE_BALANCE_ID);
 
-  let usdRate = 5.0;
-  try {
-    const rateRes = await fetch(
-      "https://economia.awesomeapi.com.br/json/last/USD-BRL",
-      { cache: "no-store" }
-    );
-    if (rateRes.ok) {
-      const rateData = await rateRes.json();
-      usdRate = parseFloat(rateData.USDBRL?.ask || "5.0");
-    }
-  } catch { /* fallback */ }
-
-  const releasedUsdCents = Math.round(releasedCents / usdRate);
-
   return NextResponse.json({
     affiliate: {
       name: profileData?.full_name || TOP_AFFILIATE_EMAIL,
@@ -211,10 +197,8 @@ export async function GET(request: NextRequest) {
       refundCents: totalRefundCents,
       totalCents: netCents,
       releasedCents,
-      releasedUsdCents,
       pendingCents,
     },
-    usdRate,
     wise: wiseData
       ? {
           totalSpentCents: Math.round(wiseData.totalSpent * 100),

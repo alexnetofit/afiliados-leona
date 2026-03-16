@@ -55,21 +55,27 @@ export async function GET() {
       if (u.email) emailMap.set(u.id, u.email);
     }
 
-    // Fetch transactions for all affiliates in one query
+    // Fetch transactions for all affiliates (paginated to avoid truncation)
     const affiliateIds = affiliatesData.map((a) => a.id);
-    const { data: allTransactions } = await supabaseAdmin
-      .from("transactions")
-      .select("affiliate_id, commission_amount_cents")
-      .in("affiliate_id", affiliateIds)
-      .eq("type", "commission")
-      .limit(10000);
-
     const commissionMap = new Map<string, number>();
-    for (const tx of allTransactions || []) {
-      commissionMap.set(
-        tx.affiliate_id,
-        (commissionMap.get(tx.affiliate_id) || 0) + tx.commission_amount_cents
-      );
+    const PAGE_SIZE = 1000;
+    let from = 0;
+    while (true) {
+      const { data: page } = await supabaseAdmin
+        .from("transactions")
+        .select("affiliate_id, commission_amount_cents")
+        .in("affiliate_id", affiliateIds)
+        .eq("type", "commission")
+        .range(from, from + PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      for (const tx of page) {
+        commissionMap.set(
+          tx.affiliate_id,
+          (commissionMap.get(tx.affiliate_id) || 0) + tx.commission_amount_cents
+        );
+      }
+      if (page.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
 
     // Fetch active subscription counts in one query
