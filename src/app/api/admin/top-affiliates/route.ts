@@ -12,6 +12,7 @@ const WISE_PROFILE_ID = process.env.WISE_PROFILE_ID;
 const WISE_BALANCE_ID = process.env.WISE_BALANCE_ID;
 
 const TOP_AFFILIATE_EMAIL = "tbnegociodigital@gmail.com";
+const WISE_CARD_LAST_FOUR = "1421";
 
 interface WiseTransaction {
   date: string;
@@ -22,7 +23,7 @@ interface WiseTransaction {
   runningBalance: number;
 }
 
-async function fetchWiseStatement(
+async function fetchWiseCardSpending(
   startDate: string,
   endDate: string
 ): Promise<{ transactions: WiseTransaction[]; totalSpent: number } | null> {
@@ -37,7 +38,7 @@ async function fetchWiseStatement(
     url.searchParams.set("intervalStart", `${startDate}T00:00:00.000Z`);
     url.searchParams.set("intervalEnd", `${endDate}T23:59:59.999Z`);
     url.searchParams.set("type", "COMPACT");
-    url.searchParams.set("currency", "BRL");
+    url.searchParams.set("currency", "USD");
 
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${WISE_API_TOKEN}` },
@@ -54,9 +55,12 @@ async function fetchWiseStatement(
     let totalSpent = 0;
 
     for (const t of data.transactions || []) {
+      if (t.type !== "DEBIT") continue;
+      if (t.details?.type !== "CARD") continue;
+      if (t.details?.cardLastFourDigits !== WISE_CARD_LAST_FOUR) continue;
+
       const amt = t.amount?.value || 0;
-      const cur = t.amount?.currency || "BRL";
-      const isDebit = t.type === "DEBIT";
+      const cur = t.amount?.currency || "USD";
 
       txs.push({
         date: t.date || "",
@@ -67,11 +71,7 @@ async function fetchWiseStatement(
         runningBalance: t.runningBalance?.value || 0,
       });
 
-      if (isDebit && amt < 0) {
-        totalSpent += Math.abs(amt);
-      } else if (isDebit && amt > 0) {
-        totalSpent += amt;
-      }
+      totalSpent += Math.abs(amt);
     }
 
     return { transactions: txs, totalSpent };
@@ -143,26 +143,32 @@ export async function GET(request: NextRequest) {
 
   let totalCommissionCents = 0;
   let totalRefundCents = 0;
-  let releasedCents = 0;
-  let pendingCents = 0;
+  let releasedCommissions = 0;
+  let releasedRefunds = 0;
+  let pendingCommissions = 0;
+  let pendingRefunds = 0;
 
   for (const t of txs) {
     if (t.type === "commission") {
       totalCommissionCents += t.commission_amount_cents;
       if (t.available_at && new Date(t.available_at) <= now) {
-        releasedCents += t.commission_amount_cents;
+        releasedCommissions += t.commission_amount_cents;
       } else {
-        pendingCents += t.commission_amount_cents;
+        pendingCommissions += t.commission_amount_cents;
       }
     } else if (t.type === "refund" || t.type === "dispute") {
       totalRefundCents += Math.abs(t.commission_amount_cents);
       if (t.available_at && new Date(t.available_at) <= now) {
-        releasedCents += t.commission_amount_cents;
+        releasedRefunds += Math.abs(t.commission_amount_cents);
+      } else {
+        pendingRefunds += Math.abs(t.commission_amount_cents);
       }
     }
   }
 
-  const netCommissionCents = totalCommissionCents - totalRefundCents;
+  const netCents = totalCommissionCents - totalRefundCents;
+  const releasedCents = releasedCommissions - releasedRefunds;
+  const pendingCents = pendingCommissions - pendingRefunds;
 
   const wiseParam = request.nextUrl.searchParams.get("wise");
   let wiseData: {
@@ -173,10 +179,24 @@ export async function GET(request: NextRequest) {
   if (wiseParam === "true") {
     const startDate = "2026-01-01";
     const endDate = now.toISOString().split("T")[0];
-    wiseData = await fetchWiseStatement(startDate, endDate);
+    wiseData = await fetchWiseCardSpending(startDate, endDate);
   }
 
   const wiseConfigured = !!(WISE_API_TOKEN && WISE_PROFILE_ID && WISE_BALANCE_ID);
+
+  let usdRate = 5.0;
+  try {
+    const rateRes = await fetch(
+      "https://economia.awesomeapi.com.br/json/last/USD-BRL",
+      { cache: "no-store" }
+    );
+    if (rateRes.ok) {
+      const rateData = await rateRes.json();
+      usdRate = parseFloat(rateData.USDBRL?.ask || "5.0");
+    }
+  } catch { /* fallback */ }
+
+  const releasedUsdCents = Math.round(releasedCents / usdRate);
 
   return NextResponse.json({
     affiliate: {
@@ -187,11 +207,14 @@ export async function GET(request: NextRequest) {
       salesCount: affiliate.paid_subscriptions_count,
     },
     commission: {
-      totalCents: netCommissionCents,
-      releasedCents,
-      pendingCents,
+      grossCents: totalCommissionCents,
       refundCents: totalRefundCents,
+      totalCents: netCents,
+      releasedCents,
+      releasedUsdCents,
+      pendingCents,
     },
+    usdRate,
     wise: wiseData
       ? {
           totalSpentCents: Math.round(wiseData.totalSpent * 100),

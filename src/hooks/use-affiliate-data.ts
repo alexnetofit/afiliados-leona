@@ -65,7 +65,7 @@ export function useAffiliateData(affiliateId?: string): UseAffiliateDataReturn {
       const txs = (transactionsRes.data || []) as Transaction[];
       
       const pendingCents = txs
-        .filter(t => t.type === 'commission' && t.available_at && new Date(t.available_at) > now)
+        .filter(t => t.available_at && new Date(t.available_at) > now)
         .reduce((sum, t) => sum + t.commission_amount_cents, 0);
 
       const availableCents = txs

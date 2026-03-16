@@ -40,11 +40,14 @@ interface TopAffiliateData {
     salesCount: number;
   };
   commission: {
+    grossCents: number;
+    refundCents: number;
     totalCents: number;
     releasedCents: number;
+    releasedUsdCents: number;
     pendingCents: number;
-    refundCents: number;
   };
+  usdRate: number;
   wise: {
     totalSpentCents: number;
     transactions: WiseTx[];
@@ -96,12 +99,12 @@ export default function TopAfiliadosPage() {
     );
   }
 
-  const { affiliate, commission, wise, wiseConfigured, transactions } = data;
+  const { affiliate, commission, wise, wiseConfigured, usdRate, transactions } = data;
   const tierName = affiliate.tier === 3 ? "Ouro" : affiliate.tier === 2 ? "Prata" : "Bronze";
   const usedCents = wise?.totalSpentCents || 0;
-  const availableCents = Math.max(commission.releasedCents - usedCents, 0);
+  const availableCents = Math.max(commission.releasedUsdCents - usedCents, 0);
 
-  const wiseDebits = (wise?.transactions || []).filter((t) => t.type === "DEBIT");
+  const wiseTxs = wise?.transactions || [];
 
   return (
     <div className="flex-1 p-6 lg:p-8">
@@ -161,7 +164,7 @@ export default function TopAfiliadosPage() {
             </p>
             {commission.refundCents > 0 && (
               <p className="text-xs text-zinc-400 mt-1">
-                (já descontados {formatCurrency(commission.refundCents / 100)} em estornos)
+                Bruto {formatCurrency(commission.grossCents / 100)} − {formatCurrency(commission.refundCents / 100)} estornos
               </p>
             )}
           </Card>
@@ -176,8 +179,11 @@ export default function TopAfiliadosPage() {
             <p className="text-2xl font-bold text-green-600">
               {formatCurrency(commission.releasedCents / 100)}
             </p>
+            <p className="text-xs text-zinc-400 mt-1">
+              ≈ {formatCurrency(commission.releasedUsdCents / 100, "USD")} (câmbio {usdRate.toFixed(2)})
+            </p>
             {commission.pendingCents > 0 && (
-              <p className="text-xs text-zinc-400 mt-1">
+              <p className="text-xs text-zinc-400 mt-0.5">
                 + {formatCurrency(commission.pendingCents / 100)} pendente
               </p>
             )}
@@ -203,7 +209,7 @@ export default function TopAfiliadosPage() {
               </div>
             </div>
             <p className="text-2xl font-bold text-red-600">
-              {wise ? formatCurrency(usedCents / 100) : "—"}
+              {wise ? formatCurrency(usedCents / 100, "USD") : "—"}
             </p>
             {!wiseConfigured && (
               <p className="text-xs text-amber-500 mt-1">Wise não configurada</p>
@@ -218,14 +224,14 @@ export default function TopAfiliadosPage() {
               <p className="text-sm font-medium text-zinc-500">Saldo Disponível</p>
             </div>
             <p className={cn("text-2xl font-bold", availableCents > 0 ? "text-blue-600" : "text-zinc-400")}>
-              {wise ? formatCurrency(availableCents / 100) : "—"}
+              {wise ? formatCurrency(availableCents / 100, "USD") : "—"}
             </p>
-            <p className="text-xs text-zinc-400 mt-1">Liberado − Usado</p>
+            <p className="text-xs text-zinc-400 mt-1">Liberado − Usado (em USD)</p>
           </Card>
         </div>
 
         {/* Wise Transactions */}
-        {wise && wiseDebits.length > 0 && (
+        {wise && wiseTxs.length > 0 && (
           <Card noPadding>
             <div className="p-5 border-b border-zinc-100">
               <h3 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
@@ -233,7 +239,7 @@ export default function TopAfiliadosPage() {
                 Gastos no Cartão Wise
               </h3>
               <p className="text-sm text-zinc-500 mt-0.5">
-                {wiseDebits.length} transações
+                Cartão ****1421 · {wiseTxs.length} transações
               </p>
             </div>
             <Table>
@@ -246,7 +252,7 @@ export default function TopAfiliadosPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {wiseDebits.map((tx, i) => (
+                {wiseTxs.map((tx, i) => (
                   <TableRow key={i} className="hover:bg-zinc-50">
                     <TableCell className="text-sm text-zinc-600">
                       {tx.date
@@ -262,10 +268,10 @@ export default function TopAfiliadosPage() {
                       {tx.description}
                     </TableCell>
                     <TableCell className="text-right text-sm font-semibold text-red-600">
-                      {formatCurrency(Math.abs(tx.amount))}
+                      {formatCurrency(Math.abs(tx.amount), "USD")}
                     </TableCell>
                     <TableCell className="text-right text-sm text-zinc-500">
-                      {formatCurrency(tx.runningBalance)}
+                      {formatCurrency(tx.runningBalance, "USD")}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -61,7 +61,8 @@ export async function GET() {
       .from("transactions")
       .select("affiliate_id, commission_amount_cents")
       .in("affiliate_id", affiliateIds)
-      .eq("type", "commission");
+      .eq("type", "commission")
+      .limit(10000);
 
     const commissionMap = new Map<string, number>();
     for (const tx of allTransactions || []) {
