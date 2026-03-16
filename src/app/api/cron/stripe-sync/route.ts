@@ -430,33 +430,25 @@ export async function GET(request: NextRequest) {
 
       if (!customerAffiliate) continue;
 
-      // Find original commission: match by affiliate + gross amount + no existing refund
-      const { data: candidates } = await supabaseAdmin
+      // Find original commission by stripe_charge_id (unique per charge)
+      const { data: originalTx } = await supabaseAdmin
         .from("transactions")
         .select("id, stripe_invoice_id, commission_percent, subscription_id, available_at")
-        .eq("affiliate_id", customerAffiliate.affiliate_id)
+        .eq("stripe_charge_id", chargeId)
         .eq("type", "commission")
-        .eq("amount_gross_cents", charge.amount)
-        .order("paid_at", { ascending: false });
-
-      if (!candidates || candidates.length === 0) continue;
-
-      // Pick the first candidate that doesn't already have a refund
-      let originalTx = null;
-      for (const candidate of candidates) {
-        const refundKey = `${candidate.stripe_invoice_id}_refund`;
-        const { data: existingRefund } = await supabaseAdmin
-          .from("transactions")
-          .select("id")
-          .eq("stripe_invoice_id", refundKey)
-          .single();
-        if (!existingRefund) {
-          originalTx = candidate;
-          break;
-        }
-      }
+        .single();
 
       if (!originalTx) continue;
+
+      // Check if refund already exists for this charge
+      const { data: existingRefund } = await supabaseAdmin
+        .from("transactions")
+        .select("id")
+        .eq("stripe_charge_id", chargeId)
+        .eq("type", "refund")
+        .single();
+
+      if (existingRefund) continue;
 
       const refundKey = `${originalTx.stripe_invoice_id}_refund`;
       const netRefund = Math.round(refund.amount * 0.93);
