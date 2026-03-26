@@ -112,7 +112,7 @@ export default function TopAfiliadosPage() {
   const tierName = affiliate.tier === 3 ? "Ouro" : affiliate.tier === 2 ? "Prata" : "Bronze";
   const usedCents = wise?.totalSpentCents || 0;
   const releasedUsdCents = usdRate > 0 ? Math.round(commission.releasedCents / usdRate) : 0;
-  const availableCents = Math.max(releasedUsdCents - usedCents, 0);
+  const availableCents = releasedUsdCents - usedCents;
 
   const wiseTxs = wise?.transactions || [];
 
@@ -235,8 +235,10 @@ export default function TopAfiliadosPage() {
               </div>
               <p className="text-sm font-medium text-zinc-500">Saldo Disponível</p>
             </div>
-            <p className={cn("text-2xl font-bold", availableCents > 0 ? "text-blue-600" : "text-zinc-400")}>
-              {wise ? formatCurrency(availableCents / 100, "USD") : "—"}
+            <p className={cn("text-2xl font-bold", availableCents > 0 ? "text-blue-600" : availableCents < 0 ? "text-red-600" : "text-zinc-400")}>
+              {wise
+                ? `${availableCents < 0 ? "−" : ""}${formatCurrency(Math.abs(availableCents) / 100, "USD")}`
+                : "—"}
             </p>
             <p className="text-xs text-zinc-400 mt-1">Liberado − Usado (em USD)</p>
           </Card>
