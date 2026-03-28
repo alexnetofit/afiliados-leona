@@ -20,14 +20,17 @@ export default function DashboardPage() {
   }
 
   const chartData = generateChartData(transactions || []);
-  const tierName = affiliate?.commission_tier === 3 ? "Ouro" : affiliate?.commission_tier === 2 ? "Prata" : "Bronze";
-  const tierPercent = affiliate?.commission_tier === 3 ? 40 : affiliate?.commission_tier === 2 ? 35 : 30;
 
   const salesCount = new Set(
     (transactions || [])
       .filter(t => t.type === 'commission' && t.subscription_id)
       .map(t => t.subscription_id)
   ).size;
+
+  const calculatedTier = salesCount >= 50 ? 3 : salesCount >= 20 ? 2 : 1;
+  const effectiveTier = Math.max(calculatedTier, affiliate?.commission_tier || 1) as 1 | 2 | 3;
+  const tierName = effectiveTier === 3 ? "Ouro" : effectiveTier === 2 ? "Prata" : "Bronze";
+  const tierPercent = effectiveTier === 3 ? 40 : effectiveTier === 2 ? 35 : 30;
 
   const pendingValue = (summary?.pending_cents || 0) / 100;
   const availableValue = (summary?.available_cents || 0) / 100;
@@ -144,7 +147,7 @@ export default function DashboardPage() {
               { name: "Prata", min: 20, percent: 35 },
               { name: "Ouro", min: 50, percent: 40 },
             ];
-            const currentIdx = affiliate?.commission_tier ? affiliate.commission_tier - 1 : 0;
+            const currentIdx = effectiveTier - 1;
             const nextTier = currentIdx < 2 ? tiers[currentIdx + 1] : null;
             const prevMin = tiers[currentIdx].min;
             const nextMin = nextTier ? nextTier.min : tiers[currentIdx].min;

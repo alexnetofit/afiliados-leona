@@ -304,13 +304,16 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
     .eq("subscription_id", subscriptionRecord?.id)
     .eq("type", "commission");
 
-  // If first payment, increment paid_subscriptions_count
   if (count === 1) {
+    const newCount = affiliate.paid_subscriptions_count + 1;
+    const newTier = newCount >= 50 ? 3 : newCount >= 20 ? 2 : 1;
+    const update: Record<string, number> = { paid_subscriptions_count: newCount };
+    if (newTier > affiliate.commission_tier) {
+      update.commission_tier = newTier;
+    }
     await supabase
       .from("affiliates")
-      .update({
-        paid_subscriptions_count: affiliate.paid_subscriptions_count + 1,
-      })
+      .update(update)
       .eq("id", affiliateId);
   }
 }

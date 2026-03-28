@@ -378,13 +378,19 @@ export async function GET(request: NextRequest) {
           if (count === 1) {
             const { data: aff } = await supabaseAdmin
               .from("affiliates")
-              .select("paid_subscriptions_count")
+              .select("paid_subscriptions_count, commission_tier")
               .eq("id", affiliateId)
               .single();
             if (aff) {
+              const newCount = aff.paid_subscriptions_count + 1;
+              const newTier = newCount >= 50 ? 3 : newCount >= 20 ? 2 : 1;
+              const update: Record<string, number> = { paid_subscriptions_count: newCount };
+              if (newTier > aff.commission_tier) {
+                update.commission_tier = newTier;
+              }
               await supabaseAdmin
                 .from("affiliates")
-                .update({ paid_subscriptions_count: aff.paid_subscriptions_count + 1 })
+                .update(update)
                 .eq("id", affiliateId);
             }
           }

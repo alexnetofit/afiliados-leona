@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useAppData } from "@/contexts";
+import { Transaction } from "@/types";
 import { Header } from "@/components/layout/header";
 import { Card, Badge, MetricCard, LoadingScreen, Select, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyState, Button, Input } from "@/components/ui/index";
 import { DollarSign, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Receipt, Search, ChevronLeft, ChevronRight } from "lucide-react";
@@ -13,7 +14,6 @@ export default function VendasPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { profile, transactions, subscriptions, managedSubscriptions, summary, isLoading, isInitialized } = useAppData();
 
-  // Create a map of subscription_id -> customer_name for quick lookup
   const subscriptionNames = useMemo(() => {
     const map = new Map<string, string>();
     (subscriptions || []).forEach((sub) => {
@@ -39,6 +39,21 @@ export default function VendasPage() {
     return map;
   }, [transactions]);
 
+  const resolveCustomerName = useCallback((tx: Transaction): string | null => {
+    let name = tx.subscription_id ? subscriptionNames.get(tx.subscription_id) ?? null : null;
+    if (!name && tx.stripe_invoice_id && (tx.type === "refund" || tx.type === "dispute")) {
+      const origKey = tx.stripe_invoice_id.replace(/_refund$/, "");
+      const subId = invoiceToSubscription.get(origKey);
+      if (subId) name = subscriptionNames.get(subId) ?? null;
+    }
+    if (!name) {
+      name = tx.description?.match(/ - (.+)$/)?.[1]
+        || tx.description?.match(/\((.+)\)/)?.[1]
+        || null;
+    }
+    return name;
+  }, [subscriptionNames, invoiceToSubscription]);
+
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,23 +61,25 @@ export default function VendasPage() {
   const filtered = useMemo(() => {
     let result = transactions || [];
     
-    // Filter by type
     if (typeFilter !== "all") {
       result = result.filter((t) => t.type === typeFilter);
     }
     
-    // Filter by search (description, date)
     if (search.trim()) {
       const searchLower = search.toLowerCase();
-      result = result.filter((t) => 
-        t.description?.toLowerCase().includes(searchLower) ||
-        t.paid_at?.toLowerCase().includes(searchLower) ||
-        formatCurrency(Math.abs(t.commission_amount_cents) / 100).includes(search)
-      );
+      result = result.filter((t) => {
+        const customerName = resolveCustomerName(t);
+        return (
+          customerName?.toLowerCase().includes(searchLower) ||
+          t.description?.toLowerCase().includes(searchLower) ||
+          t.paid_at?.toLowerCase().includes(searchLower) ||
+          formatCurrency(Math.abs(t.commission_amount_cents) / 100).includes(search)
+        );
+      });
     }
     
     return result;
-  }, [transactions, typeFilter, search]);
+  }, [transactions, typeFilter, search, resolveCustomerName]);
 
   // Pagination
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
@@ -176,17 +193,7 @@ export default function VendasPage() {
                       const neg = tx.commission_amount_cents < 0;
                       const avail = tx.available_at ? isDateAvailable(tx.available_at) : false;
                       const isManagerTx = tx.description?.startsWith("Comissão de gerência");
-                      let customerName = (tx.subscription_id
-                        ? subscriptionNames.get(tx.subscription_id)
-                        : null)
-                        || tx.description?.match(/ - (.+)$/)?.[1]
-                        || tx.description?.match(/\((.+)\)/)?.[1]
-                        || null;
-                      if (!customerName && tx.stripe_invoice_id && (tx.type === "refund" || tx.type === "dispute")) {
-                        const origKey = tx.stripe_invoice_id.replace(/_refund$/, "");
-                        const subId = invoiceToSubscription.get(origKey);
-                        if (subId) customerName = subscriptionNames.get(subId) || null;
-                      }
+                      const customerName = resolveCustomerName(tx);
                       const isRefundOrDispute = tx.type === "refund" || tx.type === "dispute";
                       
                       return (

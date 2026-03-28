@@ -137,7 +137,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
         <input
           ref={ref}
           className={cn(
-            "w-full h-8 px-2.5",
+            "w-full h-9 px-3",
             Icon && "pl-8",
             RightIcon && "pr-8",
             "bg-white",
