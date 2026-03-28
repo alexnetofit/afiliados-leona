@@ -23,7 +23,11 @@ export default function DashboardPage() {
   const tierName = affiliate?.commission_tier === 3 ? "Ouro" : affiliate?.commission_tier === 2 ? "Prata" : "Bronze";
   const tierPercent = affiliate?.commission_tier === 3 ? 40 : affiliate?.commission_tier === 2 ? 35 : 30;
 
-  const salesCount = affiliate?.paid_subscriptions_count || 0;
+  const salesCount = new Set(
+    (transactions || [])
+      .filter(t => t.type === 'commission' && t.subscription_id)
+      .map(t => t.subscription_id)
+  ).size;
 
   const pendingValue = (summary?.pending_cents || 0) / 100;
   const availableValue = (summary?.available_cents || 0) / 100;
@@ -134,7 +138,7 @@ export default function DashboardPage() {
 
           {/* Tier Progression Bar */}
           {(() => {
-            const sales = affiliate?.paid_subscriptions_count || 0;
+            const sales = salesCount;
             const tiers = [
               { name: "Bronze", min: 0, percent: 30 },
               { name: "Prata", min: 20, percent: 35 },

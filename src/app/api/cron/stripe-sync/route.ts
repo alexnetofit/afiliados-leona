@@ -368,6 +368,28 @@ export async function GET(request: NextRequest) {
           description: "Comissão de venda (cron sync)",
         });
 
+        if (subRecord?.id) {
+          const { count } = await supabaseAdmin
+            .from("transactions")
+            .select("id", { count: "exact", head: true })
+            .eq("subscription_id", subRecord.id)
+            .eq("type", "commission");
+
+          if (count === 1) {
+            const { data: aff } = await supabaseAdmin
+              .from("affiliates")
+              .select("paid_subscriptions_count")
+              .eq("id", affiliateId)
+              .single();
+            if (aff) {
+              await supabaseAdmin
+                .from("affiliates")
+                .update({ paid_subscriptions_count: aff.paid_subscriptions_count + 1 })
+                .eq("id", affiliateId);
+            }
+          }
+        }
+
         // Manager commission: check if affiliate has a manager
         const { data: managerRel } = await supabaseAdmin
           .from("manager_affiliates")
@@ -389,7 +411,7 @@ export async function GET(request: NextRequest) {
             const customerName = customerObj?.name || customerId;
             await supabaseAdmin.from("transactions").insert({
               affiliate_id: managerRel.manager_id,
-              subscription_id: null,
+              subscription_id: subRecord?.id || null,
               stripe_invoice_id: mgrInvoiceId,
               stripe_charge_id: chargeIdForInvoice,
               type: "commission",

@@ -11,7 +11,7 @@ const ITEMS_PER_PAGE = 10;
 
 export default function VendasPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { profile, transactions, subscriptions, summary, isLoading, isInitialized } = useAppData();
+  const { profile, transactions, subscriptions, managedSubscriptions, summary, isLoading, isInitialized } = useAppData();
 
   // Create a map of subscription_id -> customer_name for quick lookup
   const subscriptionNames = useMemo(() => {
@@ -21,8 +21,13 @@ export default function VendasPage() {
         map.set(sub.id, sub.customer_name);
       }
     });
+    (managedSubscriptions || []).forEach((sub) => {
+      if (sub.id && sub.customer_name) {
+        map.set(sub.id, sub.customer_name);
+      }
+    });
     return map;
-  }, [subscriptions]);
+  }, [subscriptions, managedSubscriptions]);
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -160,9 +165,12 @@ export default function VendasPage() {
                       const neg = tx.commission_amount_cents < 0;
                       const avail = tx.available_at ? isDateAvailable(tx.available_at) : false;
                       const isManagerTx = tx.description?.startsWith("Comissão de gerência");
-                      const customerName = tx.subscription_id
+                      const customerName = (tx.subscription_id
                         ? subscriptionNames.get(tx.subscription_id)
-                        : tx.description?.match(/\((.+)\)/)?.[1] || null;
+                        : null)
+                        || tx.description?.match(/ - (.+)$/)?.[1]
+                        || tx.description?.match(/\((.+)\)/)?.[1]
+                        || null;
                       const isRefundOrDispute = tx.type === "refund" || tx.type === "dispute";
                       
                       return (
