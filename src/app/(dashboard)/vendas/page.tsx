@@ -45,6 +45,14 @@ export default function VendasPage() {
       const origKey = tx.stripe_invoice_id.replace(/_refund$/, "");
       const subId = invoiceToSubscription.get(origKey);
       if (subId) name = subscriptionNames.get(subId) ?? null;
+      if (!name) {
+        const origTx = (transactions || []).find(t => t.stripe_invoice_id === origKey && t.type === "commission");
+        if (origTx) {
+          name = origTx.description?.match(/ - (.+)$/)?.[1]
+            || origTx.description?.match(/\((.+)\)/)?.[1]
+            || null;
+        }
+      }
     }
     if (!name) {
       name = tx.description?.match(/ - (.+)$/)?.[1]
@@ -52,7 +60,7 @@ export default function VendasPage() {
         || null;
     }
     return name;
-  }, [subscriptionNames, invoiceToSubscription]);
+  }, [subscriptionNames, invoiceToSubscription, transactions]);
 
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
