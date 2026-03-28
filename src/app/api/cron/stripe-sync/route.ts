@@ -559,7 +559,7 @@ export async function GET(request: NextRequest) {
           const mgrRefundAmount = -Math.round(mgrNetRefund * mgrTx.commission_percent / 100);
           await supabaseAdmin.from("transactions").insert({
             affiliate_id: mgrTx.affiliate_id,
-            subscription_id: null,
+            subscription_id: originalTx.subscription_id,
             stripe_invoice_id: mgrRefundKey,
             stripe_charge_id: chargeId,
             type: "refund",

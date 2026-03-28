@@ -425,7 +425,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
       const mgrRefundAmount = Math.round(mgrNetRefund * mgrTx.commission_percent / 100);
       await supabase.from("transactions").insert({
         affiliate_id: mgrTx.affiliate_id,
-        subscription_id: null,
+        subscription_id: originalTx.subscription_id,
         stripe_invoice_id: mgrRefundKey,
         stripe_charge_id: charge.id,
         type: "refund",

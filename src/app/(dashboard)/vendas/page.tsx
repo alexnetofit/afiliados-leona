@@ -28,6 +28,17 @@ export default function VendasPage() {
     });
     return map;
   }, [subscriptions, managedSubscriptions]);
+
+  const invoiceToSubscription = useMemo(() => {
+    const map = new Map<string, string>();
+    (transactions || []).forEach((tx) => {
+      if (tx.type === "commission" && tx.stripe_invoice_id && tx.subscription_id) {
+        map.set(tx.stripe_invoice_id, tx.subscription_id);
+      }
+    });
+    return map;
+  }, [transactions]);
+
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -165,12 +176,17 @@ export default function VendasPage() {
                       const neg = tx.commission_amount_cents < 0;
                       const avail = tx.available_at ? isDateAvailable(tx.available_at) : false;
                       const isManagerTx = tx.description?.startsWith("Comissão de gerência");
-                      const customerName = (tx.subscription_id
+                      let customerName = (tx.subscription_id
                         ? subscriptionNames.get(tx.subscription_id)
                         : null)
                         || tx.description?.match(/ - (.+)$/)?.[1]
                         || tx.description?.match(/\((.+)\)/)?.[1]
                         || null;
+                      if (!customerName && tx.stripe_invoice_id && (tx.type === "refund" || tx.type === "dispute")) {
+                        const origKey = tx.stripe_invoice_id.replace(/_refund$/, "");
+                        const subId = invoiceToSubscription.get(origKey);
+                        if (subId) customerName = subscriptionNames.get(subId) || null;
+                      }
                       const isRefundOrDispute = tx.type === "refund" || tx.type === "dispute";
                       
                       return (
