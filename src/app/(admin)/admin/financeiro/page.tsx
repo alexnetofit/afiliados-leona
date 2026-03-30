@@ -8,8 +8,15 @@ import {
 import {
   DollarSign, TrendingUp, TrendingDown, Wallet, Plus, Trash2,
   ChevronDown, ChevronRight, BarChart3, X, RefreshCw, Pencil, Check,
+  ArrowDownToLine, Loader2,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
+
+interface AbacateBalance {
+  available: number;
+  pending: number;
+  blocked: number;
+}
 
 interface ManualCost {
   id: string;
@@ -119,6 +126,14 @@ export default function FinanceiroPage() {
   const [dolarHoje, setDolarHoje] = useState<number | null>(null);
   const didInit = useRef(false);
 
+  const [abacateBalance, setAbacateBalance] = useState<AbacateBalance | null>(null);
+  const [abacateLoading, setAbacateLoading] = useState(false);
+  const [withdrawPixKey, setWithdrawPixKey] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawResult, setWithdrawResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [showWithdrawForm, setShowWithdrawForm] = useState(false);
+
   const applyLocalFallback = useCallback((periodsData: Period[], cp: string) => {
     const cache = readRevenueCache();
     return periodsData.map((p) => {
@@ -174,6 +189,47 @@ export default function FinanceiroPage() {
     }
   }, []);
 
+  const fetchAbacateBalance = useCallback(async () => {
+    setAbacateLoading(true);
+    try {
+      const res = await fetch("/api/admin/abacatepay");
+      if (res.ok) {
+        const data = await res.json();
+        setAbacateBalance(data.balance);
+      }
+    } catch { /* */ } finally {
+      setAbacateLoading(false);
+    }
+  }, []);
+
+  const handleWithdraw = async () => {
+    const amountCents = Math.round(parseFloat(withdrawAmount || "0") * 100);
+    if (amountCents < 350 || !withdrawPixKey.trim()) return;
+    setWithdrawing(true);
+    setWithdrawResult(null);
+    try {
+      const res = await fetch("/api/admin/abacatepay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: amountCents, pixKey: withdrawPixKey.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setWithdrawResult({ ok: true, msg: `Saque criado: ${data.withdraw?.id || "OK"} — ${data.withdraw?.status || "PENDING"}` });
+        setWithdrawAmount("");
+        setWithdrawPixKey("");
+        setShowWithdrawForm(false);
+        fetchAbacateBalance();
+      } else {
+        setWithdrawResult({ ok: false, msg: data.error || "Erro ao criar saque" });
+      }
+    } catch {
+      setWithdrawResult({ ok: false, msg: "Erro de conexão" });
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
   const fetchDolar = useCallback(() => {
     fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL")
       .then((r) => r.json())
@@ -191,7 +247,8 @@ export default function FinanceiroPage() {
       if (cp) fetchRevenue(cp);
     });
     fetchDolar();
-  }, [fetchPeriods, fetchRevenue, fetchDolar]);
+    fetchAbacateBalance();
+  }, [fetchPeriods, fetchRevenue, fetchDolar, fetchAbacateBalance]);
 
   useEffect(() => {
     const onFocus = () => fetchDolar();
@@ -316,6 +373,118 @@ export default function FinanceiroPage() {
             )}
           </p>
         </div>
+
+        {/* AbacatePay Balance */}
+        <Card noPadding>
+          <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                <span className="text-lg">🥑</span>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500 font-medium">Saldo AbacatePay</p>
+                {abacateLoading ? (
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+                    <span className="text-sm text-zinc-400">Carregando...</span>
+                  </div>
+                ) : abacateBalance ? (
+                  <div className="flex items-center gap-4 mt-0.5">
+                    <div>
+                      <span className="text-xl font-bold text-emerald-600">
+                        {formatCurrency(abacateBalance.available / 100)}
+                      </span>
+                      <span className="text-xs text-zinc-400 ml-1">disponível</span>
+                    </div>
+                    {abacateBalance.pending > 0 && (
+                      <div className="text-sm text-zinc-500">
+                        <span className="font-medium text-amber-600">{formatCurrency(abacateBalance.pending / 100)}</span>
+                        <span className="text-xs text-zinc-400 ml-1">pendente</span>
+                      </div>
+                    )}
+                    {abacateBalance.blocked > 0 && (
+                      <div className="text-sm text-zinc-500">
+                        <span className="font-medium text-error-600">{formatCurrency(abacateBalance.blocked / 100)}</span>
+                        <span className="text-xs text-zinc-400 ml-1">bloqueado</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-zinc-400 mt-0.5">Não disponível</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="ghost" icon={RefreshCw} onClick={fetchAbacateBalance} disabled={abacateLoading}>
+                Atualizar
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                icon={ArrowDownToLine}
+                onClick={() => {
+                  setShowWithdrawForm(!showWithdrawForm);
+                  setWithdrawResult(null);
+                  if (!showWithdrawForm && abacateBalance) {
+                    setWithdrawAmount((abacateBalance.available / 100).toFixed(2));
+                  }
+                }}
+                disabled={!abacateBalance || abacateBalance.available < 350}
+              >
+                Sacar
+              </Button>
+            </div>
+          </div>
+
+          {showWithdrawForm && (
+            <div className="border-t border-zinc-100 p-4 bg-zinc-50">
+              <div className="flex flex-col sm:flex-row gap-3 items-end">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Chave PIX</label>
+                  <Input
+                    placeholder="CPF, e-mail, telefone ou chave aleatória"
+                    value={withdrawPixKey}
+                    onChange={(e) => setWithdrawPixKey(e.target.value)}
+                  />
+                </div>
+                <div className="w-full sm:w-40">
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Valor (R$)</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="0,00"
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  loading={withdrawing}
+                  onClick={handleWithdraw}
+                  disabled={!withdrawPixKey.trim() || parseFloat(withdrawAmount || "0") < 3.5}
+                >
+                  Confirmar saque
+                </Button>
+              </div>
+              {parseFloat(withdrawAmount || "0") > 0 && (
+                <p className="text-[11px] text-zinc-400 mt-2">
+                  Taxa: R$ 0,80 · Valor recebido: {formatCurrency(Math.max(parseFloat(withdrawAmount || "0") - 0.80, 0))}
+                </p>
+              )}
+            </div>
+          )}
+
+          {withdrawResult && (
+            <div className={cn(
+              "px-4 py-2 text-sm border-t",
+              withdrawResult.ok ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-red-50 text-red-700 border-red-100"
+            )}>
+              {withdrawResult.msg}
+            </div>
+          )}
+        </Card>
 
         {/* Totals */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
