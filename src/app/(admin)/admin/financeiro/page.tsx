@@ -428,6 +428,7 @@ export default function FinanceiroPage() {
                   setWithdrawResult(null);
                   if (!showWithdrawForm && abacateBalance) {
                     setWithdrawAmount((abacateBalance.available / 100).toFixed(2));
+                    if (!withdrawPixKey) setWithdrawPixKey("50523175000151");
                   }
                 }}
                 disabled={!abacateBalance || abacateBalance.available < 350}
