@@ -35,7 +35,6 @@ async function fetchAbacateWithdraws(): Promise<AbacateWithdraw[]> {
     const res = await fetch("https://api.abacatepay.com/v1/withdraw/list", {
       headers: { Authorization: `Bearer ${ABACATEPAY_API_KEY}` },
     });
-    if (!res.ok) throw new Error(`AbacatePay ${res.status}`);
     const json = await res.json();
     abacateCache = (json.data || []) as AbacateWithdraw[];
     abacateCacheTs = Date.now();
