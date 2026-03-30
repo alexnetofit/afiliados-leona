@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
         Authorization: `Bearer ${ABACATEPAY_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ amount, pixKey, notes: notes || "Saque via painel admin" }),
+      body: JSON.stringify({ amount, method: "PIX", pix: { key: pixKey, type: "CNPJ" }, description: notes || "Saque via painel admin" }),
     });
 
     if (!res.ok) {
