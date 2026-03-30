@@ -28,7 +28,7 @@ export async function GET() {
   }
 
   try {
-    const res = await fetch("https://api.abacatepay.com/v2/store/get", {
+    const res = await fetch("https://api.abacatepay.com/v1/store/get", {
       headers: { Authorization: `Bearer ${ABACATEPAY_API_KEY}` },
       cache: "no-store",
     });
