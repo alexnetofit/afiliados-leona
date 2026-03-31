@@ -7,6 +7,52 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+export async function PATCH(request: Request) {
+  try {
+    const supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.role !== "admin") {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { affiliateId, commission_tier } = body;
+
+    if (!affiliateId || ![1, 2, 3].includes(commission_tier)) {
+      return NextResponse.json(
+        { error: "affiliateId e commission_tier (1, 2 ou 3) são obrigatórios" },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await supabaseAdmin
+      .from("affiliates")
+      .update({ commission_tier })
+      .eq("id", affiliateId);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const tierNames: Record<number, string> = { 1: "Bronze 30%", 2: "Prata 35%", 3: "Ouro 40%" };
+    return NextResponse.json({ success: true, message: `Tier alterado para ${tierNames[commission_tier]}` });
+  } catch (error) {
+    console.error("[ADMIN] Error updating tier:", error);
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+  }
+}
+
 export async function GET() {
   try {
     // Auth check

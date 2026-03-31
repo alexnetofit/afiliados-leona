@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Card, Badge, LoadingScreen, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, MetricCard } from "@/components/ui/index";
-import { Users, UserCheck, DollarSign, KeyRound, X, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
+import { Users, UserCheck, DollarSign, KeyRound, X, Eye, EyeOff, CheckCircle, AlertCircle, ChevronDown } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { COMMISSION_TIERS } from "@/types";
 import { AffiliateFilters, type AffiliateFilterState } from "@/components/admin";
@@ -40,6 +40,10 @@ export default function AfiliadosPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [resetStatus, setResetStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Tier edit state
+  const [editingTierId, setEditingTierId] = useState<string | null>(null);
+  const [savingTier, setSavingTier] = useState(false);
 
   const handleFiltersChange = useCallback((newFilters: AffiliateFilterState) => {
     setFilters(newFilters);
@@ -87,6 +91,27 @@ export default function AfiliadosPage() {
       setResetStatus({ type: "error", message: "Erro de conexão" });
     } finally {
       setIsResetting(false);
+    }
+  };
+
+  const handleTierChange = async (affiliateId: string, newTier: number) => {
+    setSavingTier(true);
+    try {
+      const res = await fetch("/api/admin/affiliates", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ affiliateId, commission_tier: newTier }),
+      });
+      if (res.ok) {
+        setAffiliates((prev) =>
+          prev.map((a) => (a.id === affiliateId ? { ...a, commission_tier: newTier } : a))
+        );
+      }
+    } catch (error) {
+      console.error("Error updating tier:", error);
+    } finally {
+      setSavingTier(false);
+      setEditingTierId(null);
     }
   };
 
@@ -241,9 +266,44 @@ export default function AfiliadosPage() {
                     </code>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="primary">
-                      Tier {affiliate.commission_tier} • {COMMISSION_TIERS[affiliate.commission_tier as 1 | 2 | 3].percent}%
-                    </Badge>
+                    {editingTierId === affiliate.id ? (
+                      <div className="flex items-center gap-1">
+                        {([1, 2, 3] as const).map((t) => {
+                          const names: Record<number, string> = { 1: "Bronze", 2: "Prata", 3: "Ouro" };
+                          const isActive = affiliate.commission_tier === t;
+                          return (
+                            <button
+                              key={t}
+                              disabled={savingTier || isActive}
+                              onClick={() => handleTierChange(affiliate.id, t)}
+                              className={`px-2 py-1 text-xs font-medium rounded-lg transition-colors ${
+                                isActive
+                                  ? "bg-zinc-900 text-white"
+                                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                              } disabled:cursor-not-allowed`}
+                            >
+                              {names[t]} {COMMISSION_TIERS[t].percent}%
+                            </button>
+                          );
+                        })}
+                        <button
+                          onClick={() => setEditingTierId(null)}
+                          className="p-1 text-zinc-400 hover:text-zinc-600"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setEditingTierId(affiliate.id)}
+                        className="group inline-flex items-center gap-1"
+                      >
+                        <Badge variant="primary">
+                          Tier {affiliate.commission_tier} • {COMMISSION_TIERS[affiliate.commission_tier as 1 | 2 | 3].percent}%
+                        </Badge>
+                        <ChevronDown className="h-3 w-3 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </button>
+                    )}
                   </TableCell>
                   <TableCell className="font-bold text-zinc-900">{affiliate.paid_subscriptions_count}</TableCell>
                   <TableCell className="text-zinc-600">{affiliate.activeSubscriptions}</TableCell>
