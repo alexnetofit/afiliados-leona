@@ -142,12 +142,19 @@ export async function GET(request: NextRequest) {
     const startMs = start.getTime();
     const endMs = end.getTime();
 
+    // Shift payout query by +3h to align with BRT (UTC-3) boundaries.
+    // Stripe stores arrival_date as UTC midnight; this ensures payouts
+    // arriving at e.g. Apr 6 00:00 UTC (= Apr 5 21:00 BRT) fall in March.
+    const BRT_OFFSET = 3 * 3600;
+    const payoutStartTs = startTs + BRT_OFFSET;
+    const payoutEndTs = endTs + BRT_OFFSET;
+
     const [stripeUsdCents, abacateList, usdBrlRate] = await Promise.all([
       (async () => {
         let total = 0;
         try {
           for await (const payout of stripe.payouts.list({
-            created: { gte: startTs, lte: endTs },
+            arrival_date: { gte: payoutStartTs, lte: payoutEndTs },
             status: "paid",
             limit: 100,
           })) {
