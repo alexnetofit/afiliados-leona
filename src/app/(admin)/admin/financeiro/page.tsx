@@ -98,7 +98,16 @@ function getProfitShares(periodLabel: string): ProfitShare[] {
       { name: "Caique", percent: 7.5, isCost: true },
     ];
   }
-  // Jan, Fev, Mar 2026
+  if (y === 2026 && m === 3) {
+    return [
+      { name: "Alex", percent: 40 },
+      { name: "Dai", percent: 20 },
+      { name: "Fabiano", percent: 20 },
+      { name: "Ericson", percent: 20 },
+      { name: "Caique", percent: 5, isCost: true },
+    ];
+  }
+  // Jan, Fev 2026
   return [
     { name: "Alex", percent: 38 },
     { name: "Dai", percent: 7.5 },
