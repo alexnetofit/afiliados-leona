@@ -188,6 +188,18 @@ export async function GET(request: NextRequest) {
 
     const stripeBrlCents = Math.round(stripeUsdCents * usdBrlRate);
 
+    // If AbacatePay returned 0, preserve the existing manual value from DB
+    if (abacateCents === 0) {
+      const { data: existing } = await supabaseAdmin
+        .from("period_revenue")
+        .select("abacate_revenue_cents")
+        .eq("period_label", revenueParam)
+        .single();
+      if (existing?.abacate_revenue_cents) {
+        abacateCents = existing.abacate_revenue_cents;
+      }
+    }
+
     // Salva no banco para meses passados (cache permanente)
     const cp = getPeriodLabel(new Date());
     if (revenueParam !== cp) {
