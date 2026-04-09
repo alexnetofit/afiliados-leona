@@ -8,7 +8,7 @@ import {
   Card, Badge, MetricCard, LoadingScreen,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyState,
 } from "@/components/ui/index";
-import { Wallet, Clock, CheckCircle, ChevronDown, ChevronRight, Banknote, AlertCircle, X } from "lucide-react";
+import { Wallet, Clock, CheckCircle, ChevronDown, ChevronRight, Banknote, AlertCircle, Loader2, X } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
 interface PaymentGroup {
@@ -122,8 +122,8 @@ export default function PagamentosPage() {
         setLocalWithdrawn(prev => {
           const next = new Map(prev);
           next.set(confirmGroup.dateLabel, {
-            status: "paid",
-            paid_at: new Date().toISOString(),
+            status: "processing",
+            paid_at: null,
             amount_text: formatCurrency(confirmGroup.totalCents / 100),
           });
           return next;
@@ -334,6 +334,12 @@ export default function PagamentosPage() {
                           if (group.status === "available" && w?.status === "paid") {
                             return <CheckCircle className="h-4 w-4 text-success-600" />;
                           }
+                          if (group.status === "available" && w?.status === "processing") {
+                            return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
+                          }
+                          if (group.status === "available" && w?.status === "failed") {
+                            return <AlertCircle className="h-4 w-4 text-red-500" />;
+                          }
                           return getStatusIcon(group.status);
                         })()}
                         <div className="text-left">
@@ -365,7 +371,25 @@ export default function PagamentosPage() {
                               : ""}
                           </Badge>
                         )}
-                        {group.status === "available" && withdrawnGroups.has(group.dateLabel) && withdrawnGroups.get(group.dateLabel)?.status !== "paid" && (
+                        {group.status === "available" && withdrawnGroups.get(group.dateLabel)?.status === "processing" && (
+                          <span className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-blue-700 bg-blue-50 rounded-full">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Processando
+                          </span>
+                        )}
+                        {group.status === "available" && withdrawnGroups.get(group.dateLabel)?.status === "failed" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleWithdrawClick(group);
+                            }}
+                            disabled={withdrawingGroup === group.dateKey}
+                            className="px-3 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-full transition-colors"
+                          >
+                            Falhou - Tentar novamente
+                          </button>
+                        )}
+                        {group.status === "available" && withdrawnGroups.has(group.dateLabel) && withdrawnGroups.get(group.dateLabel)?.status === "pending" && (
                           <span className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-amber-700 bg-amber-50 rounded-full">
                             <Clock className="h-3 w-3" />
                             Saque solicitado
@@ -580,12 +604,12 @@ export default function PagamentosPage() {
             {withdrawResult.success ? (
               <>
                 <div className="flex flex-col items-center text-center mb-6">
-                  <div className="h-14 w-14 rounded-full bg-emerald-50 flex items-center justify-center mb-4">
-                    <CheckCircle className="h-7 w-7 text-emerald-600" />
+                  <div className="h-14 w-14 rounded-full bg-blue-50 flex items-center justify-center mb-4">
+                    <Clock className="h-7 w-7 text-blue-600" />
                   </div>
-                  <h3 className="text-lg font-bold text-zinc-900 mb-1">Saque Processado!</h3>
+                  <h3 className="text-lg font-bold text-zinc-900 mb-1">Saque Solicitado!</h3>
                   <p className="text-sm text-zinc-500">
-                    A transferência PIX foi criada com sucesso.
+                    Seu pagamento será processado em até 1 dia útil.
                   </p>
                 </div>
 
@@ -607,7 +631,7 @@ export default function PagamentosPage() {
                 )}
 
                 <p className="text-xs text-zinc-400 text-center mb-4">
-                  Você receberá um email de confirmação em breve.
+                  Você receberá um email quando o pagamento for confirmado.
                 </p>
               </>
             ) : (

@@ -12,7 +12,7 @@ interface WithdrawRequest {
   date_label: string | null;
   pix_key: string | null;
   wise_email: string | null;
-  status: "pending" | "paid" | "rejected";
+  status: "pending" | "processing" | "paid" | "rejected" | "failed";
   paid_at: string | null;
   created_at: string;
 }
@@ -113,7 +113,7 @@ export default function PagamentosPage() {
     setCurrentPage(1);
   }, [searchQuery, statusFilter]);
 
-  const pendingCount = withdrawRequests.filter((w) => w.status === "pending").length;
+  const pendingCount = withdrawRequests.filter((w) => w.status === "pending" || w.status === "processing").length;
 
   return (
     <div className="flex-1 p-6 lg:p-8">
@@ -155,7 +155,9 @@ export default function PagamentosPage() {
                 options={[
                   { value: "all", label: "Todos" },
                   { value: "pending", label: "Pendentes" },
+                  { value: "processing", label: "Processando" },
                   { value: "paid", label: "Pagos" },
+                  { value: "failed", label: "Falhou" },
                 ]}
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -225,10 +227,20 @@ export default function PagamentosPage() {
                       </TableCell>
                       <TableCell>
                         <Badge
-                          variant={req.status === "paid" ? "success" : req.status === "rejected" ? "default" : "warning"}
+                          variant={
+                            req.status === "paid" ? "success"
+                            : req.status === "processing" ? "primary"
+                            : req.status === "failed" ? "default"
+                            : req.status === "rejected" ? "default"
+                            : "warning"
+                          }
                           dot
                         >
-                          {req.status === "paid" ? "Pago" : req.status === "rejected" ? "Rejeitado" : "Pendente"}
+                          {req.status === "paid" ? "Pago"
+                           : req.status === "processing" ? "Processando"
+                           : req.status === "failed" ? "Falhou"
+                           : req.status === "rejected" ? "Rejeitado"
+                           : "Pendente"}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -242,6 +254,8 @@ export default function PagamentosPage() {
                           >
                             Pago
                           </Button>
+                        ) : req.status === "processing" ? (
+                          <span className="text-xs text-blue-600 font-medium">Aguardando Asaas</span>
                         ) : req.status === "paid" ? (
                           <Button
                             size="sm"
@@ -252,6 +266,8 @@ export default function PagamentosPage() {
                           >
                             Voltar Pendente
                           </Button>
+                        ) : req.status === "failed" ? (
+                          <span className="text-xs text-red-600 font-medium">Parceiro pode retentar</span>
                         ) : null}
                       </TableCell>
                     </TableRow>

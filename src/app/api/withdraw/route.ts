@@ -41,17 +41,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Prevent duplicates
+    // Prevent duplicates (allow retry if previous attempt failed)
     if (affiliateId && dateLabel) {
       const { data: existing } = await supabaseAdmin
         .from("withdraw_requests")
-        .select("id")
+        .select("id, status")
         .eq("affiliate_id", affiliateId)
         .eq("date_label", dateLabel)
         .limit(1);
 
       if (existing && existing.length > 0) {
-        return NextResponse.json({ success: true, duplicate: true });
+        const prev = existing[0];
+        if (prev.status === "failed") {
+          await supabaseAdmin
+            .from("withdraw_requests")
+            .delete()
+            .eq("id", prev.id);
+        } else {
+          return NextResponse.json({ success: true, duplicate: true });
+        }
       }
     }
 
@@ -100,7 +108,7 @@ export async function POST(request: NextRequest) {
     const bankName = asaasData.bankAccount?.bank?.name || null;
     const cpfCnpj = asaasData.bankAccount?.cpfCnpj || null;
 
-    // --- Save to database as PAID ---
+    // --- Save to database as PROCESSING (webhook will update to paid) ---
     if (affiliateId && dateLabel) {
       await supabaseAdmin.from("withdraw_requests").insert({
         affiliate_id: affiliateId,
@@ -109,38 +117,9 @@ export async function POST(request: NextRequest) {
         amount_text: amount,
         date_label: dateLabel,
         pix_key: pixKey,
-        status: "paid",
-        paid_at: new Date().toISOString(),
+        status: "processing",
         asaas_transfer_id: asaasTransferId,
       });
-    }
-
-    // --- Send "paid" email to partner ---
-    try {
-      await resend.emails.send({
-        from: "Leona Afiliados <onboarding@resend.dev>",
-        to: user.email!,
-        subject: `Leona Afiliados - Saque processado, ${affiliateName}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 500px;">
-            <h2 style="color: #18181b;">Saque Processado</h2>
-            <p style="color: #3f3f46; font-size: 16px;">
-              Olá, <strong>${affiliateName}</strong>!
-            </p>
-            <p style="color: #3f3f46; font-size: 16px;">
-              Seu saque de <strong>${amount}</strong> foi processado com sucesso.
-            </p>
-            ${dateLabel ? `<p style="color: #71717a; font-size: 14px;">Referente à liberação de ${dateLabel}.</p>` : ""}
-            <p style="color: #3f3f46; font-size: 14px; margin-top: 16px;">
-              O valor foi enviado para a conta informada. Verifique seu extrato.
-            </p>
-            <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 20px 0;" />
-            <p style="color: #a1a1aa; font-size: 12px;">Enviado automaticamente pelo sistema de afiliados Leona.</p>
-          </div>
-        `,
-      });
-    } catch (emailErr) {
-      console.error("[WITHDRAW] Error sending partner email:", emailErr);
     }
 
     // --- Send notification email to admin ---
