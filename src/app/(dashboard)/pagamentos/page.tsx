@@ -8,7 +8,7 @@ import {
   Card, Badge, MetricCard, LoadingScreen,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyState,
 } from "@/components/ui/index";
-import { Wallet, Clock, CheckCircle, ChevronDown, ChevronRight, Banknote, AlertCircle, Loader2, X } from "lucide-react";
+import { Wallet, Clock, CheckCircle, ChevronDown, ChevronRight, Banknote, AlertCircle, X } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
 interface PaymentGroup {
@@ -335,7 +335,7 @@ export default function PagamentosPage() {
                             return <CheckCircle className="h-4 w-4 text-success-600" />;
                           }
                           if (group.status === "available" && w?.status === "processing") {
-                            return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
+                            return <Clock className="h-4 w-4 text-blue-500" />;
                           }
                           if (group.status === "available" && w?.status === "failed") {
                             return <AlertCircle className="h-4 w-4 text-red-500" />;
@@ -373,8 +373,8 @@ export default function PagamentosPage() {
                         )}
                         {group.status === "available" && withdrawnGroups.get(group.dateLabel)?.status === "processing" && (
                           <span className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-blue-700 bg-blue-50 rounded-full">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Processando
+                            <Clock className="h-3 w-3" />
+                            Transferência em andamento
                           </span>
                         )}
                         {group.status === "available" && withdrawnGroups.get(group.dateLabel)?.status === "failed" && (
