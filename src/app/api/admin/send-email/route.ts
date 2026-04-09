@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       const personalizedSubject = replaceVariables(subject, testData);
       
       const { error } = await resend.emails.send({
-        from: "Leona Afiliados <onboarding@resend.dev>",
+        from: "Leona Afiliados <noreply@leonaflow.com>",
         to: testEmail,
         subject: `[TESTE] ${personalizedSubject}`,
         html: personalizedHtml,
@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
           const personalizedSubject = replaceVariables(subject, data);
           
           return resend.emails.send({
-            from: "Leona Afiliados <onboarding@resend.dev>",
+            from: "Leona Afiliados <noreply@leonaflow.com>",
             to: data.email,
             subject: personalizedSubject,
             html: personalizedHtml,

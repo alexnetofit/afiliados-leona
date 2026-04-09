@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: "Leona Afiliados <onboarding@resend.dev>",
+      from: "Leona Afiliados <noreply@leonaflow.com>",
       to: affiliateEmail,
       subject: `Leona Afiliados - Saque processado, ${affiliateName || "Afiliado"}`,
       html: `

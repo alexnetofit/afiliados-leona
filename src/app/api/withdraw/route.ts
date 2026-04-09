@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     try {
       await resend.emails.send({
-        from: "Leona Afiliados <onboarding@resend.dev>",
+        from: "Leona Afiliados <noreply@leonaflow.com>",
         to: ADMIN_EMAIL,
         subject: `SAQUE AFILIADO LEONA: ${affiliateName} - ${amount}`,
         html: `

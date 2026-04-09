@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
         if (withdrawRequest.affiliate_email) {
           try {
             await resend.emails.send({
-              from: "Leona Afiliados <onboarding@resend.dev>",
+              from: "Leona Afiliados <noreply@leonaflow.com>",
               to: withdrawRequest.affiliate_email,
               subject: `Leona Afiliados - Saque processado, ${withdrawRequest.affiliate_name || "Afiliado"}`,
               html: `
