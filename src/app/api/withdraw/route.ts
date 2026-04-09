@@ -16,12 +16,21 @@ const ASAAS_BASE_URL = "https://api.asaas.com";
 
 function detectPixType(key: string): string {
   const clean = key.replace(/[.\-/\s]/g, "");
-  if (/^\d{11}$/.test(clean)) return "CPF";
   if (/^\d{14}$/.test(clean)) return "CNPJ";
-  if (/^(\+?55)?\d{10,11}$/.test(clean)) return "PHONE";
+  if (/^\d{11}$/.test(clean)) {
+    // DDD (2 dígitos) + 9 + 8 dígitos = telefone celular brasileiro
+    if (/^[1-9][1-9]9\d{8}$/.test(clean)) return "PHONE";
+    return "CPF";
+  }
+  if (/^(\+?55)\d{10,11}$/.test(clean)) return "PHONE";
   if (key.includes("@")) return "EMAIL";
   return "EVP";
 }
+
+const PIX_TYPE_FALLBACKS: Record<string, string[]> = {
+  CPF: ["PHONE"],
+  PHONE: ["CPF"],
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -71,32 +80,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const pixType = detectPixType(pixKey);
+    const detectedType = detectPixType(pixKey);
     const transferValue = amountCents / 100;
+    const typesToTry = [detectedType, ...(PIX_TYPE_FALLBACKS[detectedType] || [])];
 
-    const asaasRes = await fetch(`${ASAAS_BASE_URL}/v3/transfers`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        access_token: ASAAS_API_KEY,
-      },
-      body: JSON.stringify({
-        value: transferValue,
-        operationType: "PIX",
-        pixAddressKey: pixKey,
-        pixAddressKeyType: pixType,
-        description: `Comissao ${affiliateName} - ${dateLabel || "saque"}`,
-        externalReference: affiliateId ? `withdraw-${affiliateId}-${dateLabel}` : undefined,
-      }),
-    });
+    let asaasData: any = null;
+    let asaasRes: Response | null = null;
 
-    const asaasData = await asaasRes.json();
+    for (const pixType of typesToTry) {
+      console.log(`[WITHDRAW] Tentando tipo ${pixType} para chave ${pixKey}`);
+      asaasRes = await fetch(`${ASAAS_BASE_URL}/v3/transfers`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          access_token: ASAAS_API_KEY,
+        },
+        body: JSON.stringify({
+          value: transferValue,
+          operationType: "PIX",
+          pixAddressKey: pixKey,
+          pixAddressKeyType: pixType,
+          description: `Comissao ${affiliateName} - ${dateLabel || "saque"}`,
+          externalReference: affiliateId ? `withdraw-${affiliateId}-${dateLabel}` : undefined,
+        }),
+      });
 
-    if (!asaasRes.ok) {
+      asaasData = await asaasRes.json();
+
+      if (asaasRes.ok) {
+        console.log(`[WITHDRAW] Sucesso com tipo ${pixType}`);
+        break;
+      }
+
+      console.warn(`[WITHDRAW] Falha com tipo ${pixType}:`, JSON.stringify(asaasData));
+    }
+
+    if (!asaasRes?.ok) {
       const errorMsg = asaasData?.errors?.[0]?.description
         || asaasData?.error
         || "Erro ao criar transferência no Asaas";
-      console.error("[WITHDRAW] Asaas error:", JSON.stringify(asaasData));
+      console.error("[WITHDRAW] Asaas error (todos os tipos falharam):", JSON.stringify(asaasData));
       return NextResponse.json(
         { error: `Falha na transferência PIX: ${errorMsg}` },
         { status: 400 }
