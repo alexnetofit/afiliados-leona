@@ -8,7 +8,7 @@ import {
   Card, Badge, MetricCard, LoadingScreen,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyState,
 } from "@/components/ui/index";
-import { Wallet, Clock, CheckCircle, ChevronDown, ChevronRight, Banknote, CheckCircle2, X } from "lucide-react";
+import { Wallet, Clock, CheckCircle, ChevronDown, ChevronRight, Banknote, AlertCircle, X } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
 interface PaymentGroup {
@@ -25,60 +25,67 @@ interface PaymentGroup {
   }>;
 }
 
+interface WithdrawResult {
+  success: boolean;
+  ownerName?: string;
+  bankName?: string;
+  error?: string;
+}
+
 export default function PagamentosPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { profile, affiliate, transactions, payouts, subscriptions, withdrawnDateLabels, isLoading, isInitialized } = useAppData();
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [withdrawingGroup, setWithdrawingGroup] = useState<string | null>(null);
-  const [localWithdrawn, setLocalWithdrawn] = useState<Set<string>>(new Set());
+  const [localWithdrawn, setLocalWithdrawn] = useState<Map<string, { status: string; paid_at: string | null; amount_text: string | null }>>(new Map());
 
   const withdrawnGroups = useMemo(() => {
     const merged = new Map(withdrawnDateLabels);
-    localWithdrawn.forEach(l => {
-      if (!merged.has(l)) merged.set(l, { status: "pending", paid_at: null, amount_text: null });
+    localWithdrawn.forEach((val, key) => {
+      merged.set(key, val);
     });
     return merged;
   }, [withdrawnDateLabels, localWithdrawn]);
 
-  // PIX/Wise modal state
+  // PIX input modal (first-time setup)
   const [pixModalGroup, setPixModalGroup] = useState<PaymentGroup | null>(null);
   const [pixKey, setPixKey] = useState("");
-  const [wiseEmail, setWiseEmail] = useState("");
   const [savingPix, setSavingPix] = useState(false);
+
+  // Confirmation modal
+  const [confirmGroup, setConfirmGroup] = useState<PaymentGroup | null>(null);
+
+  // Result feedback
+  const [withdrawResult, setWithdrawResult] = useState<WithdrawResult | null>(null);
 
   const supabase = createClient();
 
-  const hasPayoutInfo = !!(affiliate?.payout_pix_key || affiliate?.payout_wise_details);
+  const hasPixKey = !!affiliate?.payout_pix_key;
 
   const handleWithdrawClick = (group: PaymentGroup) => {
-    if (hasPayoutInfo) {
-      handleWithdraw(group);
+    if (hasPixKey) {
+      setConfirmGroup(group);
     } else {
       setPixKey("");
-      setWiseEmail("");
       setPixModalGroup(group);
     }
   };
 
-  const handleSavePixAndWithdraw = async () => {
-    if (!pixKey && !wiseEmail) return;
+  const handleSavePixKey = async () => {
+    if (!pixKey.trim()) return;
     if (!pixModalGroup || !affiliate) return;
 
     setSavingPix(true);
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase.from("affiliates") as any).update({
-        payout_pix_key: pixKey || null,
-        payout_wise_details: wiseEmail.trim() ? { email: wiseEmail.trim() } : null,
+        payout_pix_key: pixKey.trim(),
       }).eq("id", affiliate.id);
 
-      if (affiliate) {
-        affiliate.payout_pix_key = pixKey || null;
-        affiliate.payout_wise_details = wiseEmail.trim() ? { email: wiseEmail.trim() } : null;
-      }
+      affiliate.payout_pix_key = pixKey.trim();
 
       setPixModalGroup(null);
-      await handleWithdraw(pixModalGroup);
+      setConfirmGroup(pixModalGroup);
     } catch {
       // silently fail
     } finally {
@@ -86,32 +93,57 @@ export default function PagamentosPage() {
     }
   };
 
-  const handleWithdraw = async (group: PaymentGroup) => {
-    setWithdrawingGroup(group.dateKey);
-    try {
-      const pixInfo = affiliate?.payout_pix_key || pixKey || null;
-      const wiseInfo = affiliate?.payout_wise_details
-        ? (affiliate.payout_wise_details as { email?: string }).email
-        : wiseEmail || null;
+  const handleConfirmWithdraw = async () => {
+    if (!confirmGroup || !affiliate) return;
 
+    const currentPixKey = affiliate.payout_pix_key;
+    if (!currentPixKey) return;
+
+    setWithdrawingGroup(confirmGroup.dateKey);
+    setConfirmGroup(null);
+
+    try {
       const res = await fetch("/api/withdraw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          affiliateId: affiliate?.id,
+          affiliateId: affiliate.id,
           affiliateName: profile?.full_name || "Afiliado",
-          amount: formatCurrency(group.totalCents / 100),
-          dateLabel: group.dateLabel,
-          pixKey: pixInfo,
-          wiseEmail: wiseInfo,
+          amount: formatCurrency(confirmGroup.totalCents / 100),
+          amountCents: confirmGroup.totalCents,
+          dateLabel: confirmGroup.dateLabel,
+          pixKey: currentPixKey,
         }),
       });
 
-      if (res.ok) {
-        setLocalWithdrawn(prev => new Set(prev).add(group.dateLabel));
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setLocalWithdrawn(prev => {
+          const next = new Map(prev);
+          next.set(confirmGroup.dateLabel, {
+            status: "paid",
+            paid_at: new Date().toISOString(),
+            amount_text: formatCurrency(confirmGroup.totalCents / 100),
+          });
+          return next;
+        });
+        setWithdrawResult({
+          success: true,
+          ownerName: data.ownerName,
+          bankName: data.bankName,
+        });
+      } else {
+        setWithdrawResult({
+          success: false,
+          error: data.error || "Erro ao processar saque",
+        });
       }
     } catch {
-      // silently fail
+      setWithdrawResult({
+        success: false,
+        error: "Erro de conexão. Tente novamente.",
+      });
     } finally {
       setWithdrawingGroup(null);
     }
@@ -196,7 +228,7 @@ export default function PagamentosPage() {
     return Array.from(groups.values()).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
   }, [transactions, paidMonths, subscriptionNames]);
 
-  // Summary metrics (consider withdraw_requests paid status)
+  // Summary metrics
   const totalPaid = paymentGroups
     .filter(g => g.status === "paid" || (g.status === "available" && withdrawnGroups.get(g.dateLabel)?.status === "paid"))
     .reduce((sum, g) => sum + g.totalCents, 0);
@@ -323,7 +355,7 @@ export default function PagamentosPage() {
                             disabled={withdrawingGroup === group.dateKey}
                             className="px-3 py-1 text-xs font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 rounded-full transition-colors"
                           >
-                            {withdrawingGroup === group.dateKey ? "Solicitando..." : "Solicitar Saque"}
+                            {withdrawingGroup === group.dateKey ? "Processando..." : "Solicitar Saque"}
                           </button>
                         )}
                         {group.status === "available" && withdrawnGroups.has(group.dateLabel) && withdrawnGroups.get(group.dateLabel)?.status === "paid" && (
@@ -418,7 +450,7 @@ export default function PagamentosPage() {
         </div>
       </div>
 
-      {/* PIX/Wise Modal */}
+      {/* PIX Key Input Modal (first-time setup) */}
       {pixModalGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
@@ -427,7 +459,7 @@ export default function PagamentosPage() {
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 animate-fade-in-up">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-zinc-900">Dados para recebimento</h3>
+              <h3 className="text-lg font-bold text-zinc-900">Chave PIX para recebimento</h3>
               <button
                 onClick={() => setPixModalGroup(null)}
                 className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
@@ -437,41 +469,20 @@ export default function PagamentosPage() {
             </div>
 
             <p className="text-sm text-zinc-500 mb-5">
-              Para solicitar o saque, preencha pelo menos uma forma de recebimento.
+              Informe sua chave PIX para receber os saques. Esta chave será salva para os próximos saques.
             </p>
 
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
-                  Chave PIX
-                </label>
-                <input
-                  type="text"
-                  value={pixKey}
-                  onChange={(e) => setPixKey(e.target.value)}
-                  placeholder="CPF, email, telefone ou chave aleatória"
-                  className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300 transition-all"
-                />
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-purple-200" />
-                <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-3 py-1 rounded-full">ou</span>
-                <div className="flex-1 h-px bg-purple-200" />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
-                  Email Wise
-                </label>
-                <input
-                  type="email"
-                  value={wiseEmail}
-                  onChange={(e) => setWiseEmail(e.target.value)}
-                  placeholder="seu@email.com"
-                  className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300 transition-all"
-                />
-              </div>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+                Chave PIX
+              </label>
+              <input
+                type="text"
+                value={pixKey}
+                onChange={(e) => setPixKey(e.target.value)}
+                placeholder="CPF, email, telefone ou chave aleatória"
+                className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300 transition-all"
+              />
             </div>
 
             <div className="flex gap-3">
@@ -482,13 +493,143 @@ export default function PagamentosPage() {
                 Cancelar
               </button>
               <button
-                onClick={handleSavePixAndWithdraw}
-                disabled={savingPix || (!pixKey && !wiseEmail)}
+                onClick={handleSavePixKey}
+                disabled={savingPix || !pixKey.trim()}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 disabled:cursor-not-allowed rounded-xl transition-colors"
               >
-                {savingPix ? "Salvando..." : "Salvar e Solicitar"}
+                {savingPix ? "Salvando..." : "Salvar e Continuar"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setConfirmGroup(null)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 animate-fade-in-up">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-zinc-900">Confirmar Saque</h3>
+              <button
+                onClick={() => setConfirmGroup(null)}
+                className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="text-sm text-zinc-500 mb-5">
+              Confira os dados abaixo antes de confirmar o saque. A transferência será processada via PIX.
+            </p>
+
+            <div className="bg-zinc-50 rounded-xl p-4 space-y-3 mb-6">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-zinc-500">Valor</span>
+                <span className="text-lg font-bold text-zinc-900">
+                  {formatCurrency(confirmGroup.totalCents / 100)}
+                </span>
+              </div>
+              <div className="h-px bg-zinc-200" />
+              <div className="flex justify-between items-start">
+                <span className="text-sm text-zinc-500">Chave PIX</span>
+                <span className="text-sm font-medium text-zinc-900 text-right max-w-[200px] break-all">
+                  {affiliate?.payout_pix_key}
+                </span>
+              </div>
+              <div className="h-px bg-zinc-200" />
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-zinc-500">Liberação</span>
+                <span className="text-sm font-medium text-zinc-700">{confirmGroup.dateLabel}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-3 mb-6">
+              Ao confirmar, a transferência PIX será criada automaticamente. Verifique se sua chave PIX está correta.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmGroup(null)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmWithdraw}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-colors"
+              >
+                Confirmar Saque
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Result Feedback Modal */}
+      {withdrawResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setWithdrawResult(null)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 animate-fade-in-up">
+            {withdrawResult.success ? (
+              <>
+                <div className="flex flex-col items-center text-center mb-6">
+                  <div className="h-14 w-14 rounded-full bg-emerald-50 flex items-center justify-center mb-4">
+                    <CheckCircle className="h-7 w-7 text-emerald-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-zinc-900 mb-1">Saque Processado!</h3>
+                  <p className="text-sm text-zinc-500">
+                    A transferência PIX foi criada com sucesso.
+                  </p>
+                </div>
+
+                {(withdrawResult.ownerName || withdrawResult.bankName) && (
+                  <div className="bg-zinc-50 rounded-xl p-4 space-y-2 mb-6">
+                    {withdrawResult.ownerName && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-zinc-500">Titular</span>
+                        <span className="text-sm font-medium text-zinc-900">{withdrawResult.ownerName}</span>
+                      </div>
+                    )}
+                    {withdrawResult.bankName && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-zinc-500">Banco</span>
+                        <span className="text-sm font-medium text-zinc-700">{withdrawResult.bankName}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <p className="text-xs text-zinc-400 text-center mb-4">
+                  Você receberá um email de confirmação em breve.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col items-center text-center mb-6">
+                  <div className="h-14 w-14 rounded-full bg-red-50 flex items-center justify-center mb-4">
+                    <AlertCircle className="h-7 w-7 text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-zinc-900 mb-1">Erro no Saque</h3>
+                  <p className="text-sm text-zinc-500">
+                    {withdrawResult.error}
+                  </p>
+                </div>
+              </>
+            )}
+
+            <button
+              onClick={() => setWithdrawResult(null)}
+              className="w-full px-4 py-2.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-colors"
+            >
+              Fechar
+            </button>
           </div>
         </div>
       )}

@@ -5,7 +5,7 @@ import { useAppData } from "@/contexts";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
 import { Card, Button, Badge, Input, LoadingScreen, Alert, Progress } from "@/components/ui/index";
-import { User, Key, CreditCard, Save, Check, Trophy, Star, ExternalLink, Lock, Eye, EyeOff } from "lucide-react";
+import { User, Key, CreditCard, Save, Check, Trophy, Star, Lock, Eye, EyeOff } from "lucide-react";
 import { COMMISSION_TIERS } from "@/types";
 
 export default function PerfilPage() {
@@ -14,7 +14,6 @@ export default function PerfilPage() {
   
   const [name, setName] = useState("");
   const [pix, setPix] = useState("");
-  const [wiseEmail, setWiseEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -33,12 +32,6 @@ export default function PerfilPage() {
   useEffect(() => {
     if (profile?.full_name) setName(profile.full_name);
     if (affiliate?.payout_pix_key) setPix(affiliate.payout_pix_key);
-    if (affiliate?.payout_wise_details) {
-      const details = affiliate.payout_wise_details;
-      if (typeof details === 'object' && details !== null && 'email' in details) {
-        setWiseEmail((details as { email?: string }).email || "");
-      }
-    }
   }, [profile, affiliate]);
 
   // Only show loading on first load, not on navigation
@@ -60,7 +53,6 @@ export default function PerfilPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase.from("affiliates") as any).update({
         payout_pix_key: pix || null,
-        payout_wise_details: wiseEmail.trim() ? { email: wiseEmail.trim() } : null,
       }).eq("id", affiliate?.id);
 
       setSaved(true);
@@ -326,38 +318,8 @@ export default function PerfilPage() {
                 value={pix}
                 onChange={(e) => setPix(e.target.value)}
                 placeholder="CPF, e-mail, telefone ou chave aleatória"
-                hint="Recomendamos usar a chave aleatória para maior segurança"
+                hint="Esta chave será usada para receber seus saques via PIX"
               />
-              
-              {/* Wise Section */}
-              <div>
-                <Input
-                  label="E-mail da conta Wise"
-                  value={wiseEmail}
-                  onChange={(e) => setWiseEmail(e.target.value)}
-                  placeholder="seu@email.com"
-                  hint="Opcional - para receber em dólar ou euro"
-                />
-                
-                {/* Wise signup CTA */}
-                <div className="mt-4 p-4 bg-gradient-to-br from-info-50 to-info-100/50 rounded-xl border border-info-200">
-                  <p className="text-sm text-info-800 mb-3">
-                    Ainda não tem conta Wise? Crie sua conta gratuita e receba transferências internacionais com as melhores taxas.
-                  </p>
-                  <a
-                    href="https://wise.com/invite/ihpc/alexn496"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#9FE870] hover:bg-[#8ED85F] text-[#163300] font-semibold text-sm rounded-xl transition-colors"
-                  >
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12.5 2L2 7l10.5 5L23 7l-10.5-5zM2 17l10.5 5 10.5-5M2 12l10.5 5 10.5-5"/>
-                    </svg>
-                    Criar conta Wise grátis
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </div>
-              </div>
             </div>
           </Card>
 
