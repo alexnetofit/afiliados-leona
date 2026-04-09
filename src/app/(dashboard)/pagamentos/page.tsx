@@ -93,11 +93,16 @@ export default function PagamentosPage() {
     }
   };
 
+  const WITHDRAW_FEE_CENTS = 200;
+
   const handleConfirmWithdraw = async () => {
     if (!confirmGroup || !affiliate) return;
 
     const currentPixKey = affiliate.payout_pix_key;
     if (!currentPixKey) return;
+
+    const netCents = confirmGroup.totalCents - WITHDRAW_FEE_CENTS;
+    if (netCents <= 0) return;
 
     setWithdrawingGroup(confirmGroup.dateKey);
     setConfirmGroup(null);
@@ -110,7 +115,7 @@ export default function PagamentosPage() {
           affiliateId: affiliate.id,
           affiliateName: profile?.full_name || "Afiliado",
           amount: formatCurrency(confirmGroup.totalCents / 100),
-          amountCents: confirmGroup.totalCents,
+          amountCents: netCents,
           dateLabel: confirmGroup.dateLabel,
           pixKey: currentPixKey,
         }),
@@ -353,16 +358,22 @@ export default function PagamentosPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         {group.status === "available" && !withdrawnGroups.has(group.dateLabel) && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleWithdrawClick(group);
-                            }}
-                            disabled={withdrawingGroup === group.dateKey}
-                            className="px-3 py-1 text-xs font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 rounded-full transition-colors"
-                          >
-                            {withdrawingGroup === group.dateKey ? "Processando..." : "Solicitar Saque"}
-                          </button>
+                          group.totalCents <= WITHDRAW_FEE_CENTS ? (
+                            <span className="px-3 py-1 text-xs font-medium text-zinc-400 bg-zinc-100 rounded-full cursor-not-allowed" title="Valor insuficiente para cobrir a taxa de transferência">
+                              Valor insuficiente
+                            </span>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleWithdrawClick(group);
+                              }}
+                              disabled={withdrawingGroup === group.dateKey}
+                              className="px-3 py-1 text-xs font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 rounded-full transition-colors"
+                            >
+                              {withdrawingGroup === group.dateKey ? "Processando..." : "Solicitar Saque"}
+                            </button>
+                          )
                         )}
                         {group.status === "available" && withdrawnGroups.has(group.dateLabel) && withdrawnGroups.get(group.dateLabel)?.status === "paid" && (
                           <Badge variant="success" size="sm">
@@ -529,69 +540,89 @@ export default function PagamentosPage() {
       )}
 
       {/* Confirmation Modal */}
-      {confirmGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setConfirmGroup(null)}
-          />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 animate-fade-in-up">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-zinc-900">Confirmar Saque</h3>
-              <button
-                onClick={() => setConfirmGroup(null)}
-                className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+      {confirmGroup && (() => {
+        const WITHDRAW_FEE_CENTS = 200;
+        const grossCents = confirmGroup.totalCents;
+        const netCents = grossCents - WITHDRAW_FEE_CENTS;
 
-            <p className="text-sm text-zinc-500 mb-5">
-              Confira os dados abaixo antes de confirmar o saque. A transferência será processada via PIX.
-            </p>
-
-            <div className="bg-zinc-50 rounded-xl p-4 space-y-3 mb-6">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-500">Valor</span>
-                <span className="text-lg font-bold text-zinc-900">
-                  {formatCurrency(confirmGroup.totalCents / 100)}
-                </span>
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => setConfirmGroup(null)}
+            />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 animate-fade-in-up">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-zinc-900">Confirmar Saque</h3>
+                <button
+                  onClick={() => setConfirmGroup(null)}
+                  className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-              <div className="h-px bg-zinc-200" />
-              <div className="flex justify-between items-start">
-                <span className="text-sm text-zinc-500">Chave PIX</span>
-                <span className="text-sm font-medium text-zinc-900 text-right max-w-[200px] break-all">
-                  {affiliate?.payout_pix_key}
-                </span>
-              </div>
-              <div className="h-px bg-zinc-200" />
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-500">Liberação</span>
-                <span className="text-sm font-medium text-zinc-700">{confirmGroup.dateLabel}</span>
-              </div>
-            </div>
 
-            <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-3 mb-6">
-              Ao confirmar, a transferência PIX será criada automaticamente. Verifique se sua chave PIX está correta.
-            </p>
+              <p className="text-sm text-zinc-500 mb-5">
+                Confira os dados abaixo antes de confirmar o saque. A transferência será processada via PIX.
+              </p>
 
-            <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmGroup(null)}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-xl transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleConfirmWithdraw}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-colors"
-              >
-                Confirmar Saque
-              </button>
+              <div className="bg-zinc-50 rounded-xl p-4 space-y-3 mb-6">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-zinc-500">Comissão</span>
+                  <span className="text-sm font-medium text-zinc-900">
+                    {formatCurrency(grossCents / 100)}
+                  </span>
+                </div>
+                <div className="h-px bg-zinc-200" />
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-zinc-500">Taxa de transferência</span>
+                  <span className="text-sm font-medium text-red-500">
+                    - {formatCurrency(WITHDRAW_FEE_CENTS / 100)}
+                  </span>
+                </div>
+                <div className="h-px bg-zinc-200" />
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-zinc-500 font-semibold">Valor a receber</span>
+                  <span className="text-lg font-bold text-zinc-900">
+                    {formatCurrency(netCents / 100)}
+                  </span>
+                </div>
+                <div className="h-px bg-zinc-200" />
+                <div className="flex justify-between items-start">
+                  <span className="text-sm text-zinc-500">Chave PIX</span>
+                  <span className="text-sm font-medium text-zinc-900 text-right max-w-[200px] break-all">
+                    {affiliate?.payout_pix_key}
+                  </span>
+                </div>
+                <div className="h-px bg-zinc-200" />
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-zinc-500">Liberação</span>
+                  <span className="text-sm font-medium text-zinc-700">{confirmGroup.dateLabel}</span>
+                </div>
+              </div>
+
+              <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-3 mb-6">
+                Ao confirmar, a transferência PIX de {formatCurrency(netCents / 100)} será criada automaticamente. Verifique se sua chave PIX está correta.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmGroup(null)}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmWithdraw}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-colors"
+                >
+                  Confirmar Saque
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Result Feedback Modal */}
       {withdrawResult && (
