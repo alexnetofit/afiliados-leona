@@ -19,7 +19,15 @@ export type GuruSubscriptionPayload = {
   trial_finished_at?: string | null;
 };
 
-/** Mapeia texto do GET Leona (ou last_status Guru) para o CHECK da tabela subscriptions. */
+/**
+ * Mapeia texto do GET Leona (ou last_status Guru) para o CHECK da tabela subscriptions.
+ *
+ * Status oficiais de assinatura Guru:
+ * https://docs.digitalmanager.guru/developers/status-de-assinaturas
+ *   active, canceled, expired, inactive, pastdue, started, trial
+ *
+ * Status do Leona podem vir como active, canceled, past_due, inactive.
+ */
 export function mapToSubscriptionStatus(
   status: string | null | undefined
 ): SubscriptionStatus | null {
@@ -27,10 +35,12 @@ export function mapToSubscriptionStatus(
   const s = String(status).toLowerCase().trim().replace(/\s+/g, "_");
   const map: Record<string, SubscriptionStatus> = {
     active: "active",
+    started: "active",
     trialing: "trialing",
     trial: "trialing",
     canceled: "canceled",
     cancelled: "canceled",
+    expired: "canceled",
     past_due: "past_due",
     pastdue: "past_due",
     inactive: "unpaid",

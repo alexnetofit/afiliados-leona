@@ -13,18 +13,21 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-/** Venda paga — comissão (API Guru + sinónimos). */
-const COMMISSION_STATUSES = new Set([
-  "approved",
-  "complete",
-  "completa",
-  "aprovado",
-  "completed",
-]);
+/**
+ * Status oficiais da Guru (slugs inglês):
+ * https://docs.digitalmanager.guru/developers/status-de-transacoes
+ *
+ * approved  = Aprovada
+ * completed = Completa
+ * refunded  = Reembolsada
+ * dispute   = Reembolso Solicitado
+ * chargeback = Reclamada (chargeback)
+ */
+const COMMISSION_STATUSES = new Set(["approved", "completed"]);
 
-const REFUND_STATUSES = new Set(["refunded", "reembolsada"]);
+const REFUND_STATUSES = new Set(["refunded"]);
 
-const DISPUTE_STATUSES = new Set(["chargeback", "dispute", "reclamada"]);
+const CHARGEBACK_STATUSES = new Set(["chargeback", "dispute"]);
 
 type GuruPayment = {
   total?: number;
@@ -432,7 +435,7 @@ export async function POST(request: NextRequest) {
     } else {
       response = await processGuruRefund(guruId, body);
     }
-  } else if (DISPUTE_STATUSES.has(st)) {
+  } else if (CHARGEBACK_STATUSES.has(st)) {
     if (!guruId) {
       response = NextResponse.json({ received: true, status: "missing_id" });
     } else {
