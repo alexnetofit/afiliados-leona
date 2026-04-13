@@ -1,3 +1,11 @@
+/*
+ * CRON Stripe (Vercel): desligado — `vercel.json` está com `"crons": []`.
+ * Para reativar o sync diário, restaure em vercel.json:
+ *   "crons": [
+ *     { "path": "/api/cron/stripe-sync", "schedule": "1 3 * * *" }
+ *   ]
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";

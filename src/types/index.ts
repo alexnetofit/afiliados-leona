@@ -93,6 +93,7 @@ export interface Transaction {
   id: string;
   affiliate_id: string;
   subscription_id: string | null;
+  guru_transaction_id: string | null;
   stripe_invoice_id: string | null;
   stripe_charge_id: string | null;
   type: TransactionType;

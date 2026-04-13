@@ -1,9 +1,4 @@
 {
   "framework": "nextjs",
-  "crons": [
-    {
-      "path": "/api/cron/stripe-sync",
-      "schedule": "1 3 * * *"
-    }
-  ]
+  "crons": []
 }

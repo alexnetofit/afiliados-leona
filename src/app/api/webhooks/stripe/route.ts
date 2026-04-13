@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
+import { calculateAvailableAtBRT, getCommissionPercent } from "@/lib/commission-payout";
+import { resolveAffiliateIdByCode } from "@/lib/resolve-affiliate-code";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -46,77 +48,17 @@ async function getAffiliateForCustomer(
   if (!affiliateCode) {
     return null;
   }
-  
+
   console.log(`Found affiliate code in metadata: ${affiliateCode} for customer ${customerId}`);
 
-  // Find affiliate by code (exact match on affiliate_code)
-  const { data: affiliate } = await supabase
-    .from("affiliates")
-    .select("id")
-    .eq("affiliate_code", affiliateCode)
-    .single();
+  const affiliateId = await resolveAffiliateIdByCode(supabase, String(affiliateCode));
+  if (!affiliateId) return null;
 
-  if (affiliate) {
-    await supabase.from("customer_affiliates").insert({
-      stripe_customer_id: customerId,
-      affiliate_id: affiliate.id,
-    });
-    return affiliate.id;
-  }
-
-  // Try finding by custom alias (from affiliate_links table)
-  const { data: link } = await supabase
-    .from("affiliate_links")
-    .select("affiliate_id")
-    .eq("alias", affiliateCode)
-    .single();
-
-  if (link) {
-    await supabase.from("customer_affiliates").insert({
-      stripe_customer_id: customerId,
-      affiliate_id: link.affiliate_id,
-    });
-    return link.affiliate_id;
-  }
-
-  return null;
-}
-
-function getCommissionPercent(tier: number): number {
-  switch (tier) {
-    case 3: return 40;
-    case 2: return 35;
-    default: return 30;
-  }
-}
-
-// Helper: Get date components in São Paulo timezone (UTC-3)
-function getDateInBRT(date: Date): { day: number; month: number; year: number } {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Sao_Paulo',
-    day: 'numeric',
-    month: 'numeric',
-    year: 'numeric',
+  await supabase.from("customer_affiliates").insert({
+    stripe_customer_id: customerId,
+    affiliate_id: affiliateId,
   });
-  const parts = formatter.formatToParts(date);
-  return {
-    day: parseInt(parts.find(p => p.type === 'day')?.value || '1'),
-    month: parseInt(parts.find(p => p.type === 'month')?.value || '1') - 1, // 0-indexed
-    year: parseInt(parts.find(p => p.type === 'year')?.value || '2026'),
-  };
-}
-
-// Helper: Calculate available_at based on payout schedule in BRT
-// Uses Date.UTC to ensure noon UTC regardless of server timezone
-function calculateAvailableAtBRT(paidAt: Date): Date {
-  const brt = getDateInBRT(paidAt);
-  const nextMonth = new Date(Date.UTC(brt.year, brt.month + 1, 1));
-  
-  if (brt.day <= 15) {
-    return new Date(Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth(), 5, 12, 0, 0));
-  } else {
-    return new Date(Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth(), 20, 12, 0, 0));
-  }
+  return affiliateId;
 }
 
 async function getSubscriptionByStripeId(stripeSubscriptionId: string) {
