@@ -70,8 +70,10 @@ export interface CustomerAffiliate {
 export interface Subscription {
   id: string;
   affiliate_id: string;
-  stripe_subscription_id: string;
-  stripe_customer_id: string;
+  stripe_subscription_id: string | null;
+  stripe_customer_id: string | null;
+  guru_subscription_internal_id?: string | null;
+  leona_account_id?: string | null;
   customer_name: string | null;
   price_id: string | null;
   amount_cents: number | null;

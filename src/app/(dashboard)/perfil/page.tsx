@@ -124,7 +124,7 @@ export default function PerfilPage() {
   const currentSales = new Set(
     (subscriptions || [])
       .filter(s => s.status === "active" || s.status === "past_due" || s.status === "canceled")
-      .map(s => s.stripe_customer_id)
+      .map((s) => s.stripe_customer_id || s.leona_account_id || s.id)
   ).size;
   
   const nextTier = affiliate?.commission_tier && affiliate.commission_tier < 3 

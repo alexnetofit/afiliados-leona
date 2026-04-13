@@ -1,10 +1,34 @@
+import type { LeonaBillingProfile } from "@/lib/guru-subscription-sync";
+
 export type LeonaBillingResult =
-  | { ok: true; rewardful_referral: string | null }
+  | { ok: true; profile: LeonaBillingProfile }
   | { ok: false; reason: "not_found" | "conflict" | "upstream"; httpStatus?: number };
 
 type BillingProfileJson = {
+  account_id?: string | number | null;
+  subscription_status?: string | null;
+  current_period_end?: string | null;
   rewardful_referral?: string | null;
+  user?: { name?: string | null; email?: string | null } | null;
 };
+
+function normalizeProfile(json: BillingProfileJson): LeonaBillingProfile {
+  const ref = json.rewardful_referral;
+  return {
+    account_id: json.account_id ?? null,
+    subscription_status:
+      json.subscription_status == null || json.subscription_status === ""
+        ? null
+        : String(json.subscription_status).trim(),
+    current_period_end:
+      json.current_period_end == null || json.current_period_end === ""
+        ? null
+        : String(json.current_period_end).trim(),
+    rewardful_referral:
+      ref == null || ref === "" ? null : String(ref).trim() || null,
+    user: json.user ?? null,
+  };
+}
 
 /**
  * GET /api/v1/integration/accounts/billing_profile?email=...
@@ -41,12 +65,7 @@ export async function fetchBillingProfileByEmail(
 
   if (res.status === 200) {
     const json = (await res.json()) as BillingProfileJson;
-    const ref = json.rewardful_referral;
-    return {
-      ok: true,
-      rewardful_referral:
-        ref == null || ref === "" ? null : String(ref).trim() || null,
-    };
+    return { ok: true, profile: normalizeProfile(json) };
   }
 
   if (res.status === 404) {

@@ -3,19 +3,28 @@ import { createClient } from "@supabase/supabase-js";
 import { calculateAvailableAtBRT, getCommissionPercent } from "@/lib/commission-payout";
 import { fetchBillingProfileByEmail } from "@/lib/leona-billing";
 import { resolveAffiliateIdByCode } from "@/lib/resolve-affiliate-code";
+import {
+  type GuruSubscriptionPayload,
+  upsertSubscriptionFromLeonaAndGuru,
+} from "@/lib/guru-subscription-sync";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-/** Status em que a venda está paga/aprovada (Guru PT/EN). */
+/** Venda paga — comissão (API Guru + sinónimos). */
 const COMMISSION_STATUSES = new Set([
   "approved",
   "complete",
   "completa",
   "aprovado",
+  "completed",
 ]);
+
+const REFUND_STATUSES = new Set(["refunded", "reembolsada"]);
+
+const DISPUTE_STATUSES = new Set(["chargeback", "dispute", "reclamada"]);
 
 type GuruPayment = {
   total?: number;
@@ -30,9 +39,10 @@ type GuruTransactionPayload = {
   webhook_type?: string;
   id?: string;
   status?: string;
-  contact?: { email?: string | null };
+  contact?: { email?: string | null; name?: string | null };
   dates?: { confirmed_at?: string | null };
   payment?: GuruPayment;
+  subscription?: GuruSubscriptionPayload | null;
 };
 
 function grossCentsFromPayment(payment: GuruPayment | undefined): number | null {
@@ -66,6 +76,326 @@ function paidAtFromPayload(body: GuruTransactionPayload): Date {
   return new Date();
 }
 
+async function maybeSyncSubscriptionFromLeona(
+  body: GuruTransactionPayload,
+  emailRaw: string
+): Promise<void> {
+  const billing = await fetchBillingProfileByEmail(emailRaw);
+  if (!billing.ok) return;
+  if (!billing.profile.rewardful_referral) return;
+
+  const affiliateId = await resolveAffiliateIdByCode(
+    supabase,
+    billing.profile.rewardful_referral
+  );
+  if (!affiliateId) return;
+
+  const amountCents = grossCentsFromPayment(body.payment);
+
+  await upsertSubscriptionFromLeonaAndGuru(supabase, {
+    affiliateId,
+    profile: billing.profile,
+    guruSubscription: body.subscription ?? null,
+    customerNameFromGuru: body.contact?.name ?? null,
+    amountCentsFromGuru: amountCents,
+  });
+}
+
+async function processGuruRefund(
+  guruId: string,
+  body: GuruTransactionPayload
+): Promise<NextResponse> {
+  const { data: originalTx } = await supabase
+    .from("transactions")
+    .select(
+      "id, affiliate_id, subscription_id, commission_percent, available_at, amount_gross_cents"
+    )
+    .eq("guru_transaction_id", guruId)
+    .eq("type", "commission")
+    .maybeSingle();
+
+  if (!originalTx) {
+    console.log(`[GURU WEBHOOK] Refund sem comissão original tx=${guruId}`);
+    return NextResponse.json({ received: true, status: "no_original_commission" });
+  }
+
+  const refundKey = `guru_refund:${guruId}`;
+  const { data: existingRefund } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("stripe_invoice_id", refundKey)
+    .maybeSingle();
+
+  if (existingRefund) {
+    return NextResponse.json({ received: true, status: "refund_already_processed" });
+  }
+
+  const refundedAmount = originalTx.amount_gross_cents;
+  const netRefund = Math.round(refundedAmount * 0.93);
+  const commissionRefund = Math.round(
+    (netRefund * originalTx.commission_percent) / 100
+  );
+
+  const marketplaceId = body.payment?.marketplace_id;
+  const chargeId =
+    marketplaceId != null && String(marketplaceId).trim() !== ""
+      ? String(marketplaceId)
+      : null;
+
+  const { error } = await supabase.from("transactions").insert({
+    affiliate_id: originalTx.affiliate_id,
+    subscription_id: originalTx.subscription_id,
+    guru_transaction_id: null,
+    stripe_invoice_id: refundKey,
+    stripe_charge_id: chargeId,
+    type: "refund",
+    amount_gross_cents: -refundedAmount,
+    commission_percent: originalTx.commission_percent,
+    commission_amount_cents: -commissionRefund,
+    paid_at: new Date().toISOString(),
+    available_at: originalTx.available_at,
+    description: "Estorno de comissão (Guru)",
+  });
+
+  if (error) {
+    if (error.code === "23505") {
+      return NextResponse.json({ received: true, status: "refund_already_processed" });
+    }
+    console.error("[GURU WEBHOOK] insert refund:", error);
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
+
+  if (originalTx.subscription_id) {
+    await supabase
+      .from("subscriptions")
+      .update({ has_refund: true })
+      .eq("id", originalTx.subscription_id);
+  }
+
+  console.log(`[GURU WEBHOOK] Estorno registrado tx=${guruId}`);
+  return NextResponse.json({ received: true, status: "refund_processed" });
+}
+
+async function processGuruDispute(
+  guruId: string,
+  body: GuruTransactionPayload
+): Promise<NextResponse> {
+  const { data: originalTx } = await supabase
+    .from("transactions")
+    .select(
+      "id, affiliate_id, subscription_id, commission_percent, available_at, amount_gross_cents"
+    )
+    .eq("guru_transaction_id", guruId)
+    .eq("type", "commission")
+    .maybeSingle();
+
+  if (!originalTx) {
+    console.log(`[GURU WEBHOOK] Disputa sem comissão original tx=${guruId}`);
+    return NextResponse.json({ received: true, status: "no_original_commission" });
+  }
+
+  const disputeKey = `guru_dispute:${guruId}`;
+  const { data: existing } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("stripe_invoice_id", disputeKey)
+    .maybeSingle();
+
+  if (existing) {
+    return NextResponse.json({ received: true, status: "dispute_already_processed" });
+  }
+
+  const disputeAmount = originalTx.amount_gross_cents;
+  const netDispute = Math.round(disputeAmount * 0.93);
+  const commissionDeduction = Math.round(
+    (netDispute * originalTx.commission_percent) / 100
+  );
+
+  const marketplaceId = body.payment?.marketplace_id;
+  const chargeId =
+    marketplaceId != null && String(marketplaceId).trim() !== ""
+      ? String(marketplaceId)
+      : null;
+
+  const { error } = await supabase.from("transactions").insert({
+    affiliate_id: originalTx.affiliate_id,
+    subscription_id: originalTx.subscription_id,
+    guru_transaction_id: null,
+    stripe_invoice_id: disputeKey,
+    stripe_charge_id: chargeId,
+    type: "dispute",
+    amount_gross_cents: -disputeAmount,
+    commission_percent: originalTx.commission_percent,
+    commission_amount_cents: -commissionDeduction,
+    paid_at: new Date().toISOString(),
+    available_at: originalTx.available_at,
+    description: "Estorno de comissão - Disputa (Guru)",
+  });
+
+  if (error) {
+    if (error.code === "23505") {
+      return NextResponse.json({ received: true, status: "dispute_already_processed" });
+    }
+    console.error("[GURU WEBHOOK] insert dispute:", error);
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
+
+  if (originalTx.subscription_id) {
+    await supabase
+      .from("subscriptions")
+      .update({ has_dispute: true })
+      .eq("id", originalTx.subscription_id);
+  }
+
+  console.log(`[GURU WEBHOOK] Disputa registrada tx=${guruId}`);
+  return NextResponse.json({ received: true, status: "dispute_processed" });
+}
+
+async function processGuruCommission(
+  body: GuruTransactionPayload,
+  guruId: string,
+  emailRaw: string
+): Promise<{ response: NextResponse; subscriptionSynced: boolean }> {
+  const amountGrossCents = grossCentsFromPayment(body.payment);
+  if (amountGrossCents == null || amountGrossCents <= 0) {
+    return {
+      response: NextResponse.json({ received: true, status: "no_amount" }),
+      subscriptionSynced: false,
+    };
+  }
+
+  const { data: existingTx } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("guru_transaction_id", guruId)
+    .maybeSingle();
+
+  if (existingTx) {
+    return {
+      response: NextResponse.json({ received: true, status: "already_processed" }),
+      subscriptionSynced: false,
+    };
+  }
+
+  const billing = await fetchBillingProfileByEmail(emailRaw);
+  if (!billing.ok) {
+    if (billing.reason === "not_found") {
+      console.log(`[GURU WEBHOOK] Leona 404 / sem perfil para email ${emailRaw}, tx ${guruId}`);
+      return {
+        response: NextResponse.json({ received: true, status: "no_billing_profile" }),
+        subscriptionSynced: false,
+      };
+    }
+    if (billing.reason === "conflict") {
+      console.warn(
+        `[GURU WEBHOOK] Leona 409 — várias contas para owner ${emailRaw}, tx ${guruId}; comissão não atribuída`
+      );
+      return {
+        response: NextResponse.json({ received: true, status: "billing_conflict" }),
+        subscriptionSynced: false,
+      };
+    }
+    const code = billing.httpStatus === 503 ? 503 : 502;
+    return {
+      response: NextResponse.json(
+        { error: "Leona billing unavailable" },
+        { status: code }
+      ),
+      subscriptionSynced: false,
+    };
+  }
+
+  if (!billing.profile.rewardful_referral) {
+    console.log(`[GURU WEBHOOK] Sem rewardful_referral no Leona para ${emailRaw}, tx ${guruId}`);
+    return {
+      response: NextResponse.json({ received: true, status: "no_referral" }),
+      subscriptionSynced: false,
+    };
+  }
+
+  const affiliateId = await resolveAffiliateIdByCode(
+    supabase,
+    billing.profile.rewardful_referral
+  );
+  if (!affiliateId) {
+    console.log(
+      `[GURU WEBHOOK] Código Rewardful não encontrado: ${billing.profile.rewardful_referral} (tx ${guruId})`
+    );
+    return {
+      response: NextResponse.json({ received: true, status: "unknown_affiliate_code" }),
+      subscriptionSynced: false,
+    };
+  }
+
+  const { data: affiliate } = await supabase
+    .from("affiliates")
+    .select("commission_tier")
+    .eq("id", affiliateId)
+    .single();
+
+  if (!affiliate) {
+    return {
+      response: NextResponse.json({ received: true, status: "affiliate_missing" }),
+      subscriptionSynced: false,
+    };
+  }
+
+  const subscriptionId = await upsertSubscriptionFromLeonaAndGuru(supabase, {
+    affiliateId,
+    profile: billing.profile,
+    guruSubscription: body.subscription ?? null,
+    customerNameFromGuru: body.contact?.name ?? null,
+    amountCentsFromGuru: amountGrossCents,
+  });
+
+  const commissionPercent = getCommissionPercent(affiliate.commission_tier);
+  const netAmount = Math.round(amountGrossCents * 0.93);
+  const commissionAmount = Math.round((netAmount * commissionPercent) / 100);
+  const paidAt = paidAtFromPayload(body);
+  const availableAt = calculateAvailableAtBRT(paidAt);
+
+  const marketplaceId = body.payment?.marketplace_id;
+  const chargeId =
+    marketplaceId != null && String(marketplaceId).trim() !== ""
+      ? String(marketplaceId)
+      : null;
+
+  const { error: insertErr } = await supabase.from("transactions").insert({
+    affiliate_id: affiliateId,
+    subscription_id: subscriptionId,
+    guru_transaction_id: guruId,
+    stripe_invoice_id: null,
+    stripe_charge_id: chargeId,
+    type: "commission",
+    amount_gross_cents: amountGrossCents,
+    commission_percent: commissionPercent,
+    commission_amount_cents: commissionAmount,
+    paid_at: paidAt.toISOString(),
+    available_at: availableAt.toISOString(),
+    description: "Comissão de venda (Guru)",
+  });
+
+  if (insertErr) {
+    if (insertErr.code === "23505") {
+      return {
+        response: NextResponse.json({ received: true, status: "already_processed" }),
+        subscriptionSynced: true,
+      };
+    }
+    console.error("[GURU WEBHOOK] insert transaction:", insertErr);
+    return {
+      response: NextResponse.json({ error: "Database error" }, { status: 500 }),
+      subscriptionSynced: true,
+    };
+  }
+
+  console.log(`[GURU WEBHOOK] Comissão registrada tx=${guruId} affiliate=${affiliateId}`);
+  return {
+    response: NextResponse.json({ received: true, status: "processed" }),
+    subscriptionSynced: true,
+  };
+}
+
 export async function POST(request: NextRequest) {
   const expectedToken = process.env.GURU_WEBHOOK_API_TOKEN;
   if (!expectedToken) {
@@ -89,109 +419,51 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, status: "ignored_type" });
   }
 
-  if (!body.status || !COMMISSION_STATUSES.has(String(body.status).toLowerCase())) {
-    return NextResponse.json({ received: true, status: "ignored_status" });
-  }
-
   const guruId = body.id?.trim();
-  if (!guruId) {
-    return NextResponse.json({ received: true, status: "missing_id" });
-  }
+  const emailRaw = body.contact?.email?.trim().toLowerCase() || "";
+  const st = String(body.status || "").toLowerCase();
 
-  const emailRaw = body.contact?.email?.trim().toLowerCase();
-  if (!emailRaw) {
-    return NextResponse.json({ received: true, status: "missing_email" });
-  }
+  let response: NextResponse;
+  let subscriptionSynced = false;
 
-  const amountGrossCents = grossCentsFromPayment(body.payment);
-  if (amountGrossCents == null || amountGrossCents <= 0) {
-    return NextResponse.json({ received: true, status: "no_amount" });
-  }
-
-  const { data: existingTx } = await supabase
-    .from("transactions")
-    .select("id")
-    .eq("guru_transaction_id", guruId)
-    .maybeSingle();
-
-  if (existingTx) {
-    return NextResponse.json({ received: true, status: "already_processed" });
-  }
-
-  const billing = await fetchBillingProfileByEmail(emailRaw);
-  if (!billing.ok) {
-    if (billing.reason === "not_found") {
-      console.log(`[GURU WEBHOOK] Leona 404 / sem perfil para email ${emailRaw}, tx ${guruId}`);
-      return NextResponse.json({ received: true, status: "no_billing_profile" });
+  if (REFUND_STATUSES.has(st)) {
+    if (!guruId) {
+      response = NextResponse.json({ received: true, status: "missing_id" });
+    } else {
+      response = await processGuruRefund(guruId, body);
     }
-    if (billing.reason === "conflict") {
-      console.warn(
-        `[GURU WEBHOOK] Leona 409 — várias contas para owner ${emailRaw}, tx ${guruId}; comissão não atribuída`
-      );
-      return NextResponse.json({ received: true, status: "billing_conflict" });
+  } else if (DISPUTE_STATUSES.has(st)) {
+    if (!guruId) {
+      response = NextResponse.json({ received: true, status: "missing_id" });
+    } else {
+      response = await processGuruDispute(guruId, body);
     }
-    const code = billing.httpStatus === 503 ? 503 : 502;
-    return NextResponse.json({ error: "Leona billing unavailable" }, { status: code });
-  }
-
-  if (!billing.rewardful_referral) {
-    console.log(`[GURU WEBHOOK] Sem rewardful_referral no Leona para ${emailRaw}, tx ${guruId}`);
-    return NextResponse.json({ received: true, status: "no_referral" });
-  }
-
-  const affiliateId = await resolveAffiliateIdByCode(supabase, billing.rewardful_referral);
-  if (!affiliateId) {
-    console.log(
-      `[GURU WEBHOOK] Código Rewardful não encontrado nos afiliados: ${billing.rewardful_referral} (tx ${guruId})`
-    );
-    return NextResponse.json({ received: true, status: "unknown_affiliate_code" });
-  }
-
-  const { data: affiliate } = await supabase
-    .from("affiliates")
-    .select("commission_tier")
-    .eq("id", affiliateId)
-    .single();
-
-  if (!affiliate) {
-    return NextResponse.json({ received: true, status: "affiliate_missing" });
-  }
-
-  const commissionPercent = getCommissionPercent(affiliate.commission_tier);
-  const netAmount = Math.round(amountGrossCents * 0.93);
-  const commissionAmount = Math.round((netAmount * commissionPercent) / 100);
-  const paidAt = paidAtFromPayload(body);
-  const availableAt = calculateAvailableAtBRT(paidAt);
-
-  const marketplaceId = body.payment?.marketplace_id;
-  const chargeId =
-    marketplaceId != null && String(marketplaceId).trim() !== ""
-      ? String(marketplaceId)
-      : null;
-
-  const { error: insertErr } = await supabase.from("transactions").insert({
-    affiliate_id: affiliateId,
-    subscription_id: null,
-    guru_transaction_id: guruId,
-    stripe_invoice_id: null,
-    stripe_charge_id: chargeId,
-    type: "commission",
-    amount_gross_cents: amountGrossCents,
-    commission_percent: commissionPercent,
-    commission_amount_cents: commissionAmount,
-    paid_at: paidAt.toISOString(),
-    available_at: availableAt.toISOString(),
-    description: "Comissão de venda (Guru)",
-  });
-
-  if (insertErr) {
-    if (insertErr.code === "23505") {
-      return NextResponse.json({ received: true, status: "already_processed" });
+  } else if (COMMISSION_STATUSES.has(st)) {
+    if (!guruId) {
+      response = NextResponse.json({ received: true, status: "missing_id" });
+    } else if (!emailRaw) {
+      response = NextResponse.json({ received: true, status: "missing_email" });
+    } else {
+      const cr = await processGuruCommission(body, guruId, emailRaw);
+      response = cr.response;
+      subscriptionSynced = cr.subscriptionSynced;
     }
-    console.error("[GURU WEBHOOK] insert transaction:", insertErr);
-    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  } else {
+    response = NextResponse.json({ received: true, status: "ignored_status" });
   }
 
-  console.log(`[GURU WEBHOOK] Comissão registrada tx=${guruId} affiliate=${affiliateId}`);
-  return NextResponse.json({ received: true, status: "processed" });
+  const shouldSyncLeona =
+    emailRaw &&
+    response.status === 200 &&
+    !subscriptionSynced;
+
+  if (shouldSyncLeona) {
+    try {
+      await maybeSyncSubscriptionFromLeona(body, emailRaw);
+    } catch (e) {
+      console.error("[GURU WEBHOOK] sync assinatura Leona:", e);
+    }
+  }
+
+  return response;
 }

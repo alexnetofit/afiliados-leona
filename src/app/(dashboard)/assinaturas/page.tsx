@@ -45,7 +45,8 @@ export default function AssinaturasPage() {
       const searchLower = search.toLowerCase();
       result = result.filter((s) => 
         s.customer_name?.toLowerCase().includes(searchLower) ||
-        s.stripe_customer_id?.toLowerCase().includes(searchLower)
+        s.stripe_customer_id?.toLowerCase().includes(searchLower) ||
+        (s.leona_account_id && s.leona_account_id.toLowerCase().includes(searchLower))
       );
     }
     
