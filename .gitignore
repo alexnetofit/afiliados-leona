@@ -50,3 +50,4 @@ supabase/.temp
 
 # OS
 Thumbs.db
+.env*.local
