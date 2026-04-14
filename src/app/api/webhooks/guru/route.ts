@@ -267,7 +267,19 @@ async function reprocessExistingGuruTransaction(
   }
 ): Promise<{ response: NextResponse; subscriptionSynced: boolean }> {
   const billing = await fetchBillingProfileByEmail(emailRaw);
-  if (!billing.ok || !billing.profile.rewardful_referral) {
+  if (!billing.ok) {
+    console.log(
+      `[GURU WEBHOOK] Reprocess tx=${guruId}: billing lookup falhou para ${emailRaw} (reason=${(billing as { reason?: string }).reason})`
+    );
+    return {
+      response: NextResponse.json({ received: true, status: "already_processed" }),
+      subscriptionSynced: false,
+    };
+  }
+  if (!billing.profile.rewardful_referral) {
+    console.log(
+      `[GURU WEBHOOK] Reprocess tx=${guruId}: sem rewardful_referral para ${emailRaw}`
+    );
     return {
       response: NextResponse.json({ received: true, status: "already_processed" }),
       subscriptionSynced: false,
@@ -279,6 +291,9 @@ async function reprocessExistingGuruTransaction(
     billing.profile.rewardful_referral
   );
   if (!newAffiliateId) {
+    console.log(
+      `[GURU WEBHOOK] Reprocess tx=${guruId}: código ${billing.profile.rewardful_referral} não encontrado`
+    );
     return {
       response: NextResponse.json({ received: true, status: "already_processed" }),
       subscriptionSynced: false,
@@ -340,6 +355,9 @@ async function reprocessExistingGuruTransaction(
     };
   }
 
+  console.log(
+    `[GURU WEBHOOK] Reprocess tx=${guruId}: mesmo affiliate=${newAffiliateId}, nada a atualizar`
+  );
   return {
     response: NextResponse.json({ received: true, status: "already_processed" }),
     subscriptionSynced: true,
