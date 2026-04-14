@@ -254,6 +254,98 @@ async function processGuruDispute(
   return NextResponse.json({ received: true, status: "dispute_processed" });
 }
 
+async function reprocessExistingGuruTransaction(
+  body: GuruTransactionPayload,
+  guruId: string,
+  emailRaw: string,
+  amountGrossCents: number,
+  existingTx: {
+    id: string;
+    affiliate_id: string;
+    subscription_id: string | null;
+    amount_gross_cents: number;
+  }
+): Promise<{ response: NextResponse; subscriptionSynced: boolean }> {
+  const billing = await fetchBillingProfileByEmail(emailRaw);
+  if (!billing.ok || !billing.profile.rewardful_referral) {
+    return {
+      response: NextResponse.json({ received: true, status: "already_processed" }),
+      subscriptionSynced: false,
+    };
+  }
+
+  const newAffiliateId = await resolveAffiliateIdByCode(
+    supabase,
+    billing.profile.rewardful_referral
+  );
+  if (!newAffiliateId) {
+    return {
+      response: NextResponse.json({ received: true, status: "already_processed" }),
+      subscriptionSynced: false,
+    };
+  }
+
+  const subscriptionId = await upsertSubscriptionFromLeonaAndGuru(supabase, {
+    affiliateId: newAffiliateId,
+    profile: billing.profile,
+    guruSubscription: body.subscription ?? null,
+    customerNameFromGuru: body.contact?.name ?? null,
+    amountCentsFromGuru: amountGrossCents,
+  });
+
+  const txPatch: Record<string, unknown> = {};
+
+  if (newAffiliateId !== existingTx.affiliate_id) {
+    const { data: affiliate } = await supabase
+      .from("affiliates")
+      .select("commission_tier")
+      .eq("id", newAffiliateId)
+      .single();
+
+    if (affiliate) {
+      const commissionPercent = getCommissionPercent(affiliate.commission_tier);
+      const netAmount = Math.round(amountGrossCents * 0.93);
+      const commissionAmount = Math.round((netAmount * commissionPercent) / 100);
+
+      txPatch.affiliate_id = newAffiliateId;
+      txPatch.commission_percent = commissionPercent;
+      txPatch.commission_amount_cents = commissionAmount;
+    }
+  }
+
+  if (subscriptionId && subscriptionId !== existingTx.subscription_id) {
+    txPatch.subscription_id = subscriptionId;
+  }
+
+  if (Object.keys(txPatch).length > 0) {
+    const { error } = await supabase
+      .from("transactions")
+      .update(txPatch)
+      .eq("id", existingTx.id);
+
+    if (error) {
+      console.error("[GURU WEBHOOK] update existing transaction:", error);
+    } else {
+      console.log(
+        `[GURU WEBHOOK] Transação atualizada tx=${guruId}`,
+        txPatch.affiliate_id
+          ? `affiliate: ${existingTx.affiliate_id} → ${newAffiliateId}`
+          : `subscription_id atualizado`
+      );
+    }
+
+    return {
+      response: NextResponse.json({ received: true, status: "updated" }),
+      subscriptionSynced: true,
+    };
+  }
+
+  return {
+    response: NextResponse.json({ received: true, status: "already_processed" }),
+    subscriptionSynced: true,
+  };
+}
+
 async function processGuruCommission(
   body: GuruTransactionPayload,
   guruId: string,
@@ -269,15 +361,18 @@ async function processGuruCommission(
 
   const { data: existingTx } = await supabase
     .from("transactions")
-    .select("id")
+    .select("id, affiliate_id, subscription_id, amount_gross_cents")
     .eq("guru_transaction_id", guruId)
     .maybeSingle();
 
   if (existingTx) {
-    return {
-      response: NextResponse.json({ received: true, status: "already_processed" }),
-      subscriptionSynced: false,
-    };
+    return await reprocessExistingGuruTransaction(
+      body,
+      guruId,
+      emailRaw,
+      amountGrossCents,
+      existingTx
+    );
   }
 
   const billing = await fetchBillingProfileByEmail(emailRaw);
