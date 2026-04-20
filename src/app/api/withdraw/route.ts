@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
+import {
+  type AsaasAccount,
+  getAsaasBaseUrl,
+  getOrderedAsaasAccounts,
+} from "@/lib/asaas-accounts";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -11,14 +16,11 @@ const supabaseAdmin = createClient(
 );
 
 const ADMIN_EMAIL = "kinhonetovai@gmail.com";
-const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
-const ASAAS_BASE_URL = "https://api.asaas.com";
 
 function detectPixType(key: string): string {
   const clean = key.replace(/[.\-/\s]/g, "");
   if (/^\d{14}$/.test(clean)) return "CNPJ";
   if (/^\d{11}$/.test(clean)) {
-    // DDD (2 dígitos) + 9 + 8 dígitos = telefone celular brasileiro
     if (/^[1-9][1-9]9\d{8}$/.test(clean)) return "PHONE";
     return "CPF";
   }
@@ -32,16 +34,160 @@ const PIX_TYPE_FALLBACKS: Record<string, string[]> = {
   PHONE: ["CPF"],
 };
 
+type AsaasErrorPayload = {
+  errors?: Array<{ code?: string; description?: string }>;
+  error?: string;
+};
+
+type TransferAttemptOk = {
+  ok: true;
+  account: AsaasAccount;
+  pixType: string;
+  data: {
+    id: string;
+    bankAccount?: {
+      ownerName?: string | null;
+      bank?: { name?: string | null } | null;
+      cpfCnpj?: string | null;
+    } | null;
+  };
+};
+
+type TransferAttemptErr = {
+  ok: false;
+  account: AsaasAccount;
+  pixType: string;
+  status: number;
+  data: AsaasErrorPayload;
+  message: string;
+};
+
+type TransferAttempt = TransferAttemptOk | TransferAttemptErr;
+
+function describeAsaasError(data: AsaasErrorPayload | null | undefined): string {
+  if (!data) return "Sem detalhes";
+  return (
+    data.errors?.[0]?.description ||
+    data.error ||
+    JSON.stringify(data).slice(0, 200)
+  );
+}
+
+function isInsufficientBalanceError(attempt: TransferAttemptErr): boolean {
+  const text = (
+    attempt.message +
+    " " +
+    JSON.stringify(attempt.data || {})
+  ).toLowerCase();
+  return (
+    text.includes("saldo insuficiente") ||
+    text.includes("insufficient balance") ||
+    text.includes("insufficient_balance")
+  );
+}
+
+async function attemptTransfer(
+  account: AsaasAccount,
+  payload: {
+    transferValue: number;
+    pixKey: string;
+    pixType: string;
+    description: string;
+    externalReference?: string;
+  }
+): Promise<TransferAttempt> {
+  const res = await fetch(`${getAsaasBaseUrl()}/v3/transfers`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      access_token: account.apiKey,
+    },
+    body: JSON.stringify({
+      value: payload.transferValue,
+      operationType: "PIX",
+      pixAddressKey: payload.pixKey,
+      pixAddressKeyType: payload.pixType,
+      description: payload.description,
+      externalReference: payload.externalReference,
+    }),
+  });
+
+  const data = (await res.json().catch(() => ({}))) as AsaasErrorPayload &
+    Partial<TransferAttemptOk["data"]>;
+
+  if (res.ok && (data as { id?: string }).id) {
+    return {
+      ok: true,
+      account,
+      pixType: payload.pixType,
+      data: data as TransferAttemptOk["data"],
+    };
+  }
+
+  return {
+    ok: false,
+    account,
+    pixType: payload.pixType,
+    status: res.status,
+    data,
+    message: describeAsaasError(data),
+  };
+}
+
+async function notifyAdminAllAccountsFailed(args: {
+  affiliateName: string;
+  affiliateEmail: string | null | undefined;
+  amount: string;
+  pixKey: string;
+  attempts: TransferAttemptErr[];
+}): Promise<void> {
+  const lines = args.attempts
+    .map(
+      (a) =>
+        `<li><strong>${a.account.label}</strong> (tipo ${a.pixType}, HTTP ${a.status}): ${a.message}</li>`
+    )
+    .join("");
+
+  try {
+    await resend.emails.send({
+      from: "Leona Afiliados <noreply@leonaflow.com>",
+      to: ADMIN_EMAIL,
+      subject: `[URGENTE] Saque falhou em TODAS as contas Asaas - ${args.affiliateName}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 560px;">
+          <h2 style="color: #b91c1c;">Saque sem caixa disponível</h2>
+          <p style="color: #3f3f46; font-size: 15px;">
+            O afiliado <strong>${args.affiliateName}</strong> tentou sacar
+            <strong>${args.amount}</strong> e a transferência falhou em todas as contas Asaas configuradas.
+          </p>
+          <p style="color: #52525b; font-size: 14px;"><strong>PIX:</strong> ${args.pixKey}</p>
+          ${args.affiliateEmail ? `<p style="color: #52525b; font-size: 14px;"><strong>Email:</strong> ${args.affiliateEmail}</p>` : ""}
+          <p style="color: #3f3f46; font-size: 14px; margin-top: 12px;"><strong>Tentativas:</strong></p>
+          <ul style="color: #52525b; font-size: 13px;">${lines}</ul>
+          <p style="color: #b91c1c; font-size: 14px; font-weight: 600; margin-top: 16px;">
+            Reabasteça a conta primária ou autorize transferências pendentes para liberar caixa.
+          </p>
+        </div>
+      `,
+    });
+  } catch (e) {
+    console.error("[WITHDRAW] Falha ao notificar admin de saldo zerado:", e);
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     if (!user) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const { affiliateName, amount, amountCents, dateLabel, pixKey, affiliateId } = await request.json();
+    const { affiliateName, amount, amountCents, dateLabel, pixKey, affiliateId } =
+      await request.json();
 
     if (!affiliateName || !amount || !pixKey || !amountCents) {
       return NextResponse.json(
@@ -50,7 +196,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Prevent duplicates (allow retry if previous attempt failed)
     if (affiliateId && dateLabel) {
       const { data: existing } = await supabaseAdmin
         .from("withdraw_requests")
@@ -72,10 +217,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // --- Create Asaas PIX transfer ---
-    if (!ASAAS_API_KEY) {
+    const accounts = getOrderedAsaasAccounts();
+    if (accounts.length === 0) {
       return NextResponse.json(
-        { error: "Chave API Asaas não configurada no servidor" },
+        { error: "Nenhuma conta Asaas configurada no servidor" },
         { status: 500 }
       );
     }
@@ -83,55 +228,90 @@ export async function POST(request: NextRequest) {
     const detectedType = detectPixType(pixKey);
     const transferValue = amountCents / 100;
     const typesToTry = [detectedType, ...(PIX_TYPE_FALLBACKS[detectedType] || [])];
+    const description = `Comissao ${affiliateName} - ${dateLabel || "saque"}`;
+    const externalReference = affiliateId
+      ? `withdraw-${affiliateId}-${dateLabel}`
+      : undefined;
 
-    let asaasData: any = null;
-    let asaasRes: Response | null = null;
+    let success: TransferAttemptOk | null = null;
+    const failures: TransferAttemptErr[] = [];
 
-    for (const pixType of typesToTry) {
-      console.log(`[WITHDRAW] Tentando tipo ${pixType} para chave ${pixKey}`);
-      asaasRes = await fetch(`${ASAAS_BASE_URL}/v3/transfers`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          access_token: ASAAS_API_KEY,
-        },
-        body: JSON.stringify({
-          value: transferValue,
-          operationType: "PIX",
-          pixAddressKey: pixKey,
-          pixAddressKeyType: pixType,
-          description: `Comissao ${affiliateName} - ${dateLabel || "saque"}`,
-          externalReference: affiliateId ? `withdraw-${affiliateId}-${dateLabel}` : undefined,
-        }),
-      });
+    accountsLoop: for (const account of accounts) {
+      for (const pixType of typesToTry) {
+        console.log(
+          `[WITHDRAW] Tentando ${account.label} (${account.id}) tipo ${pixType} chave ${pixKey}`
+        );
+        const attempt = await attemptTransfer(account, {
+          transferValue,
+          pixKey,
+          pixType,
+          description,
+          externalReference,
+        });
 
-      asaasData = await asaasRes.json();
+        if (attempt.ok) {
+          console.log(
+            `[WITHDRAW] Sucesso em ${account.label} tipo ${pixType} transferId=${attempt.data.id}`
+          );
+          success = attempt;
+          break accountsLoop;
+        }
 
-      if (asaasRes.ok) {
-        console.log(`[WITHDRAW] Sucesso com tipo ${pixType}`);
-        break;
+        console.warn(
+          `[WITHDRAW] Falha em ${account.label} tipo ${pixType}:`,
+          JSON.stringify(attempt.data)
+        );
+        failures.push(attempt);
+
+        // Se foi saldo insuficiente, não adianta tentar outros tipos PIX nessa
+        // conta — pula direto pra próxima conta (failover).
+        if (isInsufficientBalanceError(attempt)) {
+          break;
+        }
       }
-
-      console.warn(`[WITHDRAW] Falha com tipo ${pixType}:`, JSON.stringify(asaasData));
     }
 
-    if (!asaasRes?.ok) {
-      const errorMsg = asaasData?.errors?.[0]?.description
-        || asaasData?.error
-        || "Erro ao criar transferência no Asaas";
-      console.error("[WITHDRAW] Asaas error (todos os tipos falharam):", JSON.stringify(asaasData));
+    if (!success) {
+      const allInsufficient =
+        failures.length > 0 && failures.every(isInsufficientBalanceError);
+
+      if (allInsufficient) {
+        await notifyAdminAllAccountsFailed({
+          affiliateName,
+          affiliateEmail: user.email,
+          amount,
+          pixKey,
+          attempts: failures,
+        });
+        return NextResponse.json(
+          {
+            error:
+              "Saque temporariamente indisponível. Já avisamos a equipe e vamos processar em algumas horas. Tente novamente mais tarde.",
+          },
+          { status: 503 }
+        );
+      }
+
+      const last = failures[failures.length - 1];
+      const errorMsg = last
+        ? last.message
+        : "Erro desconhecido ao criar transferência no Asaas";
+      console.error(
+        "[WITHDRAW] Asaas error (todas as contas falharam):",
+        JSON.stringify(failures.map((f) => ({ acc: f.account.id, msg: f.message })))
+      );
       return NextResponse.json(
         { error: `Falha na transferência PIX: ${errorMsg}` },
         { status: 400 }
       );
     }
 
-    const asaasTransferId = asaasData.id;
-    const ownerName = asaasData.bankAccount?.ownerName || null;
-    const bankName = asaasData.bankAccount?.bank?.name || null;
-    const cpfCnpj = asaasData.bankAccount?.cpfCnpj || null;
+    const asaasTransferId = success.data.id;
+    const ownerName = success.data.bankAccount?.ownerName || null;
+    const bankName = success.data.bankAccount?.bank?.name || null;
+    const cpfCnpj = success.data.bankAccount?.cpfCnpj || null;
+    const usedAccount = success.account;
 
-    // --- Save to database as PROCESSING (webhook will update to paid) ---
     if (affiliateId && dateLabel) {
       await supabaseAdmin.from("withdraw_requests").insert({
         affiliate_id: affiliateId,
@@ -142,12 +322,20 @@ export async function POST(request: NextRequest) {
         pix_key: pixKey,
         status: "processing",
         asaas_transfer_id: asaasTransferId,
+        asaas_account: usedAccount.id,
       });
     }
 
-    // --- Send notification email to admin ---
+    const fallbackBadge =
+      usedAccount.id !== accounts[0].id
+        ? `<p style="background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:6px;font-size:13px;margin:12px 0;">
+            ⚠ Failover acionado: a transferência foi processada pela conta secundária <strong>${usedAccount.label}</strong> porque a primária falhou.
+          </p>`
+        : "";
+
     const pixHtml = `<div style="background: #f4f4f5; border-radius: 8px; padding: 12px 16px; margin: 16px 0;">
       <p style="color: #3f3f46; font-size: 14px; margin: 0 0 4px 0; font-weight: 600;">Dados da transferência:</p>
+      <p style="color: #52525b; font-size: 14px; margin: 2px 0;"><strong>Conta Asaas:</strong> ${usedAccount.label}</p>
       <p style="color: #52525b; font-size: 14px; margin: 2px 0;"><strong>PIX:</strong> ${pixKey}</p>
       ${ownerName ? `<p style="color: #52525b; font-size: 14px; margin: 2px 0;"><strong>Titular:</strong> ${ownerName}</p>` : ""}
       ${bankName ? `<p style="color: #52525b; font-size: 14px; margin: 2px 0;"><strong>Banco:</strong> ${bankName}</p>` : ""}
@@ -168,9 +356,10 @@ export async function POST(request: NextRequest) {
             </p>
             ${dateLabel ? `<p style="color: #71717a; font-size: 14px;">Referente à liberação de ${dateLabel}.</p>` : ""}
             <p style="color: #71717a; font-size: 14px;">Email do afiliado: ${user.email}</p>
+            ${fallbackBadge}
             ${pixHtml}
             <p style="color: #ef4444; font-size: 14px; font-weight: 600; margin-top: 16px;">
-              ⚠ Autorize esta transferência no app Asaas.
+              ⚠ Autorize esta transferência no app Asaas (${usedAccount.label}).
             </p>
             <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 20px 0;" />
             <p style="color: #a1a1aa; font-size: 12px;">Enviado automaticamente pelo sistema de afiliados Leona.</p>
@@ -187,6 +376,7 @@ export async function POST(request: NextRequest) {
       bankName,
       cpfCnpj,
       asaasTransferId,
+      asaasAccount: usedAccount.id,
     });
   } catch (error) {
     console.error("[WITHDRAW] Error:", error);

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
+import {
+  findAccountByWebhookToken,
+  getOrderedAsaasAccounts,
+} from "@/lib/asaas-accounts";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -9,17 +13,21 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const ASAAS_WEBHOOK_TOKEN = process.env.ASAAS_WEBHOOK_TOKEN;
-
 export async function POST(request: NextRequest) {
   try {
-    // Validate webhook token if configured
-    if (ASAAS_WEBHOOK_TOKEN) {
+    const accounts = getOrderedAsaasAccounts();
+    const anyTokenConfigured = accounts.some((a) => a.webhookToken);
+
+    // Só valida token se pelo menos uma conta cadastrou um. Assim, ambientes
+    // de dev/sandbox sem token continuam funcionando.
+    if (anyTokenConfigured) {
       const token = request.headers.get("asaas-access-token");
-      if (token !== ASAAS_WEBHOOK_TOKEN) {
-        console.error("[ASAAS WEBHOOK] Invalid token");
+      const sourceAccount = findAccountByWebhookToken(token);
+      if (!sourceAccount) {
+        console.error("[ASAAS WEBHOOK] Token inválido ou não cadastrado");
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
+      console.log(`[ASAAS WEBHOOK] Conta de origem: ${sourceAccount.label}`);
     }
 
     const body = await request.json();
@@ -30,12 +38,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    console.log(`[ASAAS WEBHOOK] Event: ${event}, Transfer: ${transfer.id}, Status: ${transfer.status}`);
+    console.log(
+      `[ASAAS WEBHOOK] Event: ${event}, Transfer: ${transfer.id}, Status: ${transfer.status}`
+    );
 
-    // Find the withdraw_request by asaas_transfer_id
     const { data: withdrawRequest } = await supabaseAdmin
       .from("withdraw_requests")
-      .select("id, affiliate_name, affiliate_email, amount_text, date_label, status")
+      .select(
+        "id, affiliate_name, affiliate_email, amount_text, date_label, status, asaas_account"
+      )
       .eq("asaas_transfer_id", transfer.id)
       .single();
 
@@ -122,8 +133,13 @@ export async function POST(request: NextRequest) {
       case "TRANSFER_IN_BANK_PROCESSING":
       case "TRANSFER_PENDING":
       case "TRANSFER_CREATED": {
-        // Keep as processing
-        if (withdrawRequest.status !== "processing") {
+        // Mantém como 'processing'. Não regride se já está em estado terminal
+        // (paid/failed) — pode acontecer se o webhook chegar fora de ordem.
+        if (
+          withdrawRequest.status !== "processing" &&
+          withdrawRequest.status !== "paid" &&
+          withdrawRequest.status !== "failed"
+        ) {
           await supabaseAdmin
             .from("withdraw_requests")
             .update({ status: "processing" })
