@@ -48,6 +48,160 @@ type GuruTransactionPayload = {
   subscription?: GuruSubscriptionPayload | null;
 };
 
+const managerInvoiceKey = (guruId: string) => `guru:${guruId}_mgr`;
+const managerRefundKey = (guruId: string) => `guru:${guruId}_mgr_refund`;
+const managerDisputeKey = (guruId: string) => `guru:${guruId}_mgr_dispute`;
+
+/**
+ * Cria, atualiza ou apenas valida a transação de comissão do gerente do afiliado.
+ * Idempotente: usa `stripe_invoice_id = guru:<guru_id>_mgr` como chave única.
+ * Quando o afiliado direto é alterado (reprocess), realinha o gerente para o novo
+ * `manager_affiliates.manager_id` e recalcula o valor.
+ */
+async function ensureGuruManagerCommission(params: {
+  guruId: string;
+  affiliateId: string;
+  subscriptionId: string | null;
+  customerName: string | null;
+  amountGrossCents: number;
+  paidAtIso: string;
+  availableAtIso: string;
+  chargeId: string | null;
+}): Promise<void> {
+  const { data: managerRel } = await supabase
+    .from("manager_affiliates")
+    .select("manager_id, commission_percent")
+    .eq("affiliate_id", params.affiliateId)
+    .maybeSingle();
+
+  const mgrKey = managerInvoiceKey(params.guruId);
+  const { data: existingMgr } = await supabase
+    .from("transactions")
+    .select("id, affiliate_id, commission_percent, commission_amount_cents")
+    .eq("stripe_invoice_id", mgrKey)
+    .maybeSingle();
+
+  if (!managerRel) {
+    if (existingMgr) {
+      console.warn(
+        `[GURU WEBHOOK] tx=${params.guruId}: afiliado ${params.affiliateId} sem gerente, mas _mgr existe (${existingMgr.id}); mantido inalterado`
+      );
+    }
+    return;
+  }
+
+  const netAmount = Math.round(params.amountGrossCents * 0.93);
+  const mgrCommission = Math.round((netAmount * managerRel.commission_percent) / 100);
+  const customerLabel = params.customerName?.trim() || "Cliente";
+
+  if (existingMgr) {
+    const patch: Record<string, unknown> = {};
+    if (existingMgr.affiliate_id !== managerRel.manager_id) {
+      patch.affiliate_id = managerRel.manager_id;
+    }
+    if (existingMgr.commission_percent !== managerRel.commission_percent) {
+      patch.commission_percent = managerRel.commission_percent;
+    }
+    if (existingMgr.commission_amount_cents !== mgrCommission) {
+      patch.commission_amount_cents = mgrCommission;
+    }
+    if (Object.keys(patch).length > 0) {
+      const { error } = await supabase
+        .from("transactions")
+        .update(patch)
+        .eq("id", existingMgr.id);
+      if (error) {
+        console.error("[GURU WEBHOOK] update manager commission:", error);
+      } else {
+        console.log(
+          `[GURU WEBHOOK] _mgr atualizado tx=${params.guruId} → manager=${managerRel.manager_id}`
+        );
+      }
+    }
+    return;
+  }
+
+  const { error } = await supabase.from("transactions").insert({
+    affiliate_id: managerRel.manager_id,
+    subscription_id: params.subscriptionId,
+    stripe_invoice_id: mgrKey,
+    stripe_charge_id: params.chargeId,
+    guru_transaction_id: null,
+    type: "commission",
+    amount_gross_cents: params.amountGrossCents,
+    commission_percent: managerRel.commission_percent,
+    commission_amount_cents: mgrCommission,
+    paid_at: params.paidAtIso,
+    available_at: params.availableAtIso,
+    description: `Comissão de gerência - ${customerLabel}`,
+  });
+
+  if (error && error.code !== "23505") {
+    console.error("[GURU WEBHOOK] insert manager commission:", error);
+    return;
+  }
+
+  console.log(
+    `[GURU WEBHOOK] Comissão de gerência registrada tx=${params.guruId} manager=${managerRel.manager_id}`
+  );
+}
+
+/**
+ * Cria a transação negativa do gerente quando há refund/dispute na venda original.
+ * Reaproveita o `commission_percent` da `_mgr` original para garantir consistência.
+ */
+async function ensureGuruManagerNegative(params: {
+  guruId: string;
+  type: "refund" | "dispute";
+  chargeId: string | null;
+}): Promise<void> {
+  const mgrKey = managerInvoiceKey(params.guruId);
+  const negativeKey =
+    params.type === "refund" ? managerRefundKey(params.guruId) : managerDisputeKey(params.guruId);
+
+  const { data: mgrTx } = await supabase
+    .from("transactions")
+    .select("id, affiliate_id, subscription_id, commission_percent, available_at, amount_gross_cents")
+    .eq("stripe_invoice_id", mgrKey)
+    .eq("type", "commission")
+    .maybeSingle();
+
+  if (!mgrTx) return;
+
+  const { data: existing } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("stripe_invoice_id", negativeKey)
+    .maybeSingle();
+  if (existing) return;
+
+  const refundAmount = mgrTx.amount_gross_cents;
+  const netRefund = Math.round(refundAmount * 0.93);
+  const commissionDeduction = Math.round((netRefund * mgrTx.commission_percent) / 100);
+
+  const { error } = await supabase.from("transactions").insert({
+    affiliate_id: mgrTx.affiliate_id,
+    subscription_id: mgrTx.subscription_id,
+    stripe_invoice_id: negativeKey,
+    stripe_charge_id: params.chargeId,
+    guru_transaction_id: null,
+    type: params.type,
+    amount_gross_cents: -refundAmount,
+    commission_percent: mgrTx.commission_percent,
+    commission_amount_cents: -commissionDeduction,
+    paid_at: new Date().toISOString(),
+    available_at: mgrTx.available_at,
+    description:
+      params.type === "refund"
+        ? "Estorno de comissão de gerência (Guru)"
+        : "Estorno de comissão de gerência - Disputa (Guru)",
+  });
+
+  if (error && error.code !== "23505") {
+    console.error(`[GURU WEBHOOK] insert manager ${params.type}:`, error);
+  }
+}
+
 function grossCentsFromPayment(payment: GuruPayment | undefined): number | null {
   if (!payment) return null;
   const reais =
@@ -175,6 +329,8 @@ async function processGuruRefund(
       .eq("id", originalTx.subscription_id);
   }
 
+  await ensureGuruManagerNegative({ guruId, type: "refund", chargeId });
+
   console.log(`[GURU WEBHOOK] Estorno registrado tx=${guruId}`);
   return NextResponse.json({ received: true, status: "refund_processed" });
 }
@@ -249,6 +405,8 @@ async function processGuruDispute(
       .update({ has_dispute: true })
       .eq("id", originalTx.subscription_id);
   }
+
+  await ensureGuruManagerNegative({ guruId, type: "dispute", chargeId });
 
   console.log(`[GURU WEBHOOK] Disputa registrada tx=${guruId}`);
   return NextResponse.json({ received: true, status: "dispute_processed" });
@@ -349,11 +507,39 @@ async function reprocessExistingGuruTransaction(
       );
     }
 
+    await ensureGuruManagerCommission({
+      guruId,
+      affiliateId: newAffiliateId,
+      subscriptionId: subscriptionId ?? existingTx.subscription_id,
+      customerName: body.contact?.name ?? billing.profile.user?.name ?? null,
+      amountGrossCents,
+      paidAtIso: paidAtFromPayload(body).toISOString(),
+      availableAtIso: calculateAvailableAtBRT(paidAtFromPayload(body)).toISOString(),
+      chargeId:
+        body.payment?.marketplace_id != null && String(body.payment.marketplace_id).trim() !== ""
+          ? String(body.payment.marketplace_id)
+          : null,
+    });
+
     return {
       response: NextResponse.json({ received: true, status: "updated" }),
       subscriptionSynced: true,
     };
   }
+
+  await ensureGuruManagerCommission({
+    guruId,
+    affiliateId: newAffiliateId,
+    subscriptionId: subscriptionId ?? existingTx.subscription_id,
+    customerName: body.contact?.name ?? billing.profile.user?.name ?? null,
+    amountGrossCents,
+    paidAtIso: paidAtFromPayload(body).toISOString(),
+    availableAtIso: calculateAvailableAtBRT(paidAtFromPayload(body)).toISOString(),
+    chargeId:
+      body.payment?.marketplace_id != null && String(body.payment.marketplace_id).trim() !== ""
+        ? String(body.payment.marketplace_id)
+        : null,
+  });
 
   console.log(
     `[GURU WEBHOOK] Reprocess tx=${guruId}: mesmo affiliate=${newAffiliateId}, nada a atualizar`
@@ -504,6 +690,17 @@ async function processGuruCommission(
       subscriptionSynced: true,
     };
   }
+
+  await ensureGuruManagerCommission({
+    guruId,
+    affiliateId,
+    subscriptionId,
+    customerName: body.contact?.name ?? billing.profile.user?.name ?? null,
+    amountGrossCents,
+    paidAtIso: paidAt.toISOString(),
+    availableAtIso: availableAt.toISOString(),
+    chargeId,
+  });
 
   console.log(`[GURU WEBHOOK] Comissão registrada tx=${guruId} affiliate=${affiliateId}`);
   return {
