@@ -42,6 +42,7 @@ export interface Affiliate {
   payout_pix_key: string | null;
   payout_wise_details: WiseDetails | null;
   is_active: boolean;
+  is_manager: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -258,7 +258,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
               .catch(() => ({ subscriptions: [] })),
           ]);
 
-          const userIsManager = !!(mgrResult.data && mgrResult.data.length > 0);
+          const hasManagedAffiliates = !!(mgrResult.data && mgrResult.data.length > 0);
+          const userIsManager = hasManagedAffiliates || typedAffiliate.is_manager === true;
           setIsManager(userIsManager);
           setManagedSubscriptions(
             userIsManager ? (managedSubsResult.subscriptions || []) : []
