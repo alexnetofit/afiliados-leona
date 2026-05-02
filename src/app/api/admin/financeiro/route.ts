@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
+import { sumPagarmePaidAmountByProduct } from "@/lib/pagarme";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-01-28.clover",
@@ -12,8 +13,14 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const ABACATEPAY_API_KEY = process.env.ABACATEPAY_API_KEY;
+// v2 (lista de payouts/saques pro fechamento financeiro)
+const ABACATEPAY_API_KEY_V2 = process.env.ABACATEPAY_API_KEY_V2 || process.env.ABACATEPAY_API_KEY;
 const FIRST_PERIOD = "2026-01";
+
+// PagarMe: só cobranças desse produto contam pro fechamento.
+const PAGARME_API_KEY = process.env.PAGARME_API_KEY || "";
+const PAGARME_PRODUCT_ID = "a1869b83-b28d-4257-a986-1df94558a152";
+const PAGARME_SAQUE_DELAY_DAYS = 8;
 
 // --------------- helpers ---------------
 
@@ -25,24 +32,63 @@ interface AbacateWithdraw {
   createdAt: string;
 }
 
+interface AbacateListResponse {
+  success?: boolean;
+  data?: AbacateWithdraw[];
+  error?: string | null;
+  pagination?: { hasMore?: boolean; next?: string | null };
+}
+
 let abacateCache: AbacateWithdraw[] | null = null;
 let abacateCacheTs = 0;
 
+/**
+ * Lista todos os saques (payouts) na API v2 da AbacatePay, paginando até esgotar.
+ * Endpoint: GET /v2/payouts/list (requer permissão WITHDRAW:READ).
+ *
+ * Observação: na prática a API não retorna o objeto `pagination` na resposta;
+ * paginamos manualmente passando o `id` do último item em `after` enquanto
+ * recebermos páginas cheias (== limit).
+ */
 async function fetchAbacateWithdraws(): Promise<AbacateWithdraw[]> {
-  if (!ABACATEPAY_API_KEY) return [];
+  if (!ABACATEPAY_API_KEY_V2) return [];
   if (abacateCache && Date.now() - abacateCacheTs < 5 * 60 * 1000) return abacateCache;
+
+  const all: AbacateWithdraw[] = [];
+  let after: string | null = null;
+  const MAX_PAGES = 50;
+  const LIMIT = 100;
+
   try {
-    const res = await fetch("https://api.abacatepay.com/v1/withdraw/list", {
-      headers: { Authorization: `Bearer ${ABACATEPAY_API_KEY}` },
-    });
-    const json = await res.json();
-    abacateCache = (json.data || []) as AbacateWithdraw[];
-    abacateCacheTs = Date.now();
-    return abacateCache;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const url = new URL("https://api.abacatepay.com/v2/payouts/list");
+      url.searchParams.set("limit", String(LIMIT));
+      if (after) url.searchParams.set("after", after);
+
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${ABACATEPAY_API_KEY_V2}` },
+      });
+      const json = (await res.json()) as AbacateListResponse;
+      if (!json.success || !Array.isArray(json.data)) {
+        if (page === 0) {
+          console.error("[AbacatePay v2] payouts/list error:", json.error || res.status);
+        }
+        break;
+      }
+      all.push(...json.data);
+      const hasMore = json.pagination?.hasMore ?? json.data.length >= LIMIT;
+      if (!hasMore) break;
+      const nextCursor = json.pagination?.next ?? json.data[json.data.length - 1]?.id ?? null;
+      if (!nextCursor) break;
+      after = nextCursor;
+    }
   } catch (e) {
-    console.error("AbacatePay withdraw error:", e);
-    return [];
+    console.error("AbacatePay payouts list error:", e);
   }
+
+  abacateCache = all;
+  abacateCacheTs = Date.now();
+  return all;
 }
 
 async function fetchUsdBrlRate(): Promise<number> {
@@ -64,6 +110,42 @@ function getPeriodRange(label: string): { start: Date; end: Date } {
     start: new Date(Date.UTC(year, month - 1, 6, 0, 0, 0)),
     end: new Date(Date.UTC(year, month, 5, 23, 59, 59)),
   };
+}
+
+/**
+ * Calcula o total "sacado" da PagarMe pro período (em centavos BRL).
+ *
+ * Regras:
+ *  - status == "paid"
+ *  - metadata.product_id == PAGARME_PRODUCT_ID
+ *  - paid_at + 8 dias deve cair dentro da janela do fechamento (dia 06 a 05).
+ *
+ * Janela de pagamentos = janela de saque − 8 dias.
+ * Ex.: Abril (saque 06/04 a 05/05) ⇒ paid entre 29/03 e 27/04.
+ */
+async function fetchPagarmeRevenueForPeriod(label: string): Promise<number> {
+  if (!PAGARME_API_KEY) return 0;
+  const saqueRange = getPeriodRange(label);
+  const delayMs = PAGARME_SAQUE_DELAY_DAYS * 24 * 60 * 60 * 1000;
+  const paidSince = new Date(saqueRange.start.getTime() - delayMs);
+  const paidUntil = new Date(saqueRange.end.getTime() - delayMs);
+
+  try {
+    const { amountCents, matched, scanned } = await sumPagarmePaidAmountByProduct({
+      apiKey: PAGARME_API_KEY,
+      productId: PAGARME_PRODUCT_ID,
+      paidSince,
+      paidUntil,
+    });
+    console.log(
+      `[PagarMe] período=${label} paid_at∈[${paidSince.toISOString()}, ${paidUntil.toISOString()}] ` +
+        `scanned=${scanned} matched=${matched} total_cents=${amountCents}`
+    );
+    return amountCents;
+  } catch (e) {
+    console.error(`[PagarMe] erro no período ${label}:`, e);
+    return 0;
+  }
 }
 
 function getPeriodLabel(date: Date): string {
@@ -118,6 +200,7 @@ interface PeriodData {
   stripeRevenueBrlCents: number;
   stripeRevenueUsdCents: number;
   abacateRevenueCents: number;
+  pagarmeRevenueCents: number;
   usdBrlRate: number;
   affiliateCostCents: number;
   manualCosts: Array<{ id: string; category: string; description: string | null; amount_cents: number }>;
@@ -149,7 +232,7 @@ export async function GET(request: NextRequest) {
     const payoutStartTs = startTs + BRT_OFFSET;
     const payoutEndTs = endTs + BRT_OFFSET;
 
-    const [stripeUsdCents, abacateList, usdBrlRate] = await Promise.all([
+    const [stripeUsdCents, abacateList, usdBrlRate, pagarmeCentsLive] = await Promise.all([
       (async () => {
         let total = 0;
         try {
@@ -167,6 +250,7 @@ export async function GET(request: NextRequest) {
       })(),
       fetchAbacateWithdraws(),
       fetchUsdBrlRate(),
+      fetchPagarmeRevenueForPeriod(revenueParam),
     ]);
 
     let abacateCents = 0;
@@ -188,15 +272,20 @@ export async function GET(request: NextRequest) {
 
     const stripeBrlCents = Math.round(stripeUsdCents * usdBrlRate);
 
-    // If AbacatePay returned 0, preserve the existing manual value from DB
-    if (abacateCents === 0) {
+    // Se AbacatePay ou PagarMe retornaram 0 (ex.: API key fora do ar / sem permissão),
+    // preserva o valor que já estava cacheado no banco em vez de zerar.
+    let pagarmeCents = pagarmeCentsLive;
+    if (abacateCents === 0 || pagarmeCents === 0) {
       const { data: existing } = await supabaseAdmin
         .from("period_revenue")
-        .select("abacate_revenue_cents")
+        .select("abacate_revenue_cents, pagarme_revenue_cents")
         .eq("period_label", revenueParam)
         .single();
-      if (existing?.abacate_revenue_cents) {
+      if (abacateCents === 0 && existing?.abacate_revenue_cents) {
         abacateCents = existing.abacate_revenue_cents;
+      }
+      if (pagarmeCents === 0 && existing?.pagarme_revenue_cents) {
+        pagarmeCents = existing.pagarme_revenue_cents;
       }
     }
 
@@ -208,6 +297,7 @@ export async function GET(request: NextRequest) {
         stripe_revenue_usd_cents: stripeUsdCents,
         stripe_revenue_brl_cents: stripeBrlCents,
         abacate_revenue_cents: abacateCents,
+        pagarme_revenue_cents: pagarmeCents,
         usd_brl_rate: usdBrlRate,
         cached_at: new Date().toISOString(),
       });
@@ -219,6 +309,7 @@ export async function GET(request: NextRequest) {
       stripeRevenueUsdCents: stripeUsdCents,
       stripeRevenueBrlCents: stripeBrlCents,
       abacateRevenueCents: abacateCents,
+      pagarmeRevenueCents: pagarmeCents,
       usdBrlRate,
     });
   }
@@ -235,7 +326,7 @@ export async function GET(request: NextRequest) {
   const globalStart = allRanges[allRanges.length - 1].start;
   const globalEnd = allRanges[0].end;
 
-  type CachedRev = { period_label: string; stripe_revenue_usd_cents: number; stripe_revenue_brl_cents: number; abacate_revenue_cents: number; usd_brl_rate: number };
+  type CachedRev = { period_label: string; stripe_revenue_usd_cents: number; stripe_revenue_brl_cents: number; abacate_revenue_cents: number; pagarme_revenue_cents: number; usd_brl_rate: number };
 
   const [allTxs, allCosts, cachedRevRows] = await Promise.all([
     supabaseAdmin
@@ -255,7 +346,7 @@ export async function GET(request: NextRequest) {
     Promise.resolve(
       supabaseAdmin
         .from("period_revenue")
-        .select("period_label, stripe_revenue_usd_cents, stripe_revenue_brl_cents, abacate_revenue_cents, usd_brl_rate")
+        .select("period_label, stripe_revenue_usd_cents, stripe_revenue_brl_cents, abacate_revenue_cents, pagarme_revenue_cents, usd_brl_rate")
         .in("period_label", periods)
     ).then((r) => (r.data || []) as CachedRev[])
       .catch(() => [] as CachedRev[]),
@@ -289,6 +380,7 @@ export async function GET(request: NextRequest) {
       stripeRevenueBrlCents: cached && !isCurrent ? cached.stripe_revenue_brl_cents : 0,
       stripeRevenueUsdCents: cached && !isCurrent ? cached.stripe_revenue_usd_cents : 0,
       abacateRevenueCents: cached && !isCurrent ? cached.abacate_revenue_cents : 0,
+      pagarmeRevenueCents: cached && !isCurrent ? (cached.pagarme_revenue_cents ?? 0) : 0,
       usdBrlRate: cached && !isCurrent ? Number(cached.usd_brl_rate) : 0,
       affiliateCostCents,
       manualCosts,

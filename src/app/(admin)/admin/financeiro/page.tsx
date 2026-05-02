@@ -32,6 +32,7 @@ interface Period {
   stripeRevenueBrlCents: number;
   stripeRevenueUsdCents: number;
   abacateRevenueCents: number;
+  pagarmeRevenueCents: number;
   usdBrlRate: number;
   affiliateCostCents: number;
   manualCosts: ManualCost[];
@@ -43,6 +44,7 @@ interface RevenueCache {
   stripeRevenueBrlCents: number;
   stripeRevenueUsdCents: number;
   abacateRevenueCents: number;
+  pagarmeRevenueCents: number;
   usdBrlRate: number;
 }
 
@@ -185,6 +187,7 @@ export default function FinanceiroPage() {
             stripeRevenueBrlCents: data.stripeRevenueBrlCents,
             stripeRevenueUsdCents: data.stripeRevenueUsdCents,
             abacateRevenueCents: keepAbacate ? p.abacateRevenueCents : data.abacateRevenueCents,
+            pagarmeRevenueCents: data.pagarmeRevenueCents ?? 0,
             usdBrlRate: data.usdBrlRate,
           };
           writeRevenueCache(label, rev);
@@ -322,6 +325,7 @@ export default function FinanceiroPage() {
           stripeRevenueBrlCents: p.stripeRevenueBrlCents,
           stripeRevenueUsdCents: p.stripeRevenueUsdCents,
           abacateRevenueCents: cents,
+          pagarmeRevenueCents: p.pagarmeRevenueCents,
           usdBrlRate: p.usdBrlRate,
         });
         return updated;
@@ -357,7 +361,7 @@ export default function FinanceiroPage() {
 
   const totals = periods.reduce(
     (acc, p) => {
-      const totalRevenue = getStripeBrl(p) + p.abacateRevenueCents;
+      const totalRevenue = getStripeBrl(p) + p.abacateRevenueCents + (p.pagarmeRevenueCents || 0);
       const totalCosts = p.affiliateCostCents + p.manualCostsTotalCents;
       acc.revenue += totalRevenue;
       acc.affiliateCosts += p.affiliateCostCents;
@@ -509,7 +513,8 @@ export default function FinanceiroPage() {
           {periods.map((period) => {
             const stripeBrl = getStripeBrl(period);
             const rate = getRate(period);
-            const totalRevenue = stripeBrl + period.abacateRevenueCents;
+            const pagarmeCents = period.pagarmeRevenueCents || 0;
+            const totalRevenue = stripeBrl + period.abacateRevenueCents + pagarmeCents;
             const totalCosts = period.affiliateCostCents + period.manualCostsTotalCents;
             const profit = totalRevenue - totalCosts;
             const isExpanded = expandedPeriod === period.label;
@@ -602,11 +607,11 @@ export default function FinanceiroPage() {
                     {isLoadingRev && (
                       <div className="flex items-center justify-center gap-2 py-4 text-zinc-500">
                         <RefreshCw className="h-4 w-4 animate-spin" />
-                        <span className="text-sm">Buscando faturamento na Stripe e AbacatePay...</span>
+                        <span className="text-sm">Buscando faturamento (Stripe, AbacatePay e PagarMe)...</span>
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                       <div className={cn("p-3 rounded-lg border", hasRevData ? "bg-success-50 border-success-100" : "bg-zinc-50 border-zinc-200")}>
                         <p className={cn("text-[10px] font-medium uppercase tracking-wider", hasRevData ? "text-success-600" : "text-zinc-400")}>
                           Stripe (USD &rarr; BRL)
@@ -664,6 +669,23 @@ export default function FinanceiroPage() {
                           <p className={cn("text-lg font-bold mt-1", hasRevData || period.abacateRevenueCents > 0 ? "text-emerald-700" : "text-zinc-300")}>
                             {period.abacateRevenueCents > 0 ? formatCurrency(period.abacateRevenueCents / 100) : hasRevData ? "R$ 0,00" : "—"}
                           </p>
+                        )}
+                      </div>
+                      <div className={cn("p-3 rounded-lg border", hasRevData ? "bg-violet-50 border-violet-100" : "bg-zinc-50 border-zinc-200")}>
+                        <p className={cn("text-[10px] font-medium uppercase tracking-wider", hasRevData ? "text-violet-600" : "text-zinc-400")}>
+                          PagarMe (D+8)
+                        </p>
+                        {hasRevData ? (
+                          <>
+                            <p className={cn("text-lg font-bold mt-1", pagarmeCents > 0 ? "text-violet-700" : "text-zinc-300")}>
+                              {pagarmeCents > 0 ? formatCurrency(pagarmeCents / 100) : "R$ 0,00"}
+                            </p>
+                            <p className="text-[10px] text-violet-500 mt-0.5">
+                              Saque considerado 8 dias após o pagamento
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-lg font-bold text-zinc-300 mt-1">—</p>
                         )}
                       </div>
                       <div className="p-3 rounded-lg bg-warning-50 border border-warning-100">
