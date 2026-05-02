@@ -113,19 +113,38 @@ function getPeriodRange(label: string): { start: Date; end: Date } {
 }
 
 /**
+ * Versão BRT-aware (UTC-3) da janela de fechamento, usada SÓ pela PagarMe.
+ *
+ * Os outros provedores (Stripe / AbacatePay) continuam usando `getPeriodRange`
+ * em UTC midnight pra preservar o comportamento atual do painel.
+ *
+ * Ex.: "2026-04" ⇒ 06/04 00:00 BRT (= 06/04 03:00 UTC) → 05/05 23:59:59 BRT
+ * (= 06/05 02:59:59 UTC).
+ */
+function getPeriodRangeBRT(label: string): { start: Date; end: Date } {
+  const [year, month] = label.split("-").map(Number);
+  return {
+    start: new Date(Date.UTC(year, month - 1, 6, 3, 0, 0)),
+    end: new Date(Date.UTC(year, month, 6, 2, 59, 59)),
+  };
+}
+
+/**
  * Calcula o total "sacado" da PagarMe pro período (em centavos BRL).
  *
  * Regras:
  *  - status == "paid"
  *  - metadata.product_id == PAGARME_PRODUCT_ID
- *  - paid_at + 8 dias deve cair dentro da janela do fechamento (dia 06 a 05).
+ *  - paid_at + 8 dias deve cair dentro da janela do fechamento em BRT (UTC-3),
+ *    isto é, [dia 06 00:00 BRT, dia 05 do mês seguinte 23:59:59 BRT].
  *
  * Janela de pagamentos = janela de saque − 8 dias.
- * Ex.: Abril (saque 06/04 a 05/05) ⇒ paid entre 29/03 e 27/04.
+ * Ex.: Abril (saque 06/04 00:00 BRT → 05/05 23:59:59 BRT)
+ *      ⇒ paid entre 29/03 00:00 BRT e 27/04 23:59:59 BRT.
  */
 async function fetchPagarmeRevenueForPeriod(label: string): Promise<number> {
   if (!PAGARME_API_KEY) return 0;
-  const saqueRange = getPeriodRange(label);
+  const saqueRange = getPeriodRangeBRT(label);
   const delayMs = PAGARME_SAQUE_DELAY_DAYS * 24 * 60 * 60 * 1000;
   const paidSince = new Date(saqueRange.start.getTime() - delayMs);
   const paidUntil = new Date(saqueRange.end.getTime() - delayMs);
