@@ -691,6 +691,39 @@ async function processGuruCommission(
     };
   }
 
+  // Se for a primeira comissão dessa subscription, incrementa paid_subscriptions_count.
+  // O trigger update_affiliate_tier respeita affiliates.tier_locked (migration 021),
+  // então afiliados com override admin não são rebaixados; o resto sobe de tier
+  // automaticamente quando atingem 20/50 vendas.
+  if (subscriptionId) {
+    const { count: subCommissionCount } = await supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("subscription_id", subscriptionId)
+      .eq("type", "commission");
+
+    if (subCommissionCount === 1) {
+      const { data: affRow } = await supabase
+        .from("affiliates")
+        .select("paid_subscriptions_count")
+        .eq("id", affiliateId)
+        .single();
+
+      if (affRow) {
+        const { error: updErr } = await supabase
+          .from("affiliates")
+          .update({ paid_subscriptions_count: affRow.paid_subscriptions_count + 1 })
+          .eq("id", affiliateId);
+        if (updErr) {
+          console.error(
+            `[GURU WEBHOOK] increment paid_subscriptions_count tx=${guruId}:`,
+            updErr
+          );
+        }
+      }
+    }
+  }
+
   await ensureGuruManagerCommission({
     guruId,
     affiliateId,
