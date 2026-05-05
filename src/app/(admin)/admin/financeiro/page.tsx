@@ -130,6 +130,8 @@ export default function FinanceiroPage() {
   const [newCategory, setNewCategory] = useState("Infraestrutura");
   const [newDescription, setNewDescription] = useState("");
   const [newAmount, setNewAmount] = useState("");
+  const [taxAbacatePct, setTaxAbacatePct] = useState("7");
+  const [taxPagarmePct, setTaxPagarmePct] = useState("3");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [editingAbacate, setEditingAbacate] = useState<string | null>(null);
@@ -164,7 +166,7 @@ export default function FinanceiroPage() {
       setPeriods(merged);
       setFormatLabels(data.formatLabel);
       setCurrentPeriod(data.currentPeriod);
-      return data.currentPeriod as string;
+      return { currentPeriod: data.currentPeriod as string, periods: merged as Period[] };
     } catch (e) {
       console.error("fetchPeriods error:", e);
       return null;
@@ -255,8 +257,10 @@ export default function FinanceiroPage() {
   useEffect(() => {
     if (didInit.current) return;
     didInit.current = true;
-    fetchPeriods().then((cp) => {
-      if (cp) fetchRevenue(cp);
+    fetchPeriods().then((res) => {
+      if (!res) return;
+      const cur = res.periods.find((p) => p.label === res.currentPeriod);
+      if (cur && !cur.revenueCached) fetchRevenue(res.currentPeriod);
     });
     fetchDolar();
     fetchAbacateBalance();
@@ -274,24 +278,33 @@ export default function FinanceiroPage() {
   }, [fetchDolar]);
 
   const handleAddCost = async (periodLabel: string) => {
-    if (!newAmount || parseFloat(newAmount) <= 0) return;
-    setSaving(true);
-
     const isTax = newCategory === "Impostos";
+    if (!isTax && (!newAmount || parseFloat(newAmount) <= 0)) return;
+
     let amountCents: number;
     let description: string | null;
 
     if (isTax) {
       const period = periods.find((p) => p.label === periodLabel);
       const abacate = period?.abacateRevenueCents || 0;
-      const pct = parseFloat(newAmount);
-      amountCents = Math.round(abacate * pct / 100);
-      description = `${pct}% sobre AbacatePay (R$ ${(abacate / 100).toFixed(2)})`;
+      const pagarme = period?.pagarmeRevenueCents || 0;
+      const aPct = parseFloat(taxAbacatePct || "0");
+      const pPct = parseFloat(taxPagarmePct || "0");
+      const abacateTax = Math.round(abacate * aPct / 100);
+      const pagarmeTax = Math.round(pagarme * pPct / 100);
+      amountCents = abacateTax + pagarmeTax;
+      if (amountCents <= 0) return;
+
+      const parts: string[] = [];
+      if (abacateTax > 0) parts.push(`${aPct}% sobre AbacatePay (R$ ${(abacate / 100).toFixed(2)})`);
+      if (pagarmeTax > 0) parts.push(`${pPct}% sobre PagarMe (R$ ${(pagarme / 100).toFixed(2)})`);
+      description = parts.join(" + ");
     } else {
       amountCents = Math.round(parseFloat(newAmount) * 100);
       description = newDescription || null;
     }
 
+    setSaving(true);
     try {
       const res = await fetch("/api/admin/costs", {
         method: "POST",
@@ -308,6 +321,8 @@ export default function FinanceiroPage() {
         setNewDescription("");
         setNewAmount("");
         setNewCategory("Infraestrutura");
+        setTaxAbacatePct("7");
+        setTaxPagarmePct("3");
         await fetchPeriods();
       }
     } catch { /* */ } finally {
@@ -315,7 +330,7 @@ export default function FinanceiroPage() {
     }
   };
 
-  const handleSaveAbacate = (label: string) => {
+  const handleSaveAbacate = async (label: string) => {
     const cents = Math.round(parseFloat(abacateInput || "0") * 100);
     setPeriods((prev) =>
       prev.map((p) => {
@@ -333,6 +348,15 @@ export default function FinanceiroPage() {
     );
     setEditingAbacate(null);
     setAbacateInput("");
+    try {
+      await fetch("/api/admin/financeiro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ period_label: label, abacate_revenue_cents: cents }),
+      });
+    } catch (e) {
+      console.error("Erro ao persistir AbacatePay:", e);
+    }
   };
 
   const handleDeleteCost = async (id: string) => {
@@ -722,53 +746,86 @@ export default function FinanceiroPage() {
 
                       {addingTo === period.label && (() => {
                         const isTax = newCategory === "Impostos";
-                        const taxBase = period.abacateRevenueCents;
-                        const taxPreview = isTax && newAmount ? Math.round(taxBase * parseFloat(newAmount || "0") / 100) : 0;
-                        const canSaveTax = isTax && taxBase > 0;
+                        const abacateBase = period.abacateRevenueCents;
+                        const pagarmeBase = period.pagarmeRevenueCents || 0;
+                        const aPct = parseFloat(taxAbacatePct || "0");
+                        const pPct = parseFloat(taxPagarmePct || "0");
+                        const abacateTax = Math.round(abacateBase * aPct / 100);
+                        const pagarmeTax = Math.round(pagarmeBase * pPct / 100);
+                        const taxTotal = abacateTax + pagarmeTax;
+                        const canSaveTax = isTax && taxTotal > 0;
 
                         return (
                           <div className="p-3 mb-3 border border-zinc-200 rounded-lg bg-zinc-50 space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                              <Select
-                                value={newCategory}
-                                onChange={(e) => { setNewCategory(e.target.value); setNewAmount(""); setNewDescription(""); }}
-                                options={COST_CATEGORIES.map((c) => ({ value: c, label: c }))}
-                              />
-                              {isTax ? (
-                                <div className="sm:col-span-2 space-y-1">
-                                  <Input
-                                    placeholder="Alíquota (%)"
-                                    type="number"
-                                    step="0.01"
-                                    value={newAmount}
-                                    onChange={(e) => setNewAmount(e.target.value)}
+                            {isTax ? (
+                              <>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                  <Select
+                                    value={newCategory}
+                                    onChange={(e) => { setNewCategory(e.target.value); setNewAmount(""); setNewDescription(""); }}
+                                    options={COST_CATEGORIES.map((c) => ({ value: c, label: c }))}
                                   />
+                                  <div>
+                                    <label className="block text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">% sobre AbacatePay</label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={taxAbacatePct}
+                                      onChange={(e) => setTaxAbacatePct(e.target.value)}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">% sobre PagarMe</label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={taxPagarmePct}
+                                      onChange={(e) => setTaxPagarmePct(e.target.value)}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-1 text-[11px] text-zinc-500">
                                   {!hasRevData && (
-                                    <p className="text-[11px] text-amber-600">Carregue o faturamento primeiro para calcular impostos</p>
+                                    <p className="text-amber-600">Carregue o faturamento primeiro para calcular impostos</p>
                                   )}
-                                  {hasRevData && taxBase === 0 && (
-                                    <p className="text-[11px] text-zinc-400">Nenhum saque AbacatePay neste período</p>
+                                  {hasRevData && abacateBase === 0 && pagarmeBase === 0 && (
+                                    <p className="text-zinc-400">Nenhum saque AbacatePay/PagarMe neste período</p>
                                   )}
-                                  {taxPreview > 0 && (
-                                    <p className="text-[11px] text-zinc-500">
-                                      {newAmount}% sobre {formatCurrency(taxBase / 100)} = <span className="font-semibold text-error-600">{formatCurrency(taxPreview / 100)}</span>
+                                  {abacateBase > 0 && (
+                                    <p>
+                                      {aPct}% sobre AbacatePay {formatCurrency(abacateBase / 100)} = <span className="font-semibold text-error-600">{formatCurrency(abacateTax / 100)}</span>
+                                    </p>
+                                  )}
+                                  {pagarmeBase > 0 && (
+                                    <p>
+                                      {pPct}% sobre PagarMe {formatCurrency(pagarmeBase / 100)} = <span className="font-semibold text-error-600">{formatCurrency(pagarmeTax / 100)}</span>
+                                    </p>
+                                  )}
+                                  {taxTotal > 0 && (
+                                    <p className="pt-1 border-t border-zinc-200">
+                                      Total imposto: <span className="font-bold text-error-600">{formatCurrency(taxTotal / 100)}</span>
                                     </p>
                                   )}
                                 </div>
-                              ) : (
-                                <>
-                                  <Input placeholder="Descrição (opcional)" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} />
-                                  <Input placeholder="Valor (R$)" type="number" step="0.01" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
-                                </>
-                              )}
-                            </div>
+                              </>
+                            ) : (
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <Select
+                                  value={newCategory}
+                                  onChange={(e) => { setNewCategory(e.target.value); setNewAmount(""); setNewDescription(""); }}
+                                  options={COST_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                                />
+                                <Input placeholder="Descrição (opcional)" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} />
+                                <Input placeholder="Valor (R$)" type="number" step="0.01" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
+                              </div>
+                            )}
                             <div className="flex justify-end gap-2">
                               <Button size="xs" variant="ghost" onClick={() => setAddingTo(null)}>Cancelar</Button>
                               <Button
                                 size="xs"
                                 loading={saving}
                                 onClick={() => handleAddCost(period.label)}
-                                disabled={!newAmount || parseFloat(newAmount) <= 0 || (isTax && !canSaveTax)}
+                                disabled={isTax ? !canSaveTax : (!newAmount || parseFloat(newAmount) <= 0)}
                               >
                                 Salvar
                               </Button>

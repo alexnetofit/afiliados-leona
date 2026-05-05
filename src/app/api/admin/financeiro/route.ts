@@ -308,20 +308,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Salva no banco para meses passados (cache permanente)
-    const cp = getPeriodLabel(new Date());
-    if (revenueParam !== cp) {
-      const { error } = await supabaseAdmin.from("period_revenue").upsert({
-        period_label: revenueParam,
-        stripe_revenue_usd_cents: stripeUsdCents,
-        stripe_revenue_brl_cents: stripeBrlCents,
-        abacate_revenue_cents: abacateCents,
-        pagarme_revenue_cents: pagarmeCents,
-        usd_brl_rate: usdBrlRate,
-        cached_at: new Date().toISOString(),
-      });
-      if (error) console.error("Erro ao salvar period_revenue:", error.message);
-    }
+    // Salva no banco SEMPRE (inclusive período atual). Para o período atual
+    // o usuário pode clicar em "Atualizar faturamento" pra forçar refresh,
+    // mas o valor mais recente fica persistido pra evitar ter que buscar
+    // de novo a cada page reload.
+    const { error: upsertErr } = await supabaseAdmin.from("period_revenue").upsert({
+      period_label: revenueParam,
+      stripe_revenue_usd_cents: stripeUsdCents,
+      stripe_revenue_brl_cents: stripeBrlCents,
+      abacate_revenue_cents: abacateCents,
+      pagarme_revenue_cents: pagarmeCents,
+      usd_brl_rate: usdBrlRate,
+      cached_at: new Date().toISOString(),
+    });
+    if (upsertErr) console.error("Erro ao salvar period_revenue:", upsertErr.message);
 
     return NextResponse.json({
       period: revenueParam,
@@ -390,21 +390,20 @@ export async function GET(request: NextRequest) {
     const manualCostsTotalCents = manualCosts.reduce((sum, c) => sum + c.amount_cents, 0);
 
     const cached = revMap.get(label);
-    const isCurrent = label === currentPeriod;
 
     return {
       label,
       startDate: start.toISOString().split("T")[0],
       endDate: end.toISOString().split("T")[0],
-      stripeRevenueBrlCents: cached && !isCurrent ? cached.stripe_revenue_brl_cents : 0,
-      stripeRevenueUsdCents: cached && !isCurrent ? cached.stripe_revenue_usd_cents : 0,
-      abacateRevenueCents: cached && !isCurrent ? cached.abacate_revenue_cents : 0,
-      pagarmeRevenueCents: cached && !isCurrent ? (cached.pagarme_revenue_cents ?? 0) : 0,
-      usdBrlRate: cached && !isCurrent ? Number(cached.usd_brl_rate) : 0,
+      stripeRevenueBrlCents: cached ? cached.stripe_revenue_brl_cents : 0,
+      stripeRevenueUsdCents: cached ? cached.stripe_revenue_usd_cents : 0,
+      abacateRevenueCents: cached ? cached.abacate_revenue_cents : 0,
+      pagarmeRevenueCents: cached ? (cached.pagarme_revenue_cents ?? 0) : 0,
+      usdBrlRate: cached ? Number(cached.usd_brl_rate) : 0,
       affiliateCostCents,
       manualCosts,
       manualCostsTotalCents,
-      revenueCached: !isCurrent && !!cached,
+      revenueCached: !!cached,
     };
   });
 
@@ -413,4 +412,44 @@ export async function GET(request: NextRequest) {
     periods: results,
     formatLabel: Object.fromEntries(periods.map((p) => [p, formatPeriodLabel(p)])),
   });
+}
+
+// PATCH/POST: persiste edições manuais do faturamento (AbacatePay) no DB.
+// Necessário porque a API da AbacatePay nem sempre retorna os saques certos
+// e o admin precisa ajustar manualmente sem perder o valor a cada reload.
+export async function POST(request: NextRequest) {
+  if (!(await verifyAdmin())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const periodLabel: string | undefined = body.period_label;
+  const abacateCents: number | undefined = body.abacate_revenue_cents;
+
+  if (!periodLabel || typeof abacateCents !== "number" || abacateCents < 0) {
+    return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
+  }
+
+  const { data: existing } = await supabaseAdmin
+    .from("period_revenue")
+    .select("*")
+    .eq("period_label", periodLabel)
+    .single();
+
+  const row = {
+    period_label: periodLabel,
+    stripe_revenue_usd_cents: existing?.stripe_revenue_usd_cents ?? 0,
+    stripe_revenue_brl_cents: existing?.stripe_revenue_brl_cents ?? 0,
+    abacate_revenue_cents: Math.round(abacateCents),
+    pagarme_revenue_cents: existing?.pagarme_revenue_cents ?? 0,
+    usd_brl_rate: existing?.usd_brl_rate ?? 0,
+    cached_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabaseAdmin.from("period_revenue").upsert(row);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, abacateRevenueCents: row.abacate_revenue_cents });
 }
