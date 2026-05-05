@@ -27,18 +27,28 @@ export async function PATCH(request: Request) {
     }
 
     const body = await request.json();
-    const { affiliateId, commission_tier } = body;
+    const { affiliateId, commission_tier, tier_locked } = body as {
+      affiliateId?: string;
+      commission_tier?: number;
+      tier_locked?: boolean;
+    };
 
-    if (!affiliateId || ![1, 2, 3].includes(commission_tier)) {
+    if (!affiliateId || !commission_tier || ![1, 2, 3].includes(commission_tier)) {
       return NextResponse.json(
         { error: "affiliateId e commission_tier (1, 2 ou 3) são obrigatórios" },
         { status: 400 }
       );
     }
 
+    // Toda mudança manual de tier vira override protegido por padrão (tier_locked=true),
+    // senão o trigger update_affiliate_tier ou o cron cron_update_affiliate_tiers
+    // recalcula a partir de paid_subscriptions_count e desfaz a alteração silenciosamente.
+    // Admin pode explicitamente passar tier_locked:false pra "voltar ao automático".
+    const lock = typeof tier_locked === "boolean" ? tier_locked : true;
+
     const { error } = await supabaseAdmin
       .from("affiliates")
-      .update({ commission_tier })
+      .update({ commission_tier, tier_locked: lock })
       .eq("id", affiliateId);
 
     if (error) {
@@ -46,7 +56,11 @@ export async function PATCH(request: Request) {
     }
 
     const tierNames: Record<number, string> = { 1: "Bronze 30%", 2: "Prata 35%", 3: "Ouro 40%" };
-    return NextResponse.json({ success: true, message: `Tier alterado para ${tierNames[commission_tier]}` });
+    const lockSuffix = lock ? " (override protegido)" : " (automático)";
+    return NextResponse.json({
+      success: true,
+      message: `Tier alterado para ${tierNames[commission_tier]}${lockSuffix}`,
+    });
   } catch (error) {
     console.error("[ADMIN] Error updating tier:", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
@@ -76,7 +90,7 @@ export async function GET() {
     // Fetch all affiliates
     const { data: affiliatesData } = await supabaseAdmin
       .from("affiliates")
-      .select("id, affiliate_code, commission_tier, paid_subscriptions_count, is_active, created_at, user_id")
+      .select("id, affiliate_code, commission_tier, paid_subscriptions_count, tier_locked, is_active, created_at, user_id")
       .order("created_at", { ascending: false });
 
     if (!affiliatesData) {
@@ -146,6 +160,7 @@ export async function GET() {
       affiliate_code: affiliate.affiliate_code,
       commission_tier: affiliate.commission_tier,
       paid_subscriptions_count: affiliate.paid_subscriptions_count,
+      tier_locked: affiliate.tier_locked,
       is_active: affiliate.is_active,
       created_at: affiliate.created_at,
       profile: { full_name: profileMap.get(affiliate.user_id) || null },

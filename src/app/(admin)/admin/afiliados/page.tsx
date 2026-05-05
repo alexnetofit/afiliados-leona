@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Card, Badge, LoadingScreen, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, MetricCard } from "@/components/ui/index";
-import { Users, UserCheck, DollarSign, KeyRound, X, Eye, EyeOff, CheckCircle, AlertCircle, ChevronDown } from "lucide-react";
+import { Users, UserCheck, DollarSign, KeyRound, X, Eye, EyeOff, CheckCircle, AlertCircle, ChevronDown, Lock, Unlock } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { COMMISSION_TIERS } from "@/types";
 import { AffiliateFilters, type AffiliateFilterState } from "@/components/admin";
@@ -13,6 +13,7 @@ interface AffiliateWithStats {
   affiliate_code: string;
   commission_tier: number;
   paid_subscriptions_count: number;
+  tier_locked: boolean;
   is_active: boolean;
   created_at: string;
   profile: { full_name: string | null };
@@ -94,17 +95,29 @@ export default function AfiliadosPage() {
     }
   };
 
-  const handleTierChange = async (affiliateId: string, newTier: number) => {
+  const handleTierChange = async (
+    affiliateId: string,
+    newTier: number,
+    lock: boolean = true
+  ) => {
     setSavingTier(true);
     try {
       const res = await fetch("/api/admin/affiliates", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ affiliateId, commission_tier: newTier }),
+        body: JSON.stringify({
+          affiliateId,
+          commission_tier: newTier,
+          tier_locked: lock,
+        }),
       });
       if (res.ok) {
         setAffiliates((prev) =>
-          prev.map((a) => (a.id === affiliateId ? { ...a, commission_tier: newTier } : a))
+          prev.map((a) =>
+            a.id === affiliateId
+              ? { ...a, commission_tier: newTier, tier_locked: lock }
+              : a
+          )
         );
       }
     } catch (error) {
@@ -270,22 +283,36 @@ export default function AfiliadosPage() {
                       <div className="flex items-center gap-1">
                         {([1, 2, 3] as const).map((t) => {
                           const names: Record<number, string> = { 1: "Bronze", 2: "Prata", 3: "Ouro" };
-                          const isActive = affiliate.commission_tier === t;
+                          const isActive = affiliate.commission_tier === t && affiliate.tier_locked;
                           return (
                             <button
                               key={t}
                               disabled={savingTier || isActive}
-                              onClick={() => handleTierChange(affiliate.id, t)}
+                              onClick={() => handleTierChange(affiliate.id, t, true)}
                               className={`px-2 py-1 text-xs font-medium rounded-lg transition-colors ${
                                 isActive
                                   ? "bg-zinc-900 text-white"
                                   : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
                               } disabled:cursor-not-allowed`}
+                              title="Alterar para este tier e travar (override)"
                             >
                               {names[t]} {COMMISSION_TIERS[t].percent}%
                             </button>
                           );
                         })}
+                        {affiliate.tier_locked && (
+                          <button
+                            disabled={savingTier}
+                            onClick={() =>
+                              handleTierChange(affiliate.id, affiliate.commission_tier, false)
+                            }
+                            className="px-2 py-1 text-xs font-medium rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors disabled:cursor-not-allowed inline-flex items-center gap-1"
+                            title="Remover override e voltar ao cálculo automático por vendas"
+                          >
+                            <Unlock className="h-3 w-3" />
+                            Auto
+                          </button>
+                        )}
                         <button
                           onClick={() => setEditingTierId(null)}
                           className="p-1 text-zinc-400 hover:text-zinc-600"
@@ -301,6 +328,12 @@ export default function AfiliadosPage() {
                         <Badge variant="primary">
                           Tier {affiliate.commission_tier} • {COMMISSION_TIERS[affiliate.commission_tier as 1 | 2 | 3].percent}%
                         </Badge>
+                        {affiliate.tier_locked && (
+                          <Lock
+                            className="h-3 w-3 text-amber-600"
+                            aria-label="Tier travado (override admin)"
+                          />
+                        )}
                         <ChevronDown className="h-3 w-3 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </button>
                     )}
