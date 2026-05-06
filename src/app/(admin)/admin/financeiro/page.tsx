@@ -97,7 +97,7 @@ function getProfitShares(periodLabel: string): ProfitShare[] {
       { name: "Dai", percent: 10 },
       { name: "Fabiano", percent: 10 },
       { name: "Ericson", percent: 20 },
-      { name: "Caique", percent: 7.5, isCost: true },
+      { name: "Caique", percent: 5, isCost: true },
     ];
   }
   if (y === 2026 && m === 3) {
@@ -295,10 +295,7 @@ export default function FinanceiroPage() {
       amountCents = abacateTax + pagarmeTax;
       if (amountCents <= 0) return;
 
-      const parts: string[] = [];
-      if (abacateTax > 0) parts.push(`${aPct}% sobre AbacatePay (R$ ${(abacate / 100).toFixed(2)})`);
-      if (pagarmeTax > 0) parts.push(`${pPct}% sobre PagarMe (R$ ${(pagarme / 100).toFixed(2)})`);
-      description = parts.join(" + ");
+      description = "Imposto";
     } else {
       amountCents = Math.round(parseFloat(newAmount) * 100);
       description = newDescription || null;
