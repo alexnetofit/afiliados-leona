@@ -45,8 +45,12 @@ export async function fetchPagarmeCharges(opts: {
   if (!apiKey) return [];
 
   const auth = Buffer.from(`${apiKey}:`).toString("base64");
+  // ATENÇÃO: a API v5 do Pagar.me ignora `size` e SEMPRE devolve até 30 itens
+  // por página (testado em 2026-05). Mantemos o parâmetro por compatibilidade,
+  // mas a paginação não pode confiar nesse valor – usamos `paging.total` e
+  // o tamanho REAL do array retornado pra decidir quando parar.
   const size = opts.pageSize ?? 100;
-  const maxPages = opts.maxPages ?? 50;
+  const maxPages = opts.maxPages ?? 1000;
 
   const all: PagarmeCharge[] = [];
   let page = 1;
@@ -90,8 +94,12 @@ export async function fetchPagarmeCharges(opts: {
     if (items.length === 0) break;
     all.push(...items);
 
-    const total = json.paging?.total ?? all.length;
-    if (page * size >= total) break;
+    const total = json.paging?.total;
+    // Critério principal: se o backend disse o total, paramos quando
+    // já temos tudo. Se não disser, paramos quando a página atual
+    // veio menor que o size pedido (heurística clássica).
+    if (typeof total === "number" && all.length >= total) break;
+    if (total === undefined && items.length < size) break;
     page++;
   }
 
