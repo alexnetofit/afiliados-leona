@@ -220,10 +220,12 @@ serve(async (req) => {
 
         if (!customerAffiliate) continue;
 
-        // Find original transaction
+        // Find original transaction (precisa do available_at pra alinhar o
+        // estorno no mesmo "bucket" da comissão original — se gravar com NOW(),
+        // o refund cai num grupo isolado e nunca é descontado do saque).
         const { data: originalTx } = await supabase
           .from("transactions")
-          .select("id, commission_percent, subscription_id")
+          .select("id, commission_percent, subscription_id, available_at")
           .eq("stripe_charge_id", refund.charge)
           .eq("type", "commission")
           .single();
@@ -252,7 +254,7 @@ serve(async (req) => {
           commission_percent: originalTx.commission_percent,
           commission_amount_cents: refundAmount,
           paid_at: new Date().toISOString(),
-          available_at: new Date().toISOString(),
+          available_at: originalTx.available_at,
           description: "Estorno de comissão - Refund",
         });
 
@@ -292,7 +294,7 @@ serve(async (req) => {
 
         const { data: originalTx } = await supabase
           .from("transactions")
-          .select("id, commission_percent, subscription_id")
+          .select("id, commission_percent, subscription_id, available_at")
           .eq("stripe_charge_id", dispute.charge)
           .eq("type", "commission")
           .single();
@@ -321,7 +323,7 @@ serve(async (req) => {
           commission_percent: originalTx.commission_percent,
           commission_amount_cents: disputeAmount,
           paid_at: new Date().toISOString(),
-          available_at: new Date().toISOString(),
+          available_at: originalTx.available_at,
           description: "Estorno de comissão - Disputa",
         });
 

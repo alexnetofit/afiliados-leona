@@ -217,6 +217,70 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Valida saldo TOTAL do afiliado: comissões já liberadas (available_at <=
+    // NOW()) menos refunds/disputes menos o que já foi sacado. Pra evitar que
+    // saques baseados em buckets diários (dia 5/20) ignorem refunds tardios
+    // que caíram em datas avulsas (vide bug histórico de 2026 antes da
+    // migration 022).
+    if (affiliateId) {
+      const PAGE = 1000;
+      let txOffset = 0;
+      let liquidoLiberadoCents = 0;
+      while (true) {
+        const { data: txPage, error: txErr } = await supabaseAdmin
+          .from("transactions")
+          .select("commission_amount_cents, available_at")
+          .eq("affiliate_id", affiliateId)
+          .not("available_at", "is", null)
+          .lte("available_at", new Date().toISOString())
+          .order("available_at", { ascending: true })
+          .range(txOffset, txOffset + PAGE - 1);
+        if (txErr) break;
+        const rows = txPage || [];
+        for (const r of rows) {
+          liquidoLiberadoCents += r.commission_amount_cents || 0;
+        }
+        if (rows.length < PAGE) break;
+        txOffset += PAGE;
+      }
+
+      const { data: prevWithdraws } = await supabaseAdmin
+        .from("withdraw_requests")
+        .select("amount_text, status")
+        .eq("affiliate_id", affiliateId)
+        .in("status", ["paid", "processing"]);
+
+      const parseBrlToCents = (t: string | null): number => {
+        if (!t) return 0;
+        const cleaned = t.replace(/[^0-9,]/g, "").replace(",", ".");
+        const n = parseFloat(cleaned);
+        return Number.isFinite(n) ? Math.round(n * 100) : 0;
+      };
+      const sacadoCents = (prevWithdraws || []).reduce(
+        (sum, w) => sum + parseBrlToCents(w.amount_text),
+        0
+      );
+
+      const saldoDisponivelCents = liquidoLiberadoCents - sacadoCents;
+
+      if (amountCents > saldoDisponivelCents) {
+        const fmtBrl = (cents: number) =>
+          (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        console.warn(
+          `[WITHDRAW] Saldo insuficiente: afiliado=${affiliateId} pediu=${amountCents} ` +
+            `disponivel=${saldoDisponivelCents} (liquido=${liquidoLiberadoCents} - sacado=${sacadoCents})`
+        );
+        return NextResponse.json(
+          {
+            error:
+              `Saldo insuficiente. Disponível líquido: ${fmtBrl(saldoDisponivelCents)} ` +
+              `(considera estornos e saques anteriores).`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     const accounts = getOrderedAsaasAccounts();
     if (accounts.length === 0) {
       return NextResponse.json(

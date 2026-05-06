@@ -64,25 +64,63 @@ export default function RelatoriosPage() {
       const yearStart = `${year}-01-01T00:00:00Z`;
       const yearEnd = `${year}-12-31T23:59:59Z`;
 
-      const [txResult, newSubsResult, canceledSubsResult] = await Promise.all([
-        supabase.from("transactions")
-          .select("type, commission_amount_cents, available_at")
-          .gte("available_at", yearStart)
-          .lte("available_at", yearEnd),
-        supabase.from("subscriptions")
-          .select("started_at")
-          .gte("started_at", yearStart)
-          .lte("started_at", yearEnd),
-        supabase.from("subscriptions")
-          .select("canceled_at")
-          .not("canceled_at", "is", null)
-          .gte("canceled_at", yearStart)
-          .lte("canceled_at", yearEnd),
-      ]);
+      // PostgREST trunca em 1000 linhas por request. Pra ano com muitas
+      // transações isso subestimava custos/comissões na tela. Pagina manualmente.
+      async function fetchAllPaginated<T>(
+        table: string,
+        select: string,
+        column: string,
+        from: string,
+        to: string,
+        notNull = false
+      ): Promise<T[]> {
+        const PAGE = 1000;
+        const all: T[] = [];
+        let offset = 0;
+        for (let page = 0; page < 200; page++) {
+          let q = supabase.from(table).select(select).gte(column, from).lte(column, to);
+          if (notNull) q = q.not(column, "is", null);
+          const { data, error } = await q
+            .order(column, { ascending: true })
+            .range(offset, offset + PAGE - 1);
+          if (error) {
+            console.error(`[relatorios] erro paginando ${table}:`, error.message);
+            break;
+          }
+          const rows = (data || []) as T[];
+          all.push(...rows);
+          if (rows.length < PAGE) break;
+          offset += PAGE;
+        }
+        return all;
+      }
 
-      const transactions = (txResult.data || []) as TxRow[];
-      const newSubs = (newSubsResult.data || []) as SubStartRow[];
-      const canceledSubs = (canceledSubsResult.data || []) as SubCancelRow[];
+      const [transactions, newSubs, canceledSubs] = await Promise.all([
+        fetchAllPaginated<TxRow>(
+          "transactions",
+          "type, commission_amount_cents, available_at",
+          "available_at",
+          yearStart,
+          yearEnd,
+          true
+        ),
+        fetchAllPaginated<SubStartRow>(
+          "subscriptions",
+          "started_at",
+          "started_at",
+          yearStart,
+          yearEnd,
+          true
+        ),
+        fetchAllPaginated<SubCancelRow>(
+          "subscriptions",
+          "canceled_at",
+          "canceled_at",
+          yearStart,
+          yearEnd,
+          true
+        ),
+      ]);
 
       const now = new Date();
       const periods: { key: string; label: string }[] = [];
