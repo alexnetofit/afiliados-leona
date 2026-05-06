@@ -20,7 +20,6 @@ const FIRST_PERIOD = "2026-01";
 // PagarMe: só cobranças desse produto contam pro fechamento.
 const PAGARME_API_KEY = process.env.PAGARME_API_KEY || "";
 const PAGARME_PRODUCT_ID = "a1869b83-b28d-4257-a986-1df94558a152";
-const PAGARME_SAQUE_DELAY_DAYS = 8;
 
 // --------------- helpers ---------------
 
@@ -138,33 +137,27 @@ function getPeriodRangeBRT(label: string): { start: Date; end: Date } {
  * Regras:
  *  - status == "paid"
  *  - metadata.product_id == PAGARME_PRODUCT_ID
- *  - paid_at + 8 dias deve cair dentro da janela do fechamento em BRT (UTC-3),
- *    isto é, [dia 06 00:00 BRT, dia 05 do mês seguinte 23:59:59 BRT].
- *
- * Janela de pagamentos = janela de saque − 8 dias.
- * Ex.: Abril (saque 06/04 00:00 BRT → 05/05 23:59:59 BRT)
- *      ⇒ paid entre 29/03 00:00 BRT e 27/04 23:59:59 BRT.
+ *  - `paid_at + delay` deve cair dentro da janela de saque BRT.
+ *    Delay depende do método: pix=D+1, cartão=D+8 (default).
+ *  - Janela de saque BRT: [dia 06 00:00, dia 05 do mês seguinte 23:59:59].
  */
 async function fetchPagarmeRevenueForPeriod(label: string): Promise<number> {
   if (!PAGARME_API_KEY) return 0;
   const saqueRange = getPeriodRangeBRT(label);
-  const delayMs = PAGARME_SAQUE_DELAY_DAYS * 24 * 60 * 60 * 1000;
-  const paidSince = new Date(saqueRange.start.getTime() - delayMs);
-  const paidUntil = new Date(saqueRange.end.getTime() - delayMs);
 
   try {
     const { amountCents, grossCents, matched, scanned, byMethod } =
       await sumPagarmePaidAmountByProduct({
         apiKey: PAGARME_API_KEY,
         productId: PAGARME_PRODUCT_ID,
-        paidSince,
-        paidUntil,
+        saqueSince: saqueRange.start,
+        saqueUntil: saqueRange.end,
       });
     const breakdown = Object.entries(byMethod)
       .map(([m, b]) => `${m}:${b.count}/${(b.grossCents / 100).toFixed(2)}→${(b.netCents / 100).toFixed(2)}`)
       .join(" ");
     console.log(
-      `[PagarMe] período=${label} paid_at∈[${paidSince.toISOString()}, ${paidUntil.toISOString()}] ` +
+      `[PagarMe] período=${label} saque∈[${saqueRange.start.toISOString()}, ${saqueRange.end.toISOString()}] ` +
         `scanned=${scanned} matched=${matched} bruto_cents=${grossCents} liquido_cents=${amountCents} | ${breakdown}`
     );
     return amountCents;

@@ -123,9 +123,25 @@ export async function fetchPagarmeCharges(opts: {
 }
 
 /**
- * Soma o valor LÍQUIDO (após taxas Guru) das cobranças cujo `paid_at` cai
- * em [`paidSince`, `paidUntil`] e que tenham `metadata.product_id` igual ao
- * informado. Status considerado: "paid".
+ * Delay padrão (em dias) pra cada método cair na conta após o pagamento.
+ *  - pix: D+1
+ *  - cartão de crédito: D+8
+ *  - boleto/voucher/desconhecido: D+8 (default conservador)
+ */
+const SAQUE_DELAY_DAYS_BY_METHOD: Record<string, number> = {
+  pix: 1,
+  credit_card: 8,
+  boleto: 8,
+  voucher: 8,
+};
+const SAQUE_DELAY_DAYS_DEFAULT = 8;
+
+/**
+ * Soma o valor LÍQUIDO (após taxas Guru) das cobranças cujo dinheiro cai
+ * pra gente dentro da janela de SAQUE [`saqueSince`, `saqueUntil`].
+ *
+ * O "dinheiro disponível" é calculado como `paid_at + delay`, onde o
+ * `delay` depende do método de pagamento (pix D+1, cartão D+8, etc).
  *
  * Pagar.me retorna `paid_amount` em centavos (BRL). Fallback para `amount`
  * se `paid_amount` estiver vazio. Aplicamos a taxa Guru por método de
@@ -134,8 +150,10 @@ export async function fetchPagarmeCharges(opts: {
 export async function sumPagarmePaidAmountByProduct(opts: {
   apiKey: string;
   productId: string;
-  paidSince: Date;
-  paidUntil: Date;
+  /** Início da janela de SAQUE (dinheiro caindo na conta). */
+  saqueSince: Date;
+  /** Fim da janela de SAQUE (dinheiro caindo na conta). */
+  saqueUntil: Date;
   /** Buffer pra trás na consulta `created_since` (boletos podem ser criados muito antes do pagamento). */
   createdSinceBufferDays?: number;
 }): Promise<{
@@ -149,10 +167,22 @@ export async function sumPagarmePaidAmountByProduct(opts: {
     return { amountCents: 0, grossCents: 0, matched: 0, scanned: 0, byMethod: {} };
   }
 
-  const bufferMs = (opts.createdSinceBufferDays ?? 30) * 24 * 60 * 60 * 1000;
-  const createdSince = new Date(opts.paidSince.getTime() - bufferMs);
-  // Cobranças criadas DEPOIS de paidUntil não podem ter sido pagas dentro da janela.
-  const createdUntil = new Date(opts.paidUntil.getTime() + 24 * 60 * 60 * 1000);
+  // O `paid_at` mais antigo possível dentro da janela é `saqueSince - maxDelay`,
+  // e o mais novo é `saqueUntil - minDelay`. Usamos esses extremos pra montar
+  // o filtro de `created_since`/`created_until` na API.
+  const dayMs = 24 * 60 * 60 * 1000;
+  const allDelays = Object.values(SAQUE_DELAY_DAYS_BY_METHOD).concat(
+    SAQUE_DELAY_DAYS_DEFAULT
+  );
+  const maxDelayMs = Math.max(...allDelays) * dayMs;
+  const minDelayMs = Math.min(...allDelays) * dayMs;
+  const earliestPaidAt = new Date(opts.saqueSince.getTime() - maxDelayMs);
+  const latestPaidAt = new Date(opts.saqueUntil.getTime() - minDelayMs);
+
+  const bufferMs = (opts.createdSinceBufferDays ?? 30) * dayMs;
+  const createdSince = new Date(earliestPaidAt.getTime() - bufferMs);
+  // Cobranças criadas DEPOIS do último paid possível não cabem na janela.
+  const createdUntil = new Date(latestPaidAt.getTime() + dayMs);
 
   const charges = await fetchPagarmeCharges({
     apiKey: opts.apiKey,
@@ -161,8 +191,8 @@ export async function sumPagarmePaidAmountByProduct(opts: {
     createdUntil,
   });
 
-  const paidSinceMs = opts.paidSince.getTime();
-  const paidUntilMs = opts.paidUntil.getTime();
+  const saqueSinceMs = opts.saqueSince.getTime();
+  const saqueUntilMs = opts.saqueUntil.getTime();
 
   let amountCents = 0;
   let grossCents = 0;
@@ -180,7 +210,11 @@ export async function sumPagarmePaidAmountByProduct(opts: {
 
     const paidAtMs = new Date(ch.paid_at).getTime();
     if (Number.isNaN(paidAtMs)) continue;
-    if (paidAtMs < paidSinceMs || paidAtMs > paidUntilMs) continue;
+
+    const method = (ch.payment_method ?? "unknown").toLowerCase();
+    const delayDays = SAQUE_DELAY_DAYS_BY_METHOD[method] ?? SAQUE_DELAY_DAYS_DEFAULT;
+    const availableAtMs = paidAtMs + delayDays * dayMs;
+    if (availableAtMs < saqueSinceMs || availableAtMs > saqueUntilMs) continue;
 
     const gross =
       typeof ch.paid_amount === "number" && ch.paid_amount > 0
@@ -189,7 +223,6 @@ export async function sumPagarmePaidAmountByProduct(opts: {
           ? ch.amount
           : 0;
 
-    const method = (ch.payment_method ?? "unknown").toLowerCase();
     const fee = GURU_FEE_BY_METHOD[method] ?? GURU_FEE_DEFAULT;
     const net = Math.round(gross * (1 - fee));
 
