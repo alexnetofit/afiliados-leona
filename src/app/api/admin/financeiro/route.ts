@@ -347,14 +347,37 @@ export async function GET(request: NextRequest) {
 
   type CachedRev = { period_label: string; stripe_revenue_usd_cents: number; stripe_revenue_brl_cents: number; abacate_revenue_cents: number; pagarme_revenue_cents: number; usd_brl_rate: number };
 
+  // PostgREST tem limite default de 1000 linhas por request. Como esse fetch
+  // varre TODAS as transações desde Jan/2026, a partir de ~1k transações
+  // o resultado fica truncado e o "Custo afiliados" do mês mais recente
+  // aparece subestimado. Paginamos manualmente em batches de 1000.
+  const fetchAllTransactions = async () => {
+    const PAGE = 1000;
+    const out: Array<{ commission_amount_cents: number; available_at: string }> = [];
+    let from = 0;
+    for (let page = 0; page < 200; page++) {
+      const { data, error } = await supabaseAdmin
+        .from("transactions")
+        .select("commission_amount_cents, available_at")
+        .not("available_at", "is", null)
+        .gte("available_at", globalStart.toISOString())
+        .lte("available_at", globalEnd.toISOString())
+        .order("available_at", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) {
+        console.error("[financeiro] erro paginando transactions:", error.message);
+        break;
+      }
+      const rows = data || [];
+      out.push(...rows);
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+    return out;
+  };
+
   const [allTxs, allCosts, cachedRevRows] = await Promise.all([
-    supabaseAdmin
-      .from("transactions")
-      .select("commission_amount_cents, available_at")
-      .not("available_at", "is", null)
-      .gte("available_at", globalStart.toISOString())
-      .lte("available_at", globalEnd.toISOString())
-      .then((r) => r.data || []),
+    fetchAllTransactions(),
     Promise.resolve(
       supabaseAdmin
         .from("admin_costs")
