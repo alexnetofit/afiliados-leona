@@ -20,7 +20,6 @@ const FIRST_PERIOD = "2026-01";
 // PagarMe: só cobranças desse produto contam pro fechamento.
 const PAGARME_API_KEY = process.env.PAGARME_API_KEY || "";
 const PAGARME_PRODUCT_ID = "a1869b83-b28d-4257-a986-1df94558a152";
-const PAGARME_SAQUE_DELAY_DAYS = 8;
 
 // --------------- helpers ---------------
 
@@ -130,34 +129,31 @@ function getPeriodRangeBRT(label: string): { start: Date; end: Date } {
 }
 
 /**
- * Calcula o total "sacado" da PagarMe pro período (em centavos BRL).
+ * Calcula o faturamento PagarMe pro período (em centavos BRL).
  *
  * Regras:
  *  - status == "paid"
  *  - metadata.product_id == PAGARME_PRODUCT_ID
- *  - paid_at + 8 dias deve cair dentro da janela do fechamento em BRT (UTC-3),
+ *  - paid_at deve cair dentro da janela do fechamento em BRT (UTC-3),
  *    isto é, [dia 06 00:00 BRT, dia 05 do mês seguinte 23:59:59 BRT].
  *
- * Janela de pagamentos = janela de saque − 8 dias.
- * Ex.: Abril (saque 06/04 00:00 BRT → 05/05 23:59:59 BRT)
- *      ⇒ paid entre 29/03 00:00 BRT e 27/04 23:59:59 BRT.
+ * (Anteriormente a janela era deslocada em -8 dias pra contar saque "D+8".
+ * Ajustado pra alinhar com o conceito usado no Stripe/AbacatePay: vendas
+ * pagas no período do fechamento.)
  */
 async function fetchPagarmeRevenueForPeriod(label: string): Promise<number> {
   if (!PAGARME_API_KEY) return 0;
-  const saqueRange = getPeriodRangeBRT(label);
-  const delayMs = PAGARME_SAQUE_DELAY_DAYS * 24 * 60 * 60 * 1000;
-  const paidSince = new Date(saqueRange.start.getTime() - delayMs);
-  const paidUntil = new Date(saqueRange.end.getTime() - delayMs);
+  const range = getPeriodRangeBRT(label);
 
   try {
     const { amountCents, matched, scanned } = await sumPagarmePaidAmountByProduct({
       apiKey: PAGARME_API_KEY,
       productId: PAGARME_PRODUCT_ID,
-      paidSince,
-      paidUntil,
+      paidSince: range.start,
+      paidUntil: range.end,
     });
     console.log(
-      `[PagarMe] período=${label} paid_at∈[${paidSince.toISOString()}, ${paidUntil.toISOString()}] ` +
+      `[PagarMe] período=${label} paid_at∈[${range.start.toISOString()}, ${range.end.toISOString()}] ` +
         `scanned=${scanned} matched=${matched} total_cents=${amountCents}`
     );
     return amountCents;
