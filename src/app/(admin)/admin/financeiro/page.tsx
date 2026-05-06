@@ -77,8 +77,8 @@ function getProfitShares(periodLabel: string): ProfitShare[] {
   if (y > 2026 || (y === 2026 && m >= 4)) {
     return [
       { name: "Alex", percent: 40 },
-      { name: "Dai", percent: 10 },
-      { name: "Fabiano", percent: 10 },
+      { name: "Dai", percent: 20 },
+      { name: "Fabiano", percent: 20 },
       { name: "Ericson", percent: 20 },
     ];
   }
