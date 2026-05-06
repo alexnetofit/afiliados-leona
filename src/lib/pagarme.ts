@@ -14,12 +14,28 @@ export interface PagarmeCharge {
   paid_amount?: number | null;
   paid_at?: string | null;
   created_at?: string | null;
+  payment_method?: string | null;
   metadata?: Record<string, string | number | boolean | null> | null;
   order?: {
     id?: string | null;
     metadata?: Record<string, string | number | boolean | null> | null;
   } | null;
 }
+
+/**
+ * Taxas Guru (já incluindo imposto) que descontamos do bruto pra chegar
+ * no líquido que efetivamente cai pra gente.
+ *  - cartão de crédito: 4,3%
+ *  - pix: 0,7%
+ * Boleto/voucher caem como cartão por segurança (raros nessa operação).
+ */
+const GURU_FEE_BY_METHOD: Record<string, number> = {
+  credit_card: 0.043,
+  pix: 0.007,
+  boleto: 0.043,
+  voucher: 0.043,
+};
+const GURU_FEE_DEFAULT = 0.043;
 
 interface PagarmeListResponse {
   data?: PagarmeCharge[];
@@ -107,12 +123,13 @@ export async function fetchPagarmeCharges(opts: {
 }
 
 /**
- * Soma o valor pago das cobranças cujo `paid_at` cai em
- * [`paidSince`, `paidUntil`] e que tenham `metadata.product_id` igual ao
+ * Soma o valor LÍQUIDO (após taxas Guru) das cobranças cujo `paid_at` cai
+ * em [`paidSince`, `paidUntil`] e que tenham `metadata.product_id` igual ao
  * informado. Status considerado: "paid".
  *
  * Pagar.me retorna `paid_amount` em centavos (BRL). Fallback para `amount`
- * se `paid_amount` estiver vazio.
+ * se `paid_amount` estiver vazio. Aplicamos a taxa Guru por método de
+ * pagamento (cartão 4,3% / pix 0,7%) pra refletir o que cai pra gente.
  */
 export async function sumPagarmePaidAmountByProduct(opts: {
   apiKey: string;
@@ -121,8 +138,16 @@ export async function sumPagarmePaidAmountByProduct(opts: {
   paidUntil: Date;
   /** Buffer pra trás na consulta `created_since` (boletos podem ser criados muito antes do pagamento). */
   createdSinceBufferDays?: number;
-}): Promise<{ amountCents: number; matched: number; scanned: number }> {
-  if (!opts.apiKey) return { amountCents: 0, matched: 0, scanned: 0 };
+}): Promise<{
+  amountCents: number;
+  grossCents: number;
+  matched: number;
+  scanned: number;
+  byMethod: Record<string, { count: number; grossCents: number; netCents: number }>;
+}> {
+  if (!opts.apiKey) {
+    return { amountCents: 0, grossCents: 0, matched: 0, scanned: 0, byMethod: {} };
+  }
 
   const bufferMs = (opts.createdSinceBufferDays ?? 30) * 24 * 60 * 60 * 1000;
   const createdSince = new Date(opts.paidSince.getTime() - bufferMs);
@@ -140,8 +165,10 @@ export async function sumPagarmePaidAmountByProduct(opts: {
   const paidUntilMs = opts.paidUntil.getTime();
 
   let amountCents = 0;
+  let grossCents = 0;
   let matched = 0;
   let scanned = 0;
+  const byMethod: Record<string, { count: number; grossCents: number; netCents: number }> = {};
 
   for (const ch of charges) {
     scanned++;
@@ -155,15 +182,27 @@ export async function sumPagarmePaidAmountByProduct(opts: {
     if (Number.isNaN(paidAtMs)) continue;
     if (paidAtMs < paidSinceMs || paidAtMs > paidUntilMs) continue;
 
-    const value =
+    const gross =
       typeof ch.paid_amount === "number" && ch.paid_amount > 0
         ? ch.paid_amount
         : typeof ch.amount === "number"
           ? ch.amount
           : 0;
-    amountCents += value;
+
+    const method = (ch.payment_method ?? "unknown").toLowerCase();
+    const fee = GURU_FEE_BY_METHOD[method] ?? GURU_FEE_DEFAULT;
+    const net = Math.round(gross * (1 - fee));
+
+    grossCents += gross;
+    amountCents += net;
     matched++;
+
+    const bucket = byMethod[method] ?? { count: 0, grossCents: 0, netCents: 0 };
+    bucket.count++;
+    bucket.grossCents += gross;
+    bucket.netCents += net;
+    byMethod[method] = bucket;
   }
 
-  return { amountCents, matched, scanned };
+  return { amountCents, grossCents, matched, scanned, byMethod };
 }

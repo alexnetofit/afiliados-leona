@@ -153,15 +153,19 @@ async function fetchPagarmeRevenueForPeriod(label: string): Promise<number> {
   const paidUntil = new Date(saqueRange.end.getTime() - delayMs);
 
   try {
-    const { amountCents, matched, scanned } = await sumPagarmePaidAmountByProduct({
-      apiKey: PAGARME_API_KEY,
-      productId: PAGARME_PRODUCT_ID,
-      paidSince,
-      paidUntil,
-    });
+    const { amountCents, grossCents, matched, scanned, byMethod } =
+      await sumPagarmePaidAmountByProduct({
+        apiKey: PAGARME_API_KEY,
+        productId: PAGARME_PRODUCT_ID,
+        paidSince,
+        paidUntil,
+      });
+    const breakdown = Object.entries(byMethod)
+      .map(([m, b]) => `${m}:${b.count}/${(b.grossCents / 100).toFixed(2)}→${(b.netCents / 100).toFixed(2)}`)
+      .join(" ");
     console.log(
       `[PagarMe] período=${label} paid_at∈[${paidSince.toISOString()}, ${paidUntil.toISOString()}] ` +
-        `scanned=${scanned} matched=${matched} total_cents=${amountCents}`
+        `scanned=${scanned} matched=${matched} bruto_cents=${grossCents} liquido_cents=${amountCents} | ${breakdown}`
     );
     return amountCents;
   } catch (e) {
