@@ -697,12 +697,17 @@ export default function FinanceiroPage() {
                       </div>
                       <div className={cn("p-3 rounded-lg border", hasRevData ? "bg-violet-50 border-violet-100" : "bg-zinc-50 border-zinc-200")}>
                         <p className={cn("text-[10px] font-medium uppercase tracking-wider", hasRevData ? "text-violet-600" : "text-zinc-400")}>
-                          PagarMe
+                          PagarMe (D+8)
                         </p>
                         {hasRevData ? (
-                          <p className={cn("text-lg font-bold mt-1", pagarmeCents > 0 ? "text-violet-700" : "text-zinc-300")}>
-                            {pagarmeCents > 0 ? formatCurrency(pagarmeCents / 100) : "R$ 0,00"}
-                          </p>
+                          <>
+                            <p className={cn("text-lg font-bold mt-1", pagarmeCents > 0 ? "text-violet-700" : "text-zinc-300")}>
+                              {pagarmeCents > 0 ? formatCurrency(pagarmeCents / 100) : "R$ 0,00"}
+                            </p>
+                            <p className="text-[10px] text-violet-500 mt-0.5">
+                              Saque considerado 8 dias após o pagamento
+                            </p>
+                          </>
                         ) : (
                           <p className="text-lg font-bold text-zinc-300 mt-1">—</p>
                         )}
