@@ -74,30 +74,12 @@ interface ProfitShare { name: string; percent: number; isCost?: boolean }
 
 function getProfitShares(periodLabel: string): ProfitShare[] {
   const [y, m] = periodLabel.split("-").map(Number);
-  if (y > 2026 || (y === 2026 && m >= 7)) {
+  if (y > 2026 || (y === 2026 && m >= 4)) {
     return [
       { name: "Alex", percent: 40 },
       { name: "Dai", percent: 10 },
       { name: "Fabiano", percent: 10 },
       { name: "Ericson", percent: 20 },
-    ];
-  }
-  if (y === 2026 && (m === 5 || m === 6)) {
-    return [
-      { name: "Alex", percent: 40 },
-      { name: "Dai", percent: 10 },
-      { name: "Fabiano", percent: 10 },
-      { name: "Ericson", percent: 20 },
-      { name: "Caique", percent: 5, isCost: true },
-    ];
-  }
-  if (y === 2026 && m === 4) {
-    return [
-      { name: "Alex", percent: 40 },
-      { name: "Dai", percent: 10 },
-      { name: "Fabiano", percent: 10 },
-      { name: "Ericson", percent: 20 },
-      { name: "Caique", percent: 5, isCost: true },
     ];
   }
   if (y === 2026 && m === 3) {
