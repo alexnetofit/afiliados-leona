@@ -21,6 +21,14 @@ export interface ManagedSubscription extends Subscription {
   managed_affiliate_name?: string;
 }
 
+export interface WithdrawBalanceClient {
+  liquidoLiberadoCents: number;
+  sacadoCents: number;
+  saldoDisponivelCents: number;
+  ajustePendenteCents: number;
+  compensacaoCents: number;
+}
+
 interface AppData {
   // User data
   user: User | null;
@@ -37,6 +45,7 @@ interface AppData {
   payouts: MonthlyPayout[];
   summary: AffiliateSummary | null;
   withdrawnDateLabels: Map<string, { status: string; paid_at: string | null; amount_text: string | null }>;
+  withdrawBalance: WithdrawBalanceClient | null;
 
   // State
   isLoading: boolean;
@@ -61,6 +70,7 @@ const defaultAppData: AppData = {
   payouts: [],
   summary: null,
   withdrawnDateLabels: new Map(),
+  withdrawBalance: null,
   isLoading: true,
   isInitialized: false,
   refetch: async () => {},
@@ -85,6 +95,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [payouts, setPayouts] = useState<MonthlyPayout[]>([]);
   const [summary, setSummary] = useState<AffiliateSummary | null>(null);
   const [withdrawnDateLabels, setWithdrawnDateLabels] = useState<Map<string, { status: string; paid_at: string | null; amount_text: string | null }>>(new Map());
+  const [withdrawBalance, setWithdrawBalance] = useState<WithdrawBalanceClient | null>(null);
   const [isManager, setIsManager] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -173,12 +184,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       // Fetch withdraw status via API (bypasses RLS)
       let wLabels = new Map<string, { status: string; paid_at: string | null; amount_text: string | null }>();
+      let wBalance: WithdrawBalanceClient | null = null;
       try {
         const wRes = await fetch(`/api/withdraw/status?affiliateId=${affiliateId}`);
         if (wRes.ok) {
           const wData = await wRes.json();
           const withdraws = wData.withdraws || {};
           wLabels = new Map(Object.entries(withdraws) as [string, { status: string; paid_at: string | null; amount_text: string | null }][]);
+          if (wData.balance) wBalance = wData.balance as WithdrawBalanceClient;
         }
       } catch {
         // silently fail
@@ -195,6 +208,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setPayouts(paysData);
       setSummary(calculateSummary(txsData, paysData, subsData, wLabels));
       setWithdrawnDateLabels(wLabels);
+      setWithdrawBalance(wBalance);
     },
     [supabase, calculateSummary]
   );
@@ -218,6 +232,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setPayouts([]);
         setSummary(null);
         setWithdrawnDateLabels(new Map());
+        setWithdrawBalance(null);
         setIsManager(false);
         return;
       }
@@ -299,6 +314,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setPayouts([]);
     setSummary(null);
     setWithdrawnDateLabels(new Map());
+    setWithdrawBalance(null);
     setIsManager(false);
     setManagedSubscriptions([]);
   }, [supabase]);
@@ -326,6 +342,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setPayouts([]);
         setSummary(null);
         setWithdrawnDateLabels(new Map());
+        setWithdrawBalance(null);
         setIsManager(false);
         setManagedSubscriptions([]);
         setIsLoading(false);
@@ -350,6 +367,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     payouts,
     summary,
     withdrawnDateLabels,
+    withdrawBalance,
     isLoading,
     isInitialized,
     refetch: fetchAllData,

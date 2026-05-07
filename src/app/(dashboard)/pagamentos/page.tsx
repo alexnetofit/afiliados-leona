@@ -34,7 +34,7 @@ interface WithdrawResult {
 
 export default function PagamentosPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { profile, affiliate, transactions, payouts, subscriptions, withdrawnDateLabels, isLoading, isInitialized } = useAppData();
+  const { profile, affiliate, transactions, payouts, subscriptions, withdrawnDateLabels, withdrawBalance, isLoading, isInitialized } = useAppData();
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [withdrawingGroup, setWithdrawingGroup] = useState<string | null>(null);
   const [localWithdrawn, setLocalWithdrawn] = useState<Map<string, { status: string; paid_at: string | null; amount_text: string | null }>>(new Map());
@@ -237,12 +237,24 @@ export default function PagamentosPage() {
   const totalPaid = paymentGroups
     .filter(g => g.status === "paid" || (g.status === "available" && withdrawnGroups.get(g.dateLabel)?.status === "paid"))
     .reduce((sum, g) => sum + g.totalCents, 0);
-  const totalAvailable = paymentGroups
+  const totalAvailableBuckets = paymentGroups
     .filter(g => g.status === "available" && withdrawnGroups.get(g.dateLabel)?.status !== "paid")
     .reduce((sum, g) => sum + g.totalCents, 0);
   const totalPending = paymentGroups
     .filter(g => g.status === "pending")
     .reduce((sum, g) => sum + g.totalCents, 0);
+
+  // Saldo "real": vem do backend (líquido liberado - sacado) e desconta saques
+  // anteriores cujo amount_text foi gravado em valor bruto antes do recálculo
+  // automático da taxa do gateway (~7%). Quando há ajuste pendente, exibimos
+  // o líquido real ao invés da soma bruta dos buckets pra evitar o "click
+  // frustrante" no botão Solicitar Saque.
+  const ajustePendenteCents = withdrawBalance?.ajustePendenteCents ?? 0;
+  const saldoRealCents = withdrawBalance?.saldoDisponivelCents ?? totalAvailableBuckets;
+  const hasAjustePendente = ajustePendenteCents > 0;
+  const totalAvailable = hasAjustePendente
+    ? Math.max(saldoRealCents, 0)
+    : totalAvailableBuckets;
 
   if (isLoading && !isInitialized) {
     return <LoadingScreen message="Carregando pagamentos..." />;
@@ -306,6 +318,24 @@ export default function PagamentosPage() {
               color="default"
             />
           </div>
+
+          {hasAjustePendente && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-900 space-y-1">
+                <p className="font-semibold">Ajuste de saldo em andamento</p>
+                <p>
+                  Saques anteriores a 12/03/2026 foram processados sobre o valor bruto e desde então
+                  o sistema passou a contabilizar a comissão líquida (já descontada a taxa do gateway de ~7%).
+                  Por isso, o seu saldo disponível neste momento está {formatCurrency(ajustePendenteCents / 100)} menor
+                  que a soma dos períodos liberados na lista abaixo.
+                </p>
+                <p className="text-xs text-amber-700 pt-1">
+                  Já estamos compensando isso automaticamente — qualquer dúvida, fala com o suporte.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Payment Groups */}
           <Card>

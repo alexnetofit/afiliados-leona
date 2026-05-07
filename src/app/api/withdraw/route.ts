@@ -7,6 +7,7 @@ import {
   getAsaasBaseUrl,
   getOrderedAsaasAccounts,
 } from "@/lib/asaas-accounts";
+import { formatBrl, getWithdrawBalance } from "@/lib/withdraw-balance";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -217,64 +218,49 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Valida saldo TOTAL do afiliado: comissões já liberadas (available_at <=
-    // NOW()) menos refunds/disputes menos o que já foi sacado. Pra evitar que
-    // saques baseados em buckets diários (dia 5/20) ignorem refunds tardios
-    // que caíram em datas avulsas (vide bug histórico de 2026 antes da
-    // migration 022).
+    // Valida saldo TOTAL do afiliado (líquido liberado - sacado anterior). Cobre
+    // dois cenários: (1) refunds em buckets já sacados — bug histórico antes da
+    // migration 022; (2) saques antigos cujo amount_text foi gravado em valor
+    // bruto antes da migration 012 recalcular as comissões pra líquido (~7% a
+    // menos). Em ambos os casos a compensação é automática nos saques futuros.
     if (affiliateId) {
-      const PAGE = 1000;
-      let txOffset = 0;
-      let liquidoLiberadoCents = 0;
-      while (true) {
-        const { data: txPage, error: txErr } = await supabaseAdmin
-          .from("transactions")
-          .select("commission_amount_cents, available_at")
-          .eq("affiliate_id", affiliateId)
-          .not("available_at", "is", null)
-          .lte("available_at", new Date().toISOString())
-          .order("available_at", { ascending: true })
-          .range(txOffset, txOffset + PAGE - 1);
-        if (txErr) break;
-        const rows = txPage || [];
-        for (const r of rows) {
-          liquidoLiberadoCents += r.commission_amount_cents || 0;
-        }
-        if (rows.length < PAGE) break;
-        txOffset += PAGE;
-      }
+      const balance = await getWithdrawBalance(supabaseAdmin, affiliateId);
 
-      const { data: prevWithdraws } = await supabaseAdmin
-        .from("withdraw_requests")
-        .select("amount_text, status")
-        .eq("affiliate_id", affiliateId)
-        .in("status", ["paid", "processing"]);
-
-      const parseBrlToCents = (t: string | null): number => {
-        if (!t) return 0;
-        const cleaned = t.replace(/[^0-9,]/g, "").replace(",", ".");
-        const n = parseFloat(cleaned);
-        return Number.isFinite(n) ? Math.round(n * 100) : 0;
-      };
-      const sacadoCents = (prevWithdraws || []).reduce(
-        (sum, w) => sum + parseBrlToCents(w.amount_text),
-        0
-      );
-
-      const saldoDisponivelCents = liquidoLiberadoCents - sacadoCents;
-
-      if (amountCents > saldoDisponivelCents) {
-        const fmtBrl = (cents: number) =>
-          (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      if (amountCents > balance.saldoDisponivelCents) {
         console.warn(
           `[WITHDRAW] Saldo insuficiente: afiliado=${affiliateId} pediu=${amountCents} ` +
-            `disponivel=${saldoDisponivelCents} (liquido=${liquidoLiberadoCents} - sacado=${sacadoCents})`
+            `disponivel=${balance.saldoDisponivelCents} (liquido=${balance.liquidoLiberadoCents} ` +
+            `- sacado=${balance.sacadoCents}, ajusteHistorico=${balance.ajustePendenteCents})`
         );
+
+        const linhas: string[] = [
+          `Você quis sacar ${formatBrl(amountCents)}, mas seu saldo real disponível é ${formatBrl(Math.max(balance.saldoDisponivelCents, 0))}.`,
+          "",
+          `• Total líquido liberado até hoje: ${formatBrl(balance.liquidoLiberadoCents)}`,
+          `• Total já sacado em períodos anteriores: ${formatBrl(balance.sacadoCents)}`,
+        ];
+        if (balance.ajustePendenteCents > 0) {
+          linhas.push(
+            `• Ajuste de saques antigos sendo compensado: ${formatBrl(balance.ajustePendenteCents)}`,
+            "",
+            "Os valores que aparecem como “Disponível” na tela referem-se ao bucket bruto da liberação. Como saques anteriores foram processados antes do recálculo automático da taxa do gateway (~7%), a diferença está sendo descontada do seu saldo agora. Em poucos saques esse ajuste se zera. Se quiser entender o cálculo em detalhe, fala com o suporte."
+          );
+        } else {
+          linhas.push(
+            "",
+            "A diferença pode vir de estornos posteriores ou saques anteriores. Se o valor não bater com o que você esperava, fala com o suporte que a gente revisa."
+          );
+        }
+
         return NextResponse.json(
           {
-            error:
-              `Saldo insuficiente. Disponível líquido: ${fmtBrl(saldoDisponivelCents)} ` +
-              `(considera estornos e saques anteriores).`,
+            error: linhas.join("\n"),
+            balance: {
+              liquidoLiberadoCents: balance.liquidoLiberadoCents,
+              sacadoCents: balance.sacadoCents,
+              saldoDisponivelCents: balance.saldoDisponivelCents,
+              ajustePendenteCents: balance.ajustePendenteCents,
+            },
           },
           { status: 400 }
         );

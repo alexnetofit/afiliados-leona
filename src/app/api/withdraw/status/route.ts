@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { getWithdrawBalance } from "@/lib/withdraw-balance";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,10 +22,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ dateLabels: [] });
     }
 
-    const { data } = await supabaseAdmin
-      .from("withdraw_requests")
-      .select("date_label, status, paid_at, amount_text")
-      .eq("affiliate_id", affiliateId);
+    const [{ data }, balance] = await Promise.all([
+      supabaseAdmin
+        .from("withdraw_requests")
+        .select("date_label, status, paid_at, amount_text")
+        .eq("affiliate_id", affiliateId),
+      getWithdrawBalance(supabaseAdmin, affiliateId).catch((err) => {
+        console.error("[WITHDRAW STATUS] balance error:", err);
+        return null;
+      }),
+    ]);
 
     const withdraws: Record<string, { status: string; paid_at: string | null; amount_text: string | null }> = {};
     (data || []).forEach((r: { date_label: string | null; status: string; paid_at: string | null; amount_text: string | null }) => {
@@ -33,7 +40,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    return NextResponse.json({ withdraws });
+    return NextResponse.json({ withdraws, balance });
   } catch (error) {
     console.error("[WITHDRAW STATUS] Error:", error);
     return NextResponse.json({ withdraws: {} });
