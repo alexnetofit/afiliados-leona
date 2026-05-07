@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,9 +9,20 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: NextRequest) {
   try {
-    const { mgrCode, userId } = await request.json();
+    // userId vem SEMPRE da sessão autenticada — não aceitamos do body
+    // pra impedir que terceiros amarrem afiliados arbitrários ao próprio
+    // código de manager.
+    const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+    const userId = user.id;
 
-    if (!mgrCode || !userId) {
+    const { mgrCode } = (await request.json()) as { mgrCode?: string };
+    if (!mgrCode) {
       return NextResponse.json({ error: "Parâmetros inválidos" }, { status: 400 });
     }
 

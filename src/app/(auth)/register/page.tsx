@@ -54,11 +54,14 @@ export default function RegisterPage() {
     }
 
     if (mgrCode && signUpData?.user) {
+      // Garante que o cookie de sess\u00e3o foi processado antes de chamar a API,
+      // que valida `userId` via `auth.getUser()` no server.
+      await supabase.auth.getSession();
       try {
         await fetch("/api/register-manager", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mgrCode, userId: signUpData.user.id }),
+          body: JSON.stringify({ mgrCode }),
         });
       } catch {
         /* best-effort */
