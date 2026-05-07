@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { calculateAvailableAtBRT, getCommissionPercent } from "@/lib/commission-payout";
-import { fetchBillingProfileByEmail } from "@/lib/leona-billing";
+import {
+  disambiguateBillingProfile,
+  fetchBillingProfileByEmail,
+  type LeonaBillingResult,
+} from "@/lib/leona-billing";
 import { resolveAffiliateIdByCode } from "@/lib/resolve-affiliate-code";
 import {
   type GuruSubscriptionPayload,
@@ -47,6 +51,57 @@ type GuruTransactionPayload = {
   payment?: GuruPayment;
   subscription?: GuruSubscriptionPayload | null;
 };
+
+/**
+ * Wrapper: chama `fetchBillingProfileByEmail` e, se a Leona devolver 409
+ * com lista de account_ids, tenta desambiguar buscando cada conta e usando
+ * a única que tem `rewardful_referral` configurado. Caso comum: cliente
+ * tem 1 conta ativa com referral + N duplicatas inativas sem referral.
+ *
+ * Só falha por ambiguidade real (2+ contas apontando pra afiliados
+ * DIFERENTES). Antes desse helper, qualquer 409 abandonava a comissão
+ * silenciosamente.
+ */
+async function fetchBillingProfileResolvingConflict(
+  emailRaw: string,
+  guruId: string
+): Promise<LeonaBillingResult> {
+  const initial = await fetchBillingProfileByEmail(emailRaw);
+  if (initial.ok) return initial;
+  if (initial.reason !== "conflict") return initial;
+
+  const accountIds = initial.conflictAccountIds;
+  if (!accountIds || accountIds.length === 0) {
+    console.warn(
+      `[GURU WEBHOOK] tx=${guruId}: 409 sem account_ids para ${emailRaw}`
+    );
+    return initial;
+  }
+
+  const disambiguated = await disambiguateBillingProfile(emailRaw, accountIds);
+  if (disambiguated.ok) {
+    console.log(
+      `[GURU WEBHOOK] tx=${guruId}: desambiguado para ${emailRaw} ` +
+        `via account_id=${disambiguated.chosenAccountId} ` +
+        `(referral=${disambiguated.profile.rewardful_referral})`
+    );
+    return { ok: true, profile: disambiguated.profile };
+  }
+
+  if (disambiguated.reason === "ambiguous") {
+    console.warn(
+      `[GURU WEBHOOK] tx=${guruId}: ambiguidade real para ${emailRaw} — ` +
+        `múltiplas contas com referrals diferentes: ` +
+        JSON.stringify(disambiguated.candidates)
+    );
+  } else if (disambiguated.reason === "no_referral") {
+    console.log(
+      `[GURU WEBHOOK] tx=${guruId}: nenhuma das ${accountIds.length} contas ` +
+        `de ${emailRaw} tem rewardful_referral`
+    );
+  }
+  return initial;
+}
 
 const managerInvoiceKey = (guruId: string) => `guru:${guruId}_mgr`;
 const managerRefundKey = (guruId: string) => `guru:${guruId}_mgr_refund`;
@@ -237,7 +292,7 @@ async function maybeSyncSubscriptionFromLeona(
   body: GuruTransactionPayload,
   emailRaw: string
 ): Promise<void> {
-  const billing = await fetchBillingProfileByEmail(emailRaw);
+  const billing = await fetchBillingProfileResolvingConflict(emailRaw, "(sync)");
   if (!billing.ok) return;
   if (!billing.profile.rewardful_referral) return;
 
@@ -424,7 +479,7 @@ async function reprocessExistingGuruTransaction(
     amount_gross_cents: number;
   }
 ): Promise<{ response: NextResponse; subscriptionSynced: boolean }> {
-  const billing = await fetchBillingProfileByEmail(emailRaw);
+  const billing = await fetchBillingProfileResolvingConflict(emailRaw, guruId);
   if (!billing.ok) {
     console.log(
       `[GURU WEBHOOK] Reprocess tx=${guruId}: billing lookup falhou para ${emailRaw} (reason=${(billing as { reason?: string }).reason})`
@@ -579,7 +634,7 @@ async function processGuruCommission(
     );
   }
 
-  const billing = await fetchBillingProfileByEmail(emailRaw);
+  const billing = await fetchBillingProfileResolvingConflict(emailRaw, guruId);
   if (!billing.ok) {
     if (billing.reason === "not_found") {
       console.log(`[GURU WEBHOOK] Leona 404 / sem perfil para email ${emailRaw}, tx ${guruId}`);
@@ -590,7 +645,8 @@ async function processGuruCommission(
     }
     if (billing.reason === "conflict") {
       console.warn(
-        `[GURU WEBHOOK] Leona 409 — várias contas para owner ${emailRaw}, tx ${guruId}; comissão não atribuída`
+        `[GURU WEBHOOK] Leona 409 IRRESOLVIDO para ${emailRaw}, tx ${guruId} ` +
+          `(múltiplas contas com referrals diferentes ou nenhuma com referral); comissão não atribuída`
       );
       return {
         response: NextResponse.json({ received: true, status: "billing_conflict" }),
