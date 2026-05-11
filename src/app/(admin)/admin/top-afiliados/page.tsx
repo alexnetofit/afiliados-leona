@@ -334,57 +334,7 @@ export default function TopAfiliadosPage() {
           </Card>
         </div>
 
-        {/* Wise Transactions */}
-        {wise && wiseTxs.length > 0 && (
-          <Card noPadding>
-            <div className="p-5 border-b border-zinc-100">
-              <h3 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-red-500" />
-                Gastos no Cartão Wise
-              </h3>
-              <p className="text-sm text-zinc-500 mt-0.5">
-                Cartão ****1421 · {wiseTxs.length} transações
-              </p>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="text-right">Saldo</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {wiseTxs.map((tx, i) => (
-                  <TableRow key={i} className="hover:bg-zinc-50">
-                    <TableCell className="text-sm text-zinc-600">
-                      {tx.date
-                        ? new Date(tx.date).toLocaleDateString("pt-BR", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                            timeZone: "America/Sao_Paulo",
-                          })
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-zinc-900 font-medium">
-                      {tx.description}
-                    </TableCell>
-                    <TableCell className="text-right text-sm font-semibold text-red-600">
-                      {formatCurrency(Math.abs(tx.amount), "USD")}
-                    </TableCell>
-                    <TableCell className="text-right text-sm text-zinc-500">
-                      {formatCurrency(tx.runningBalance, "USD")}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        )}
-
-        {/* Pix Expenses */}
+        {/* Pix Expenses (lançamento manual — vem ANTES do Wise pra ficar à mão) */}
         <Card noPadding>
           <div className="p-5 border-b border-zinc-100 flex items-start justify-between gap-3">
             <div>
@@ -507,6 +457,56 @@ export default function TopAfiliadosPage() {
             )
           )}
         </Card>
+
+        {/* Wise Transactions (automático — vem depois do Pix manual) */}
+        {wise && wiseTxs.length > 0 && (
+          <Card noPadding>
+            <div className="p-5 border-b border-zinc-100">
+              <h3 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-red-500" />
+                Gastos no Cartão Wise
+              </h3>
+              <p className="text-sm text-zinc-500 mt-0.5">
+                Cartão ****1421 · {wiseTxs.length} transações
+              </p>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="text-right">Saldo</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {wiseTxs.map((tx, i) => (
+                  <TableRow key={i} className="hover:bg-zinc-50">
+                    <TableCell className="text-sm text-zinc-600">
+                      {tx.date
+                        ? new Date(tx.date).toLocaleDateString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            timeZone: "America/Sao_Paulo",
+                          })
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-sm text-zinc-900 font-medium">
+                      {tx.description}
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-semibold text-red-600">
+                      {formatCurrency(Math.abs(tx.amount), "USD")}
+                    </TableCell>
+                    <TableCell className="text-right text-sm text-zinc-500">
+                      {formatCurrency(tx.runningBalance, "USD")}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        )}
 
         {/* Commission Transactions */}
         <Card noPadding>
