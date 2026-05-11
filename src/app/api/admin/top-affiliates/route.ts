@@ -138,6 +138,18 @@ export async function GET(request: NextRequest) {
     .eq("affiliate_id", affiliate.id)
     .order("paid_at", { ascending: false });
 
+  const { data: pixExpensesRaw } = await supabaseAdmin
+    .from("top_affiliate_pix_expenses")
+    .select("id, amount_brl_cents, paid_at, description")
+    .eq("affiliate_id", affiliate.id)
+    .order("paid_at", { ascending: false });
+
+  const pixExpenses = pixExpensesRaw || [];
+  const pixTotalBrlCents = pixExpenses.reduce(
+    (sum, p) => sum + (p.amount_brl_cents || 0),
+    0
+  );
+
   const txs = transactions || [];
   const now = new Date();
 
@@ -206,6 +218,8 @@ export async function GET(request: NextRequest) {
         }
       : null,
     wiseConfigured,
+    pixExpenses,
+    pixTotalBrlCents,
     transactions: txs.slice(0, 100),
   });
 }

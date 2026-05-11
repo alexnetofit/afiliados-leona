@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
-  Card, LoadingScreen, Badge,
+  Card, LoadingScreen, Badge, Button, Input,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@/components/ui/index";
 import {
   DollarSign, TrendingUp, Clock, CreditCard, RefreshCw, Star,
-  ArrowDownRight, ArrowUpRight,
+  ArrowDownRight, ArrowUpRight, Plus, Trash2,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
@@ -31,6 +31,13 @@ interface Transaction {
   description: string | null;
 }
 
+interface PixExpense {
+  id: string;
+  amount_brl_cents: number;
+  paid_at: string;
+  description: string | null;
+}
+
 interface TopAffiliateData {
   affiliate: {
     name: string;
@@ -51,6 +58,8 @@ interface TopAffiliateData {
     transactions: WiseTx[];
   } | null;
   wiseConfigured: boolean;
+  pixExpenses: PixExpense[];
+  pixTotalBrlCents: number;
   transactions: Transaction[];
 }
 
@@ -61,6 +70,16 @@ export default function TopAfiliadosPage() {
   const [error, setError] = useState("");
   const [usdRate, setUsdRate] = useState(0);
   const didInit = useRef(false);
+
+  const todayBrt = () =>
+    new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+
+  const [pixFormOpen, setPixFormOpen] = useState(false);
+  const [pixAmount, setPixAmount] = useState("");
+  const [pixDate, setPixDate] = useState(todayBrt());
+  const [pixDescription, setPixDescription] = useState("");
+  const [pixSubmitting, setPixSubmitting] = useState(false);
+  const [pixError, setPixError] = useState("");
 
   const fetchUsdRate = useCallback(async () => {
     try {
@@ -97,6 +116,62 @@ export default function TopAfiliadosPage() {
     setWiseLoading(false);
   };
 
+  const resetPixForm = () => {
+    setPixAmount("");
+    setPixDate(todayBrt());
+    setPixDescription("");
+    setPixError("");
+  };
+
+  const handleAddPix = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPixError("");
+
+    const parsed = Number(pixAmount.replace(",", "."));
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setPixError("Informe um valor em BRL maior que zero");
+      return;
+    }
+    const cents = Math.round(parsed * 100);
+
+    setPixSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/top-affiliates/pix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount_brl_cents: cents,
+          paid_at: new Date(`${pixDate}T12:00:00-03:00`).toISOString(),
+          description: pixDescription.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Erro ao salvar Pix");
+      }
+      await fetchData(true);
+      resetPixForm();
+      setPixFormOpen(false);
+    } catch (err) {
+      setPixError(err instanceof Error ? err.message : "Erro ao salvar Pix");
+    } finally {
+      setPixSubmitting(false);
+    }
+  };
+
+  const handleDeletePix = async (id: string) => {
+    if (!confirm("Remover este lançamento de Pix?")) return;
+    try {
+      const res = await fetch(`/api/admin/top-affiliates/pix?id=${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Erro ao remover");
+      await fetchData(true);
+    } catch {
+      alert("Não foi possível remover o lançamento.");
+    }
+  };
+
   if (loading) return <LoadingScreen message="Carregando Top Afiliados..." />;
   if (error || !data) {
     return (
@@ -108,9 +183,11 @@ export default function TopAfiliadosPage() {
     );
   }
 
-  const { affiliate, commission, wise, wiseConfigured, transactions } = data;
+  const { affiliate, commission, wise, wiseConfigured, pixExpenses, pixTotalBrlCents, transactions } = data;
   const tierName = affiliate.tier === 3 ? "Ouro" : affiliate.tier === 2 ? "Prata" : "Bronze";
-  const usedCents = wise?.totalSpentCents || 0;
+  const wiseUsdCents = wise?.totalSpentCents || 0;
+  const pixUsdCents = usdRate > 0 ? Math.round(pixTotalBrlCents / usdRate) : 0;
+  const usedCents = wiseUsdCents + pixUsdCents;
   const releasedUsdCents = usdRate > 0 ? Math.round(commission.releasedCents / usdRate) : 0;
   const availableCents = releasedUsdCents - usedCents;
 
@@ -207,7 +284,7 @@ export default function TopAfiliadosPage() {
                 <CreditCard className="h-5 w-5 text-red-600" />
               </div>
               <div className="flex items-center gap-2 flex-1">
-                <p className="text-sm font-medium text-zinc-500">Usado (Wise)</p>
+                <p className="text-sm font-medium text-zinc-500">Usado (Wise + Pix)</p>
                 <button
                   onClick={handleRefreshWise}
                   disabled={wiseLoading}
@@ -223,6 +300,19 @@ export default function TopAfiliadosPage() {
             <p className="text-2xl font-bold text-red-600">
               {wise ? formatCurrency(usedCents / 100, "USD") : "—"}
             </p>
+            {wise && (
+              <div className="mt-1 space-y-0.5">
+                <p className="text-xs text-zinc-400">
+                  Wise {formatCurrency(wiseUsdCents / 100, "USD")}
+                </p>
+                {pixTotalBrlCents > 0 && (
+                  <p className="text-xs text-zinc-400">
+                    Pix {formatCurrency(pixTotalBrlCents / 100)}
+                    {usdRate > 0 && ` (≈ ${formatCurrency(pixUsdCents / 100, "USD")})`}
+                  </p>
+                )}
+              </div>
+            )}
             {!wiseConfigured && (
               <p className="text-xs text-amber-500 mt-1">Wise não configurada</p>
             )}
@@ -293,6 +383,130 @@ export default function TopAfiliadosPage() {
             </Table>
           </Card>
         )}
+
+        {/* Pix Expenses */}
+        <Card noPadding>
+          <div className="p-5 border-b border-zinc-100 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-emerald-500" />
+                Gastos via Pix
+              </h3>
+              <p className="text-sm text-zinc-500 mt-0.5">
+                {pixExpenses.length} lançamento{pixExpenses.length === 1 ? "" : "s"}
+                {pixTotalBrlCents > 0 &&
+                  ` · Total ${formatCurrency(pixTotalBrlCents / 100)}`}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant={pixFormOpen ? "secondary" : "primary"}
+              onClick={() => {
+                setPixFormOpen((v) => !v);
+                setPixError("");
+              }}
+              icon={Plus}
+            >
+              {pixFormOpen ? "Cancelar" : "Adicionar Pix"}
+            </Button>
+          </div>
+
+          {pixFormOpen && (
+            <form
+              onSubmit={handleAddPix}
+              className="p-5 border-b border-zinc-100 bg-zinc-50/60 grid grid-cols-1 md:grid-cols-4 gap-3"
+            >
+              <Input
+                label="Valor (R$)"
+                type="text"
+                inputMode="decimal"
+                placeholder="0,00"
+                value={pixAmount}
+                onChange={(e) => setPixAmount(e.target.value)}
+                disabled={pixSubmitting}
+                required
+              />
+              <Input
+                label="Data"
+                type="date"
+                value={pixDate}
+                onChange={(e) => setPixDate(e.target.value)}
+                disabled={pixSubmitting}
+                required
+              />
+              <Input
+                label="Descrição (opcional)"
+                type="text"
+                placeholder="Ex: Pix semanal"
+                value={pixDescription}
+                onChange={(e) => setPixDescription(e.target.value)}
+                disabled={pixSubmitting}
+              />
+              <div className="flex items-end">
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="w-full"
+                  loading={pixSubmitting}
+                >
+                  Salvar
+                </Button>
+              </div>
+              {pixError && (
+                <p className="md:col-span-4 text-xs text-red-600">{pixError}</p>
+              )}
+            </form>
+          )}
+
+          {pixExpenses.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pixExpenses.map((p) => (
+                  <TableRow key={p.id} className="hover:bg-zinc-50">
+                    <TableCell className="text-sm text-zinc-600">
+                      {new Date(p.paid_at).toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        timeZone: "America/Sao_Paulo",
+                      })}
+                    </TableCell>
+                    <TableCell className="text-sm text-zinc-900">
+                      {p.description || "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-semibold text-red-600">
+                      {formatCurrency(p.amount_brl_cents / 100)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePix(p.id)}
+                        className="p-1.5 rounded hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
+                        title="Remover"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            !pixFormOpen && (
+              <div className="p-8 text-center text-sm text-zinc-500">
+                Nenhum gasto Pix registrado. Clique em &quot;Adicionar Pix&quot; para começar.
+              </div>
+            )
+          )}
+        </Card>
 
         {/* Commission Transactions */}
         <Card noPadding>
