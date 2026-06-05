@@ -186,10 +186,11 @@ export default function TopAfiliadosPage() {
   const { affiliate, commission, wise, wiseConfigured, pixExpenses, pixTotalBrlCents, transactions } = data;
   const tierName = affiliate.tier === 3 ? "Ouro" : affiliate.tier === 2 ? "Prata" : "Bronze";
   const wiseUsdCents = wise?.totalSpentCents || 0;
-  const pixUsdCents = usdRate > 0 ? Math.round(pixTotalBrlCents / usdRate) : 0;
-  const usedCents = wiseUsdCents + pixUsdCents;
-  const releasedUsdCents = usdRate > 0 ? Math.round(commission.releasedCents / usdRate) : 0;
-  const availableCents = releasedUsdCents - usedCents;
+  // Wise vem em USD; converte pra BRL pelo câmbio atual. Pix já está em BRL.
+  const wiseBrlCents = usdRate > 0 ? Math.round(wiseUsdCents * usdRate) : 0;
+  const usedBrlCents = wiseBrlCents + pixTotalBrlCents;
+  // Ganho (liberado) já está em BRL, então o saldo é só Liberado − Usado.
+  const availableBrlCents = commission.releasedCents - usedBrlCents;
 
   const wiseTxs = wise?.transactions || [];
 
@@ -266,13 +267,8 @@ export default function TopAfiliadosPage() {
             <p className="text-2xl font-bold text-green-600">
               {formatCurrency(commission.releasedCents / 100)}
             </p>
-            {usdRate > 0 && (
-              <p className="text-xs text-zinc-400 mt-1">
-                ≈ {formatCurrency(releasedUsdCents / 100, "USD")} (câmbio {usdRate.toFixed(2)})
-              </p>
-            )}
             {commission.pendingCents > 0 && (
-              <p className="text-xs text-zinc-400 mt-0.5">
+              <p className="text-xs text-zinc-400 mt-1">
                 + {formatCurrency(commission.pendingCents / 100)} pendente
               </p>
             )}
@@ -298,17 +294,17 @@ export default function TopAfiliadosPage() {
               </div>
             </div>
             <p className="text-2xl font-bold text-red-600">
-              {wise ? formatCurrency(usedCents / 100, "USD") : "—"}
+              {wise ? formatCurrency(usedBrlCents / 100) : "—"}
             </p>
             {wise && (
               <div className="mt-1 space-y-0.5">
                 <p className="text-xs text-zinc-400">
-                  Wise {formatCurrency(wiseUsdCents / 100, "USD")}
+                  Wise {formatCurrency(wiseBrlCents / 100)}
+                  {usdRate > 0 && ` (${formatCurrency(wiseUsdCents / 100, "USD")} × ${usdRate.toFixed(2)})`}
                 </p>
                 {pixTotalBrlCents > 0 && (
                   <p className="text-xs text-zinc-400">
                     Pix {formatCurrency(pixTotalBrlCents / 100)}
-                    {usdRate > 0 && ` (≈ ${formatCurrency(pixUsdCents / 100, "USD")})`}
                   </p>
                 )}
               </div>
@@ -325,12 +321,12 @@ export default function TopAfiliadosPage() {
               </div>
               <p className="text-sm font-medium text-zinc-500">Saldo Disponível</p>
             </div>
-            <p className={cn("text-2xl font-bold", availableCents > 0 ? "text-blue-600" : availableCents < 0 ? "text-red-600" : "text-zinc-400")}>
+            <p className={cn("text-2xl font-bold", availableBrlCents > 0 ? "text-blue-600" : availableBrlCents < 0 ? "text-red-600" : "text-zinc-400")}>
               {wise
-                ? `${availableCents < 0 ? "−" : ""}${formatCurrency(Math.abs(availableCents) / 100, "USD")}`
+                ? `${availableBrlCents < 0 ? "−" : ""}${formatCurrency(Math.abs(availableBrlCents) / 100)}`
                 : "—"}
             </p>
-            <p className="text-xs text-zinc-400 mt-1">Liberado − Usado (em USD)</p>
+            <p className="text-xs text-zinc-400 mt-1">Liberado − Usado (em R$)</p>
           </Card>
         </div>
 
