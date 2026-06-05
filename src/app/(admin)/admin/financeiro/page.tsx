@@ -72,7 +72,7 @@ const COST_CATEGORIES = [
 ];
 
 /** Maio/2026+: imposto automático sobre faturamento PagarMe. */
-const AUTO_TAX_PAGARME_PERCENT = 3;
+const AUTO_TAX_PAGARME_PERCENT = 2.8;
 
 function getAutoPagarmeTaxCents(periodLabel: string, pagarmeCents: number): number {
   if (!financeUsesPagarmeOnly(periodLabel) || pagarmeCents <= 0) return 0;
