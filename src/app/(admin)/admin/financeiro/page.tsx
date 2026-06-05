@@ -11,6 +11,7 @@ import {
   ArrowDownToLine, Loader2,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
+import { pagarmeUsesUniversalD8 } from "@/lib/pagarme";
 
 interface AbacateBalance {
   available: number;
@@ -692,7 +693,9 @@ export default function FinanceiroPage() {
                               {pagarmeCents > 0 ? formatCurrency(pagarmeCents / 100) : "R$ 0,00"}
                             </p>
                             <p className="text-[10px] text-violet-500 mt-0.5">
-                              Pix D+1 / Cartão D+8 · já com taxa Guru
+                              {pagarmeUsesUniversalD8(period.label)
+                                ? "D+8 (todos os métodos) · já com taxa Guru"
+                                : "Pix D+1 / Cartão D+8 · já com taxa Guru"}
                             </p>
                           </>
                         ) : (

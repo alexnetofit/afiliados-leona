@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
-import { sumPagarmePaidAmountByProduct } from "@/lib/pagarme";
+import {
+  pagarmeUsesUniversalD8,
+  sumPagarmePaidAmountByProduct,
+} from "@/lib/pagarme";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-01-28.clover",
@@ -20,6 +23,18 @@ const FIRST_PERIOD = "2026-01";
 // PagarMe: só cobranças desse produto contam pro fechamento.
 const PAGARME_API_KEY = process.env.PAGARME_API_KEY || "";
 const PAGARME_PRODUCT_ID = "a1869b83-b28d-4257-a986-1df94558a152";
+
+/** Períodos já fechados/pagos — refresh não recalcula PagarMe (preserva cache). */
+const PAGARME_SEALED_PERIODS = new Set([
+  "2026-01",
+  "2026-02",
+  "2026-03",
+  "2026-04",
+]);
+
+function isPagarmeSealed(periodLabel: string): boolean {
+  return PAGARME_SEALED_PERIODS.has(periodLabel);
+}
 
 // --------------- helpers ---------------
 
@@ -138,18 +153,20 @@ function getPeriodRangeBRT(label: string): { start: Date; end: Date } {
  *  - status == "paid"
  *  - metadata.product_id == PAGARME_PRODUCT_ID
  *  - `paid_at + delay` deve cair dentro da janela de saque BRT.
- *    Delay depende do método: pix=D+1, cartão=D+8 (default).
+ *    Até Abril/2026: pix=D+1, cartão=D+8. A partir de Maio/2026: tudo D+8.
  *  - Janela de saque BRT: [dia 06 00:00, dia 05 do mês seguinte 23:59:59].
  */
 async function fetchPagarmeRevenueForPeriod(label: string): Promise<number> {
   if (!PAGARME_API_KEY) return 0;
   const saqueRange = getPeriodRangeBRT(label);
+  const delayRule = pagarmeUsesUniversalD8(label) ? "D+8 universal" : "legado (pix D+1)";
 
   try {
     const { amountCents, grossCents, matched, scanned, byMethod } =
       await sumPagarmePaidAmountByProduct({
         apiKey: PAGARME_API_KEY,
         productId: PAGARME_PRODUCT_ID,
+        periodLabel: label,
         saqueSince: saqueRange.start,
         saqueUntil: saqueRange.end,
       });
@@ -157,7 +174,7 @@ async function fetchPagarmeRevenueForPeriod(label: string): Promise<number> {
       .map(([m, b]) => `${m}:${b.count}/${(b.grossCents / 100).toFixed(2)}→${(b.netCents / 100).toFixed(2)}`)
       .join(" ");
     console.log(
-      `[PagarMe] período=${label} saque∈[${saqueRange.start.toISOString()}, ${saqueRange.end.toISOString()}] ` +
+      `[PagarMe] período=${label} delay=${delayRule} saque∈[${saqueRange.start.toISOString()}, ${saqueRange.end.toISOString()}] ` +
         `scanned=${scanned} matched=${matched} bruto_cents=${grossCents} liquido_cents=${amountCents} | ${breakdown}`
     );
     return amountCents;
@@ -251,6 +268,8 @@ export async function GET(request: NextRequest) {
     const payoutStartTs = startTs + BRT_OFFSET;
     const payoutEndTs = endTs + BRT_OFFSET;
 
+    const pagarmeSealed = isPagarmeSealed(revenueParam);
+
     const [stripeUsdCents, abacateList, usdBrlRate, pagarmeCentsLive] = await Promise.all([
       (async () => {
         let total = 0;
@@ -269,7 +288,9 @@ export async function GET(request: NextRequest) {
       })(),
       fetchAbacateWithdraws(),
       fetchUsdBrlRate(),
-      fetchPagarmeRevenueForPeriod(revenueParam),
+      pagarmeSealed
+        ? Promise.resolve(null as number | null)
+        : fetchPagarmeRevenueForPeriod(revenueParam),
     ]);
 
     let abacateCents = 0;
@@ -291,20 +312,32 @@ export async function GET(request: NextRequest) {
 
     const stripeBrlCents = Math.round(stripeUsdCents * usdBrlRate);
 
+    const { data: existingRevenue } = await supabaseAdmin
+      .from("period_revenue")
+      .select("abacate_revenue_cents, pagarme_revenue_cents")
+      .eq("period_label", revenueParam)
+      .single();
+
+    // Períodos selados: PagarMe nunca é recalculada (fechamento já pago).
+    let pagarmeCents =
+      pagarmeSealed
+        ? (existingRevenue?.pagarme_revenue_cents ?? 0)
+        : (pagarmeCentsLive ?? 0);
+
+    if (pagarmeSealed) {
+      console.log(
+        `[PagarMe] período=${revenueParam} selado — mantendo cache=${pagarmeCents} cents`
+      );
+    }
+
     // Se AbacatePay ou PagarMe retornaram 0 (ex.: API key fora do ar / sem permissão),
     // preserva o valor que já estava cacheado no banco em vez de zerar.
-    let pagarmeCents = pagarmeCentsLive;
-    if (abacateCents === 0 || pagarmeCents === 0) {
-      const { data: existing } = await supabaseAdmin
-        .from("period_revenue")
-        .select("abacate_revenue_cents, pagarme_revenue_cents")
-        .eq("period_label", revenueParam)
-        .single();
-      if (abacateCents === 0 && existing?.abacate_revenue_cents) {
-        abacateCents = existing.abacate_revenue_cents;
+    if (abacateCents === 0 || (!pagarmeSealed && pagarmeCents === 0)) {
+      if (abacateCents === 0 && existingRevenue?.abacate_revenue_cents) {
+        abacateCents = existingRevenue.abacate_revenue_cents;
       }
-      if (pagarmeCents === 0 && existing?.pagarme_revenue_cents) {
-        pagarmeCents = existing.pagarme_revenue_cents;
+      if (!pagarmeSealed && pagarmeCents === 0 && existingRevenue?.pagarme_revenue_cents) {
+        pagarmeCents = existingRevenue.pagarme_revenue_cents;
       }
     }
 

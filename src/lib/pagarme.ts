@@ -122,13 +122,13 @@ export async function fetchPagarmeCharges(opts: {
   return all;
 }
 
+/** A partir deste período (inclusive), todos os métodos usam D+8. */
+export const PAGARME_UNIVERSAL_D8_FROM = "2026-05";
+
 /**
- * Delay padrão (em dias) pra cada método cair na conta após o pagamento.
- *  - pix: D+1
- *  - cartão de crédito: D+8
- *  - boleto/voucher/desconhecido: D+8 (default conservador)
+ * Delay legado (até Abril/2026): pix D+1, demais D+8.
  */
-const SAQUE_DELAY_DAYS_BY_METHOD: Record<string, number> = {
+const SAQUE_DELAY_DAYS_LEGACY: Record<string, number> = {
   pix: 1,
   credit_card: 8,
   boleto: 8,
@@ -136,12 +136,36 @@ const SAQUE_DELAY_DAYS_BY_METHOD: Record<string, number> = {
 };
 const SAQUE_DELAY_DAYS_DEFAULT = 8;
 
+export function pagarmeUsesUniversalD8(periodLabel: string): boolean {
+  const [y, m] = periodLabel.split("-").map(Number);
+  const [fromY, fromM] = PAGARME_UNIVERSAL_D8_FROM.split("-").map(Number);
+  return y > fromY || (y === fromY && m >= fromM);
+}
+
+export function getPagarmeSaqueDelayDays(
+  periodLabel: string,
+  method: string
+): number {
+  if (pagarmeUsesUniversalD8(periodLabel)) return SAQUE_DELAY_DAYS_DEFAULT;
+  return SAQUE_DELAY_DAYS_LEGACY[method.toLowerCase()] ?? SAQUE_DELAY_DAYS_DEFAULT;
+}
+
+function getPagarmeDelayRange(periodLabel: string): { min: number; max: number } {
+  if (pagarmeUsesUniversalD8(periodLabel)) {
+    return { min: SAQUE_DELAY_DAYS_DEFAULT, max: SAQUE_DELAY_DAYS_DEFAULT };
+  }
+  const legacyDelays = Object.values(SAQUE_DELAY_DAYS_LEGACY).concat(
+    SAQUE_DELAY_DAYS_DEFAULT
+  );
+  return { min: Math.min(...legacyDelays), max: Math.max(...legacyDelays) };
+}
+
 /**
  * Soma o valor LÍQUIDO (após taxas Guru) das cobranças cujo dinheiro cai
  * pra gente dentro da janela de SAQUE [`saqueSince`, `saqueUntil`].
  *
- * O "dinheiro disponível" é calculado como `paid_at + delay`, onde o
- * `delay` depende do método de pagamento (pix D+1, cartão D+8, etc).
+ * O "dinheiro disponível" é calculado como `paid_at + delay`. Até Abril/2026
+ * pix usa D+1 e cartão D+8; a partir de Maio/2026 todos os métodos usam D+8.
  *
  * Pagar.me retorna `paid_amount` em centavos (BRL). Fallback para `amount`
  * se `paid_amount` estiver vazio. Aplicamos a taxa Guru por método de
@@ -150,6 +174,8 @@ const SAQUE_DELAY_DAYS_DEFAULT = 8;
 export async function sumPagarmePaidAmountByProduct(opts: {
   apiKey: string;
   productId: string;
+  /** Label do período (ex.: "2026-05") — define a regra de delay D+1/D+8 vs D+8 universal. */
+  periodLabel: string;
   /** Início da janela de SAQUE (dinheiro caindo na conta). */
   saqueSince: Date;
   /** Fim da janela de SAQUE (dinheiro caindo na conta). */
@@ -171,11 +197,9 @@ export async function sumPagarmePaidAmountByProduct(opts: {
   // e o mais novo é `saqueUntil - minDelay`. Usamos esses extremos pra montar
   // o filtro de `created_since`/`created_until` na API.
   const dayMs = 24 * 60 * 60 * 1000;
-  const allDelays = Object.values(SAQUE_DELAY_DAYS_BY_METHOD).concat(
-    SAQUE_DELAY_DAYS_DEFAULT
-  );
-  const maxDelayMs = Math.max(...allDelays) * dayMs;
-  const minDelayMs = Math.min(...allDelays) * dayMs;
+  const { min: minDelayDays, max: maxDelayDays } = getPagarmeDelayRange(opts.periodLabel);
+  const maxDelayMs = maxDelayDays * dayMs;
+  const minDelayMs = minDelayDays * dayMs;
   const earliestPaidAt = new Date(opts.saqueSince.getTime() - maxDelayMs);
   const latestPaidAt = new Date(opts.saqueUntil.getTime() - minDelayMs);
 
@@ -212,7 +236,7 @@ export async function sumPagarmePaidAmountByProduct(opts: {
     if (Number.isNaN(paidAtMs)) continue;
 
     const method = (ch.payment_method ?? "unknown").toLowerCase();
-    const delayDays = SAQUE_DELAY_DAYS_BY_METHOD[method] ?? SAQUE_DELAY_DAYS_DEFAULT;
+    const delayDays = getPagarmeSaqueDelayDays(opts.periodLabel, method);
     const availableAtMs = paidAtMs + delayDays * dayMs;
     if (availableAtMs < saqueSinceMs || availableAtMs > saqueUntilMs) continue;
 
