@@ -399,10 +399,11 @@ export default function FinanceiroPage() {
       const totalRevenue = getPeriodRevenue(p, getStripeBrl(p));
       const manualCosts = getManualCostsExcludingAutoTax(p);
       const autoTax = getAutoPagarmeTaxCents(p.label, p.pagarmeRevenueCents || 0);
+      const otherCosts = manualCosts + autoTax;
       acc.revenue += totalRevenue;
       acc.affiliateCosts += p.affiliateCostCents;
-      acc.manualCosts += manualCosts;
-      acc.profit += totalRevenue - p.affiliateCostCents - manualCosts - autoTax;
+      acc.manualCosts += otherCosts;
+      acc.profit += totalRevenue - p.affiliateCostCents - otherCosts;
       return acc;
     },
     { revenue: 0, affiliateCosts: 0, manualCosts: 0, profit: 0 }
@@ -554,9 +555,12 @@ export default function FinanceiroPage() {
             const totalRevenue = getPeriodRevenue(period, stripeBrl);
             const manualCostsCents = getManualCostsExcludingAutoTax(period);
             const autoTaxCents = getAutoPagarmeTaxCents(period.label, pagarmeCents);
-            const totalCosts = period.affiliateCostCents + manualCostsCents;
+            const otherCostsCents = manualCostsCents + autoTaxCents;
+            const totalCosts = period.affiliateCostCents + otherCostsCents;
             const profit = totalRevenue - totalCosts;
-            const profitAfterTax = profit - autoTaxCents;
+            const visibleManualCosts = pagarmeOnly
+              ? period.manualCosts.filter((c) => c.category !== "Impostos")
+              : period.manualCosts;
             const costCategories = pagarmeOnly
               ? COST_CATEGORIES.filter((c) => c !== "Impostos")
               : COST_CATEGORIES;
@@ -564,9 +568,8 @@ export default function FinanceiroPage() {
             const isCurrent = period.label === currentPeriod;
             const isLoadingRev = loadingRevenue[period.label];
             const hasRevData = period.revenueCached;
-            const displayProfit = autoTaxCents > 0 ? profitAfterTax : profit;
             const affiliatePercent = totalRevenue > 0 ? ((period.affiliateCostCents / totalRevenue) * 100).toFixed(1) : "0";
-            const marginPercent = totalRevenue > 0 ? ((displayProfit / totalRevenue) * 100).toFixed(1) : "0";
+            const marginPercent = totalRevenue > 0 ? ((profit / totalRevenue) * 100).toFixed(1) : "0";
 
             return (
               <Card key={period.label} noPadding>
@@ -609,11 +612,11 @@ export default function FinanceiroPage() {
                         </div>
                         <div>
                           <p className="text-[10px] text-zinc-400">Lucro</p>
-                          <p className={cn("text-sm font-semibold", displayProfit >= 0 ? "text-primary-600" : "text-error-600")}>
-                            {formatCurrency(displayProfit / 100)}
+                          <p className={cn("text-sm font-semibold", profit >= 0 ? "text-primary-600" : "text-error-600")}>
+                            {formatCurrency(profit / 100)}
                           </p>
                         </div>
-                        <Badge variant={displayProfit >= 0 ? "success" : "error"} size="sm">
+                        <Badge variant={profit >= 0 ? "success" : "error"} size="sm">
                           {marginPercent}% margem
                         </Badge>
                       </div>
@@ -876,8 +879,8 @@ export default function FinanceiroPage() {
                         );
                       })()}
 
-                      {period.manualCosts.length === 0 && addingTo !== period.label ? (
-                        <p className="text-xs text-zinc-400 py-2">Nenhum custo manual neste período</p>
+                      {visibleManualCosts.length === 0 && autoTaxCents === 0 && addingTo !== period.label ? (
+                        <p className="text-xs text-zinc-400 py-2">Nenhum custo neste período</p>
                       ) : (
                         <Table>
                           <TableHeader>
@@ -889,7 +892,7 @@ export default function FinanceiroPage() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {period.manualCosts.map((cost) => (
+                            {visibleManualCosts.map((cost) => (
                               <TableRow key={cost.id}>
                                 <TableCell><Badge variant="default" size="sm">{cost.category}</Badge></TableCell>
                                 <TableCell className="text-sm text-zinc-600">{cost.description || "—"}</TableCell>
@@ -909,17 +912,40 @@ export default function FinanceiroPage() {
                         </Table>
                       )}
 
-                      {manualCostsCents > 0 && (
-                        <div className="flex justify-end pt-2 border-t border-zinc-100 mt-2">
-                          <p className="text-xs text-zinc-500">
-                            Total custos manuais: <span className="font-semibold text-error-600">{formatCurrency(manualCostsCents / 100)}</span>
-                          </p>
+                      {autoTaxCents > 0 && (
+                        <div className="rounded-lg bg-orange-100 border border-orange-200 p-2.5 mt-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="warning" size="sm">Impostos</Badge>
+                              <span className="text-sm text-orange-800">
+                                Imposto · {AUTO_TAX_PAGARME_PERCENT}% do faturamento PagarMe
+                              </span>
+                            </div>
+                            <span className="text-sm font-bold text-orange-800">
+                              {formatCurrency(autoTaxCents / 100)}
+                            </span>
+                          </div>
                         </div>
                       )}
-                      {pagarmeOnly && hasRevData && pagarmeCents > 0 && (
-                        <p className="text-[10px] text-orange-600 mt-2">
-                          Imposto ({AUTO_TAX_PAGARME_PERCENT}% PagarMe) calculado automaticamente na distribuição do lucro.
-                        </p>
+
+                      {otherCostsCents > 0 && (
+                        <div className="flex justify-end pt-2 border-t border-zinc-100 mt-2">
+                          <p className="text-xs text-zinc-500">
+                            {autoTaxCents > 0 && manualCostsCents > 0 ? (
+                              <>
+                                Custos manuais: <span className="font-semibold text-error-600">{formatCurrency(manualCostsCents / 100)}</span>
+                                {" · "}
+                                Imposto: <span className="font-semibold text-orange-700">{formatCurrency(autoTaxCents / 100)}</span>
+                                {" · "}
+                                Total outros custos: <span className="font-semibold text-error-600">{formatCurrency(otherCostsCents / 100)}</span>
+                              </>
+                            ) : (
+                              <>
+                                Total outros custos: <span className="font-semibold text-error-600">{formatCurrency(otherCostsCents / 100)}</span>
+                              </>
+                            )}
+                          </p>
+                        </div>
                       )}
                     </div>
 
@@ -937,7 +963,7 @@ export default function FinanceiroPage() {
                         </div>
                         <div>
                           <p className="text-[10px] text-zinc-400 uppercase">Outros custos</p>
-                          <p className="text-base font-bold text-error-400 mt-0.5">-{formatCurrency(manualCostsCents / 100)}</p>
+                          <p className="text-base font-bold text-error-400 mt-0.5">-{formatCurrency(otherCostsCents / 100)}</p>
                         </div>
                         <div>
                           <p className="text-[10px] text-zinc-400 uppercase">Lucro</p>
@@ -949,47 +975,25 @@ export default function FinanceiroPage() {
                     </div>
 
                     {/* Distribuição de Lucro */}
-                    {hasRevData && (profit !== 0 || autoTaxCents > 0) && (() => {
+                    {hasRevData && profit !== 0 && (() => {
                       const shares = getProfitShares(period.label);
                       const costShares = shares.filter((s) => s.isCost);
                       const costShareTotal = costShares.reduce(
-                        (sum, s) => sum + Math.round(profitAfterTax * s.percent / 100),
+                        (sum, s) => sum + Math.round(profit * s.percent / 100),
                         0
                       );
-                      const distributableProfit = profitAfterTax - costShareTotal;
+                      const distributableProfit = profit - costShareTotal;
                       const profitShares = shares.filter((s) => !s.isCost);
 
                       return (
                         <div className="p-3 rounded-lg border border-zinc-200 bg-zinc-50 space-y-2">
                           <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Distribuição do Lucro</p>
                           <div className="space-y-1.5">
-                            {autoTaxCents > 0 && (
-                              <div className="rounded-lg bg-orange-100 border border-orange-200 p-2.5 space-y-1.5">
-                                <p className="text-[10px] font-semibold text-orange-700 uppercase tracking-wider">Imposto</p>
-                                <div className="flex items-center justify-between py-1 px-2 rounded bg-white/70 border border-orange-200">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs font-medium text-orange-800">Imposto</span>
-                                    <Badge variant="warning" size="sm">
-                                      {AUTO_TAX_PAGARME_PERCENT}% do faturamento PagarMe
-                                    </Badge>
-                                  </div>
-                                  <span className="text-sm font-bold text-orange-800">
-                                    -{formatCurrency(autoTaxCents / 100)}
-                                  </span>
-                                </div>
-                                <div className="flex justify-end">
-                                  <p className="text-[10px] text-orange-600">
-                                    Lucro após imposto:{" "}
-                                    <span className="font-semibold">{formatCurrency(profitAfterTax / 100)}</span>
-                                  </p>
-                                </div>
-                              </div>
-                            )}
                             {costShares.length > 0 && (
                               <div className="rounded-lg bg-violet-100 border border-violet-200 p-2.5 space-y-1.5">
                                 <p className="text-[10px] font-semibold text-violet-700 uppercase tracking-wider">Custos sobre lucro</p>
                                 {costShares.map((s) => {
-                                  const val = Math.round(profitAfterTax * s.percent / 100);
+                                  const val = Math.round(profit * s.percent / 100);
                                   return (
                                     <div key={s.name} className="flex items-center justify-between py-1 px-2 rounded bg-white/70 border border-violet-200">
                                       <div className="flex items-center gap-2">
