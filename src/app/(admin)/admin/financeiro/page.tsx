@@ -74,13 +74,21 @@ interface ProfitShare { name: string; percent: number; isCost?: boolean }
 
 function getProfitShares(periodLabel: string): ProfitShare[] {
   const [y, m] = periodLabel.split("-").map(Number);
-  if (y > 2026 || (y === 2026 && m >= 4)) {
+  const partnersAprilPlus: ProfitShare[] = [
+    { name: "Alex", percent: 40 },
+    { name: "Dai", percent: 20 },
+    { name: "Fabiano", percent: 20 },
+    { name: "Ericson", percent: 20 },
+  ];
+  if (y > 2026 || (y === 2026 && m >= 5)) {
     return [
-      { name: "Alex", percent: 40 },
-      { name: "Dai", percent: 20 },
-      { name: "Fabiano", percent: 20 },
-      { name: "Ericson", percent: 20 },
+      { name: "Parceiro Adailton", percent: 2.5, isCost: true },
+      { name: "Suporte Nível 2", percent: 3, isCost: true },
+      ...partnersAprilPlus,
     ];
+  }
+  if (y > 2026 || (y === 2026 && m >= 4)) {
+    return partnersAprilPlus;
   }
   if (y === 2026 && m === 3) {
     return [
@@ -893,25 +901,29 @@ export default function FinanceiroPage() {
                           <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Distribuição do Lucro</p>
                           <div className="space-y-1.5">
                             {costShares.length > 0 && (
-                              <>
+                              <div className="rounded-lg bg-violet-100 border border-violet-200 p-2.5 space-y-1.5">
+                                <p className="text-[10px] font-semibold text-violet-700 uppercase tracking-wider">Custos sobre lucro</p>
                                 {costShares.map((s) => {
                                   const val = Math.round(profit * s.percent / 100);
                                   return (
-                                    <div key={s.name} className="flex items-center justify-between py-1 px-2 rounded bg-amber-50 border border-amber-100">
+                                    <div key={s.name} className="flex items-center justify-between py-1 px-2 rounded bg-white/70 border border-violet-200">
                                       <div className="flex items-center gap-2">
-                                        <span className="text-xs font-medium text-amber-700">{s.name}</span>
-                                        <Badge variant="warning" size="sm">{s.percent}% (custo)</Badge>
+                                        <span className="text-xs font-medium text-violet-800">{s.name}</span>
+                                        <Badge variant="default" size="sm">{s.percent}% do lucro</Badge>
                                       </div>
-                                      <span className="text-sm font-bold text-amber-700">{formatCurrency(val / 100)}</span>
+                                      <span className="text-sm font-bold text-violet-800">-{formatCurrency(val / 100)}</span>
                                     </div>
                                   );
                                 })}
-                                <div className="flex justify-end">
-                                  <p className="text-[10px] text-zinc-400">
-                                    Lucro distribuível: <span className="font-semibold text-zinc-600">{formatCurrency(distributableProfit / 100)}</span>
+                                <div className="flex items-center justify-between pt-1.5 border-t border-violet-200">
+                                  <p className="text-[10px] text-violet-600">
+                                    Total abatido: <span className="font-semibold">-{formatCurrency(costShareTotal / 100)}</span>
+                                  </p>
+                                  <p className="text-[10px] text-violet-600">
+                                    Lucro distribuível: <span className="font-semibold">{formatCurrency(distributableProfit / 100)}</span>
                                   </p>
                                 </div>
-                              </>
+                              </div>
                             )}
                             {profitShares.map((s) => {
                               const val = Math.round(distributableProfit * s.percent / 100);
