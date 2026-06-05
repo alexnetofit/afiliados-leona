@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
 import {
+  PAGARME_SEALED_PERIODS,
   pagarmeUsesUniversalD8,
   sumPagarmePaidAmountByProduct,
 } from "@/lib/pagarme";
@@ -24,16 +25,8 @@ const FIRST_PERIOD = "2026-01";
 const PAGARME_API_KEY = process.env.PAGARME_API_KEY || "";
 const PAGARME_PRODUCT_ID = "a1869b83-b28d-4257-a986-1df94558a152";
 
-/** Períodos já fechados/pagos — refresh não recalcula PagarMe (preserva cache). */
-const PAGARME_SEALED_PERIODS = new Set([
-  "2026-01",
-  "2026-02",
-  "2026-03",
-  "2026-04",
-]);
-
 function isPagarmeSealed(periodLabel: string): boolean {
-  return PAGARME_SEALED_PERIODS.has(periodLabel);
+  return (PAGARME_SEALED_PERIODS as readonly string[]).includes(periodLabel);
 }
 
 // --------------- helpers ---------------
@@ -162,7 +155,7 @@ async function fetchPagarmeRevenueForPeriod(label: string): Promise<number> {
   const delayRule = pagarmeUsesUniversalD8(label) ? "D+8 universal" : "legado (pix D+1)";
 
   try {
-    const { amountCents, grossCents, matched, scanned, byMethod } =
+    const { amountCents, grossCents, matched, scanned, skippedSealed, byMethod } =
       await sumPagarmePaidAmountByProduct({
         apiKey: PAGARME_API_KEY,
         productId: PAGARME_PRODUCT_ID,
@@ -175,7 +168,7 @@ async function fetchPagarmeRevenueForPeriod(label: string): Promise<number> {
       .join(" ");
     console.log(
       `[PagarMe] período=${label} delay=${delayRule} saque∈[${saqueRange.start.toISOString()}, ${saqueRange.end.toISOString()}] ` +
-        `scanned=${scanned} matched=${matched} bruto_cents=${grossCents} liquido_cents=${amountCents} | ${breakdown}`
+        `scanned=${scanned} matched=${matched} skipped_sealed=${skippedSealed} bruto_cents=${grossCents} liquido_cents=${amountCents} | ${breakdown}`
     );
     return amountCents;
   } catch (e) {

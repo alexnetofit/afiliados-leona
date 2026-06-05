@@ -125,6 +125,44 @@ export async function fetchPagarmeCharges(opts: {
 /** A partir deste período (inclusive), todos os métodos usam D+8. */
 export const PAGARME_UNIVERSAL_D8_FROM = "2026-05";
 
+/** Períodos já fechados/pagos com regra legada — não entram de novo no cálculo D+8. */
+export const PAGARME_SEALED_PERIODS = [
+  "2026-01",
+  "2026-02",
+  "2026-03",
+  "2026-04",
+] as const;
+
+function getPeriodRangeBRT(label: string): { start: Date; end: Date } {
+  const [year, month] = label.split("-").map(Number);
+  return {
+    start: new Date(Date.UTC(year, month - 1, 6, 3, 0, 0)),
+    end: new Date(Date.UTC(year, month, 6, 2, 59, 59)),
+  };
+}
+
+/** Pix com D+1 legado já contado num período selado não pode repetir em Maio+ com D+8. */
+function wasCountedInSealedPagarmePeriod(
+  paidAtMs: number,
+  method: string
+): boolean {
+  const dayMs = 24 * 60 * 60 * 1000;
+  const legacyDelay =
+    SAQUE_DELAY_DAYS_LEGACY[method.toLowerCase()] ?? SAQUE_DELAY_DAYS_DEFAULT;
+  const legacyAvailableMs = paidAtMs + legacyDelay * dayMs;
+
+  for (const label of PAGARME_SEALED_PERIODS) {
+    const { start, end } = getPeriodRangeBRT(label);
+    if (
+      legacyAvailableMs >= start.getTime() &&
+      legacyAvailableMs <= end.getTime()
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Delay legado (até Abril/2026): pix D+1, demais D+8.
  */
@@ -166,6 +204,8 @@ function getPagarmeDelayRange(periodLabel: string): { min: number; max: number }
  *
  * O "dinheiro disponível" é calculado como `paid_at + delay`. Até Abril/2026
  * pix usa D+1 e cartão D+8; a partir de Maio/2026 todos os métodos usam D+8.
+ * Cobranças já contadas em período selado (regra legada) são excluídas pra
+ * evitar pagamento em dobro na virada Abril → Maio.
  *
  * Pagar.me retorna `paid_amount` em centavos (BRL). Fallback para `amount`
  * se `paid_amount` estiver vazio. Aplicamos a taxa Guru por método de
@@ -187,10 +227,18 @@ export async function sumPagarmePaidAmountByProduct(opts: {
   grossCents: number;
   matched: number;
   scanned: number;
+  skippedSealed: number;
   byMethod: Record<string, { count: number; grossCents: number; netCents: number }>;
 }> {
   if (!opts.apiKey) {
-    return { amountCents: 0, grossCents: 0, matched: 0, scanned: 0, byMethod: {} };
+    return {
+      amountCents: 0,
+      grossCents: 0,
+      matched: 0,
+      scanned: 0,
+      skippedSealed: 0,
+      byMethod: {},
+    };
   }
 
   // O `paid_at` mais antigo possível dentro da janela é `saqueSince - maxDelay`,
@@ -222,6 +270,7 @@ export async function sumPagarmePaidAmountByProduct(opts: {
   let grossCents = 0;
   let matched = 0;
   let scanned = 0;
+  let skippedSealed = 0;
   const byMethod: Record<string, { count: number; grossCents: number; netCents: number }> = {};
 
   for (const ch of charges) {
@@ -239,6 +288,14 @@ export async function sumPagarmePaidAmountByProduct(opts: {
     const delayDays = getPagarmeSaqueDelayDays(opts.periodLabel, method);
     const availableAtMs = paidAtMs + delayDays * dayMs;
     if (availableAtMs < saqueSinceMs || availableAtMs > saqueUntilMs) continue;
+
+    if (
+      pagarmeUsesUniversalD8(opts.periodLabel) &&
+      wasCountedInSealedPagarmePeriod(paidAtMs, method)
+    ) {
+      skippedSealed++;
+      continue;
+    }
 
     const gross =
       typeof ch.paid_amount === "number" && ch.paid_amount > 0
@@ -261,5 +318,5 @@ export async function sumPagarmePaidAmountByProduct(opts: {
     byMethod[method] = bucket;
   }
 
-  return { amountCents, grossCents, matched, scanned, byMethod };
+  return { amountCents, grossCents, matched, scanned, skippedSealed, byMethod };
 }
