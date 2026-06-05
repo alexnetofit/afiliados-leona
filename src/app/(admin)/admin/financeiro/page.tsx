@@ -99,7 +99,7 @@ function getProfitShares(periodLabel: string): ProfitShare[] {
   if (y > 2026 || (y === 2026 && m >= 5)) {
     return [
       { name: "Parceiro Adailton", percent: 2.5, isCost: true },
-      { name: "Suporte Nível 2", percent: 3, isCost: true },
+      { name: "Suporte Nível 2", percent: 2.5, isCost: true },
       ...partnersAprilPlus,
     ];
   }
