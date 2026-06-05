@@ -4,6 +4,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
 import {
   PAGARME_SEALED_PERIODS,
+  financeUsesPagarmeOnly,
   pagarmeUsesUniversalD8,
   sumPagarmePaidAmountByProduct,
 } from "@/lib/pagarme";
@@ -262,48 +263,53 @@ export async function GET(request: NextRequest) {
     const payoutEndTs = endTs + BRT_OFFSET;
 
     const pagarmeSealed = isPagarmeSealed(revenueParam);
+    const pagarmeOnly = financeUsesPagarmeOnly(revenueParam);
 
     const [stripeUsdCents, abacateList, usdBrlRate, pagarmeCentsLive] = await Promise.all([
-      (async () => {
-        let total = 0;
-        try {
-          for await (const payout of stripe.payouts.list({
-            arrival_date: { gte: payoutStartTs, lte: payoutEndTs },
-            status: "paid",
-            limit: 100,
-          })) {
-            total += payout.amount;
-          }
-        } catch (e) {
-          console.error(`Stripe payouts error (${revenueParam}):`, e);
-        }
-        return total;
-      })(),
-      fetchAbacateWithdraws(),
-      fetchUsdBrlRate(),
+      pagarmeOnly
+        ? Promise.resolve(0)
+        : (async () => {
+            let total = 0;
+            try {
+              for await (const payout of stripe.payouts.list({
+                arrival_date: { gte: payoutStartTs, lte: payoutEndTs },
+                status: "paid",
+                limit: 100,
+              })) {
+                total += payout.amount;
+              }
+            } catch (e) {
+              console.error(`Stripe payouts error (${revenueParam}):`, e);
+            }
+            return total;
+          })(),
+      pagarmeOnly ? Promise.resolve([] as AbacateWithdraw[]) : fetchAbacateWithdraws(),
+      pagarmeOnly ? Promise.resolve(0) : fetchUsdBrlRate(),
       pagarmeSealed
         ? Promise.resolve(null as number | null)
         : fetchPagarmeRevenueForPeriod(revenueParam),
     ]);
 
     let abacateCents = 0;
-    console.log(`[AbacatePay] Total saques retornados: ${abacateList.length}`);
-    if (abacateList.length > 0) {
-      console.log(`[AbacatePay] Exemplo:`, JSON.stringify(abacateList[0]));
-      console.log(`[AbacatePay] Statuses:`, [...new Set(abacateList.map(w => w.status))]);
-    }
-    for (const w of abacateList) {
-      if (w.devMode) continue;
-      const t = new Date(w.createdAt).getTime();
-      if (t >= startMs && t <= endMs) {
-        console.log(`[AbacatePay] Saque no período: status=${w.status} amount=${w.amount} date=${w.createdAt}`);
-        if (w.status === "COMPLETE" || w.status === "PAID") {
-          abacateCents += w.amount || 0;
+    if (!pagarmeOnly) {
+      console.log(`[AbacatePay] Total saques retornados: ${abacateList.length}`);
+      if (abacateList.length > 0) {
+        console.log(`[AbacatePay] Exemplo:`, JSON.stringify(abacateList[0]));
+        console.log(`[AbacatePay] Statuses:`, [...new Set(abacateList.map(w => w.status))]);
+      }
+      for (const w of abacateList) {
+        if (w.devMode) continue;
+        const t = new Date(w.createdAt).getTime();
+        if (t >= startMs && t <= endMs) {
+          console.log(`[AbacatePay] Saque no período: status=${w.status} amount=${w.amount} date=${w.createdAt}`);
+          if (w.status === "COMPLETE" || w.status === "PAID") {
+            abacateCents += w.amount || 0;
+          }
         }
       }
     }
 
-    const stripeBrlCents = Math.round(stripeUsdCents * usdBrlRate);
+    const stripeBrlCents = pagarmeOnly ? 0 : Math.round(stripeUsdCents * usdBrlRate);
 
     const { data: existingRevenue } = await supabaseAdmin
       .from("period_revenue")
@@ -325,7 +331,7 @@ export async function GET(request: NextRequest) {
 
     // Se AbacatePay ou PagarMe retornaram 0 (ex.: API key fora do ar / sem permissão),
     // preserva o valor que já estava cacheado no banco em vez de zerar.
-    if (abacateCents === 0 || (!pagarmeSealed && pagarmeCents === 0)) {
+    if (!pagarmeOnly && (abacateCents === 0 || (!pagarmeSealed && pagarmeCents === 0))) {
       if (abacateCents === 0 && existingRevenue?.abacate_revenue_cents) {
         abacateCents = existingRevenue.abacate_revenue_cents;
       }
@@ -439,16 +445,17 @@ export async function GET(request: NextRequest) {
     const manualCostsTotalCents = manualCosts.reduce((sum, c) => sum + c.amount_cents, 0);
 
     const cached = revMap.get(label);
+    const pagarmeOnly = financeUsesPagarmeOnly(label);
 
     return {
       label,
       startDate: start.toISOString().split("T")[0],
       endDate: end.toISOString().split("T")[0],
-      stripeRevenueBrlCents: cached ? cached.stripe_revenue_brl_cents : 0,
-      stripeRevenueUsdCents: cached ? cached.stripe_revenue_usd_cents : 0,
-      abacateRevenueCents: cached ? cached.abacate_revenue_cents : 0,
+      stripeRevenueBrlCents: pagarmeOnly ? 0 : (cached ? cached.stripe_revenue_brl_cents : 0),
+      stripeRevenueUsdCents: pagarmeOnly ? 0 : (cached ? cached.stripe_revenue_usd_cents : 0),
+      abacateRevenueCents: pagarmeOnly ? 0 : (cached ? cached.abacate_revenue_cents : 0),
       pagarmeRevenueCents: cached ? (cached.pagarme_revenue_cents ?? 0) : 0,
-      usdBrlRate: cached ? Number(cached.usd_brl_rate) : 0,
+      usdBrlRate: pagarmeOnly ? 0 : (cached ? Number(cached.usd_brl_rate) : 0),
       affiliateCostCents,
       manualCosts,
       manualCostsTotalCents,

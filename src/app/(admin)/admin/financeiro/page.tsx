@@ -11,7 +11,7 @@ import {
   ArrowDownToLine, Loader2,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
-import { pagarmeUsesUniversalD8 } from "@/lib/pagarme";
+import { financeUsesPagarmeOnly, pagarmeUsesUniversalD8 } from "@/lib/pagarme";
 
 interface AbacateBalance {
   available: number;
@@ -175,13 +175,14 @@ export default function FinanceiroPage() {
       setPeriods((prev) =>
         prev.map((p) => {
           if (p.label !== label) return p;
-          const keepAbacate = p.abacateRevenueCents > 0;
+          const pagarmeOnly = financeUsesPagarmeOnly(label);
+          const keepAbacate = !pagarmeOnly && p.abacateRevenueCents > 0;
           const rev: RevenueCache = {
-            stripeRevenueBrlCents: data.stripeRevenueBrlCents,
-            stripeRevenueUsdCents: data.stripeRevenueUsdCents,
-            abacateRevenueCents: keepAbacate ? p.abacateRevenueCents : data.abacateRevenueCents,
+            stripeRevenueBrlCents: pagarmeOnly ? 0 : data.stripeRevenueBrlCents,
+            stripeRevenueUsdCents: pagarmeOnly ? 0 : data.stripeRevenueUsdCents,
+            abacateRevenueCents: keepAbacate ? p.abacateRevenueCents : (pagarmeOnly ? 0 : data.abacateRevenueCents),
             pagarmeRevenueCents: data.pagarmeRevenueCents ?? 0,
-            usdBrlRate: data.usdBrlRate,
+            usdBrlRate: pagarmeOnly ? 0 : data.usdBrlRate,
           };
           writeRevenueCache(label, rev);
           return { ...p, ...rev, revenueCached: true };
@@ -277,7 +278,8 @@ export default function FinanceiroPage() {
 
     if (isTax) {
       const period = periods.find((p) => p.label === periodLabel);
-      const abacate = period?.abacateRevenueCents || 0;
+      const pagarmeOnly = period ? financeUsesPagarmeOnly(period.label) : false;
+      const abacate = pagarmeOnly ? 0 : (period?.abacateRevenueCents || 0);
       const pagarme = period?.pagarmeRevenueCents || 0;
       const aPct = parseFloat(taxAbacatePct || "0");
       const pPct = parseFloat(taxPagarmePct || "0");
@@ -360,10 +362,16 @@ export default function FinanceiroPage() {
   if (isLoading) return <LoadingScreen message="Carregando financeiro..." />;
 
   const getStripeBrl = (p: Period) => {
+    if (financeUsesPagarmeOnly(p.label)) return 0;
     if (dolarHoje && p.stripeRevenueUsdCents > 0) {
       return Math.round(p.stripeRevenueUsdCents * dolarHoje);
     }
     return p.stripeRevenueBrlCents;
+  };
+
+  const getPeriodRevenue = (p: Period, stripeBrl: number) => {
+    if (financeUsesPagarmeOnly(p.label)) return p.pagarmeRevenueCents || 0;
+    return stripeBrl + p.abacateRevenueCents + (p.pagarmeRevenueCents || 0);
   };
 
   const getRate = (p: Period) => {
@@ -373,7 +381,7 @@ export default function FinanceiroPage() {
 
   const totals = periods.reduce(
     (acc, p) => {
-      const totalRevenue = getStripeBrl(p) + p.abacateRevenueCents + (p.pagarmeRevenueCents || 0);
+      const totalRevenue = getPeriodRevenue(p, getStripeBrl(p));
       const totalCosts = p.affiliateCostCents + p.manualCostsTotalCents;
       acc.revenue += totalRevenue;
       acc.affiliateCosts += p.affiliateCostCents;
@@ -526,7 +534,8 @@ export default function FinanceiroPage() {
             const stripeBrl = getStripeBrl(period);
             const rate = getRate(period);
             const pagarmeCents = period.pagarmeRevenueCents || 0;
-            const totalRevenue = stripeBrl + period.abacateRevenueCents + pagarmeCents;
+            const pagarmeOnly = financeUsesPagarmeOnly(period.label);
+            const totalRevenue = getPeriodRevenue(period, stripeBrl);
             const totalCosts = period.affiliateCostCents + period.manualCostsTotalCents;
             const profit = totalRevenue - totalCosts;
             const isExpanded = expandedPeriod === period.label;
@@ -619,70 +628,81 @@ export default function FinanceiroPage() {
                     {isLoadingRev && (
                       <div className="flex items-center justify-center gap-2 py-4 text-zinc-500">
                         <RefreshCw className="h-4 w-4 animate-spin" />
-                        <span className="text-sm">Buscando faturamento (Stripe, AbacatePay e PagarMe)...</span>
+                        <span className="text-sm">
+                          {pagarmeOnly
+                            ? "Buscando faturamento (PagarMe)..."
+                            : "Buscando faturamento (Stripe, AbacatePay e PagarMe)..."}
+                        </span>
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      <div className={cn("p-3 rounded-lg border", hasRevData ? "bg-success-50 border-success-100" : "bg-zinc-50 border-zinc-200")}>
-                        <p className={cn("text-[10px] font-medium uppercase tracking-wider", hasRevData ? "text-success-600" : "text-zinc-400")}>
-                          Stripe (USD &rarr; BRL)
-                        </p>
-                        {hasRevData ? (
-                          <>
-                            <p className="text-lg font-bold text-success-700 mt-1">
-                              {formatCurrency(stripeBrl / 100)}
+                    <div className={cn(
+                      "grid grid-cols-1 gap-3",
+                      pagarmeOnly ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-4"
+                    )}>
+                      {!pagarmeOnly && (
+                        <>
+                          <div className={cn("p-3 rounded-lg border", hasRevData ? "bg-success-50 border-success-100" : "bg-zinc-50 border-zinc-200")}>
+                            <p className={cn("text-[10px] font-medium uppercase tracking-wider", hasRevData ? "text-success-600" : "text-zinc-400")}>
+                              Stripe (USD &rarr; BRL)
                             </p>
-                            <p className="text-[10px] text-success-500 mt-0.5">
-                              US$ {(period.stripeRevenueUsdCents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                              {rate > 0 && ` × R$ ${rate.toFixed(2)}`}
-                            </p>
-                          </>
-                        ) : (
-                          <p className="text-lg font-bold text-zinc-300 mt-1">—</p>
-                        )}
-                      </div>
-                      <div className={cn("p-3 rounded-lg border relative", hasRevData ? "bg-emerald-50 border-emerald-100" : "bg-zinc-50 border-zinc-200")}>
-                        <div className="flex items-center justify-between">
-                          <p className={cn("text-[10px] font-medium uppercase tracking-wider", hasRevData ? "text-emerald-600" : "text-zinc-400")}>AbacatePay</p>
-                          {editingAbacate !== period.label ? (
-                            <button
-                              onClick={() => {
-                                setEditingAbacate(period.label);
-                                setAbacateInput(period.abacateRevenueCents > 0 ? (period.abacateRevenueCents / 100).toFixed(2) : "");
-                              }}
-                              className="p-0.5 rounded hover:bg-emerald-100 text-emerald-400 hover:text-emerald-600 transition-colors"
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleSaveAbacate(period.label)}
-                              className="p-0.5 rounded hover:bg-emerald-100 text-emerald-600 transition-colors"
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                        {editingAbacate === period.label ? (
-                          <div className="mt-1 flex items-center gap-1">
-                            <span className="text-sm font-bold text-emerald-700">R$</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={abacateInput}
-                              onChange={(e) => setAbacateInput(e.target.value)}
-                              onKeyDown={(e) => e.key === "Enter" && handleSaveAbacate(period.label)}
-                              className="w-full text-lg font-bold text-emerald-700 bg-white border border-emerald-200 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                              autoFocus
-                            />
+                            {hasRevData ? (
+                              <>
+                                <p className="text-lg font-bold text-success-700 mt-1">
+                                  {formatCurrency(stripeBrl / 100)}
+                                </p>
+                                <p className="text-[10px] text-success-500 mt-0.5">
+                                  US$ {(period.stripeRevenueUsdCents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                                  {rate > 0 && ` × R$ ${rate.toFixed(2)}`}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-lg font-bold text-zinc-300 mt-1">—</p>
+                            )}
                           </div>
-                        ) : (
-                          <p className={cn("text-lg font-bold mt-1", hasRevData || period.abacateRevenueCents > 0 ? "text-emerald-700" : "text-zinc-300")}>
-                            {period.abacateRevenueCents > 0 ? formatCurrency(period.abacateRevenueCents / 100) : hasRevData ? "R$ 0,00" : "—"}
-                          </p>
-                        )}
-                      </div>
+                          <div className={cn("p-3 rounded-lg border relative", hasRevData ? "bg-emerald-50 border-emerald-100" : "bg-zinc-50 border-zinc-200")}>
+                            <div className="flex items-center justify-between">
+                              <p className={cn("text-[10px] font-medium uppercase tracking-wider", hasRevData ? "text-emerald-600" : "text-zinc-400")}>AbacatePay</p>
+                              {editingAbacate !== period.label ? (
+                                <button
+                                  onClick={() => {
+                                    setEditingAbacate(period.label);
+                                    setAbacateInput(period.abacateRevenueCents > 0 ? (period.abacateRevenueCents / 100).toFixed(2) : "");
+                                  }}
+                                  className="p-0.5 rounded hover:bg-emerald-100 text-emerald-400 hover:text-emerald-600 transition-colors"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleSaveAbacate(period.label)}
+                                  className="p-0.5 rounded hover:bg-emerald-100 text-emerald-600 transition-colors"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            {editingAbacate === period.label ? (
+                              <div className="mt-1 flex items-center gap-1">
+                                <span className="text-sm font-bold text-emerald-700">R$</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={abacateInput}
+                                  onChange={(e) => setAbacateInput(e.target.value)}
+                                  onKeyDown={(e) => e.key === "Enter" && handleSaveAbacate(period.label)}
+                                  className="w-full text-lg font-bold text-emerald-700 bg-white border border-emerald-200 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                  autoFocus
+                                />
+                              </div>
+                            ) : (
+                              <p className={cn("text-lg font-bold mt-1", hasRevData || period.abacateRevenueCents > 0 ? "text-emerald-700" : "text-zinc-300")}>
+                                {period.abacateRevenueCents > 0 ? formatCurrency(period.abacateRevenueCents / 100) : hasRevData ? "R$ 0,00" : "—"}
+                              </p>
+                            )}
+                          </div>
+                        </>
+                      )}
                       <div className={cn("p-3 rounded-lg border", hasRevData ? "bg-violet-50 border-violet-100" : "bg-zinc-50 border-zinc-200")}>
                         <p className={cn("text-[10px] font-medium uppercase tracking-wider", hasRevData ? "text-violet-600" : "text-zinc-400")}>
                           PagarMe (líquido)
@@ -736,7 +756,7 @@ export default function FinanceiroPage() {
 
                       {addingTo === period.label && (() => {
                         const isTax = newCategory === "Impostos";
-                        const abacateBase = period.abacateRevenueCents;
+                        const abacateBase = pagarmeOnly ? 0 : period.abacateRevenueCents;
                         const pagarmeBase = period.pagarmeRevenueCents || 0;
                         const aPct = parseFloat(taxAbacatePct || "0");
                         const pPct = parseFloat(taxPagarmePct || "0");
@@ -749,21 +769,26 @@ export default function FinanceiroPage() {
                           <div className="p-3 mb-3 border border-zinc-200 rounded-lg bg-zinc-50 space-y-3">
                             {isTax ? (
                               <>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className={cn(
+                                  "grid grid-cols-1 gap-3",
+                                  pagarmeOnly ? "sm:grid-cols-2" : "sm:grid-cols-3"
+                                )}>
                                   <Select
                                     value={newCategory}
                                     onChange={(e) => { setNewCategory(e.target.value); setNewAmount(""); setNewDescription(""); }}
                                     options={COST_CATEGORIES.map((c) => ({ value: c, label: c }))}
                                   />
-                                  <div>
-                                    <label className="block text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">% sobre AbacatePay</label>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      value={taxAbacatePct}
-                                      onChange={(e) => setTaxAbacatePct(e.target.value)}
-                                    />
-                                  </div>
+                                  {!pagarmeOnly && (
+                                    <div>
+                                      <label className="block text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">% sobre AbacatePay</label>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={taxAbacatePct}
+                                        onChange={(e) => setTaxAbacatePct(e.target.value)}
+                                      />
+                                    </div>
+                                  )}
                                   <div>
                                     <label className="block text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">% sobre PagarMe</label>
                                     <Input
@@ -779,7 +804,11 @@ export default function FinanceiroPage() {
                                     <p className="text-amber-600">Carregue o faturamento primeiro para calcular impostos</p>
                                   )}
                                   {hasRevData && abacateBase === 0 && pagarmeBase === 0 && (
-                                    <p className="text-zinc-400">Nenhum saque AbacatePay/PagarMe neste período</p>
+                                    <p className="text-zinc-400">
+                                      {pagarmeOnly
+                                        ? "Nenhum saque PagarMe neste período"
+                                        : "Nenhum saque AbacatePay/PagarMe neste período"}
+                                    </p>
                                   )}
                                   {abacateBase > 0 && (
                                     <p>

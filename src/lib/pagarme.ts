@@ -180,6 +180,11 @@ export function pagarmeUsesUniversalD8(periodLabel: string): boolean {
   return y > fromY || (y === fromY && m >= fromM);
 }
 
+/** Maio/2026+: fechamento financeiro usa só PagarMe (Stripe/AbacatePay fora). */
+export function financeUsesPagarmeOnly(periodLabel: string): boolean {
+  return pagarmeUsesUniversalD8(periodLabel);
+}
+
 export function getPagarmeSaqueDelayDays(
   periodLabel: string,
   method: string
