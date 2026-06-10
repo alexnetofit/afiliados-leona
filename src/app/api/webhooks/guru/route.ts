@@ -108,6 +108,22 @@ const managerRefundKey = (guruId: string) => `guru:${guruId}_mgr_refund`;
 const managerDisputeKey = (guruId: string) => `guru:${guruId}_mgr_dispute`;
 
 /**
+ * A Guru pode mandar `refunded` E `dispute`/`chargeback` para a MESMA venda
+ * (o dinheiro só volta uma vez). Como cada evento usa uma chave de idempotência
+ * diferente (`guru_refund:` vs `guru_dispute:`), sem este guard a comissão era
+ * estornada duas vezes. Aqui consideramos a venda já revertida se QUALQUER uma
+ * das duas reversões (afiliado) já existir — vence a primeira que chegar.
+ */
+async function affiliateReversalAlreadyExists(guruId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("transactions")
+    .select("id")
+    .in("stripe_invoice_id", [`guru_refund:${guruId}`, `guru_dispute:${guruId}`])
+    .limit(1);
+  return Boolean(data && data.length > 0);
+}
+
+/**
  * Cria, atualiza ou apenas valida a transação de comissão do gerente do afiliado.
  * Idempotente: usa `stripe_invoice_id = guru:<guru_id>_mgr` como chave única.
  * Quando o afiliado direto é alterado (reprocess), realinha o gerente para o novo
@@ -223,12 +239,17 @@ async function ensureGuruManagerNegative(params: {
 
   if (!mgrTx) return;
 
+  // Mesmo guard da reversão do afiliado: se a venda já teve refund OU disputa
+  // estornando o gerente, não estorna de novo (vence a primeira que chegar).
   const { data: existing } = await supabase
     .from("transactions")
     .select("id")
-    .eq("stripe_invoice_id", negativeKey)
-    .maybeSingle();
-  if (existing) return;
+    .in("stripe_invoice_id", [
+      managerRefundKey(params.guruId),
+      managerDisputeKey(params.guruId),
+    ])
+    .limit(1);
+  if (existing && existing.length > 0) return;
 
   const refundAmount = mgrTx.amount_gross_cents;
   const netRefund = Math.round(refundAmount * 0.93);
@@ -332,13 +353,7 @@ async function processGuruRefund(
   }
 
   const refundKey = `guru_refund:${guruId}`;
-  const { data: existingRefund } = await supabase
-    .from("transactions")
-    .select("id")
-    .eq("stripe_invoice_id", refundKey)
-    .maybeSingle();
-
-  if (existingRefund) {
+  if (await affiliateReversalAlreadyExists(guruId)) {
     return NextResponse.json({ received: true, status: "refund_already_processed" });
   }
 
@@ -409,13 +424,7 @@ async function processGuruDispute(
   }
 
   const disputeKey = `guru_dispute:${guruId}`;
-  const { data: existing } = await supabase
-    .from("transactions")
-    .select("id")
-    .eq("stripe_invoice_id", disputeKey)
-    .maybeSingle();
-
-  if (existing) {
+  if (await affiliateReversalAlreadyExists(guruId)) {
     return NextResponse.json({ received: true, status: "dispute_already_processed" });
   }
 
