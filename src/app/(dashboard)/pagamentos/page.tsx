@@ -328,7 +328,10 @@ export default function PagamentosPage() {
         <div className="max-w-[1200px] mx-auto space-y-4">
 
           {/* Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className={cn(
+            "grid grid-cols-1 sm:grid-cols-2 gap-3",
+            isTopAffiliate ? "lg:grid-cols-4" : "lg:grid-cols-3"
+          )}>
             <MetricCard
               icon={CheckCircle}
               label="Total recebido"
@@ -343,6 +346,14 @@ export default function PagamentosPage() {
               value={formatCurrency(totalAvailable / 100)}
               color="warning"
             />
+            {isTopAffiliate && (
+              <MetricCard
+                icon={Wallet}
+                label="Saldo disponível"
+                value={formatCurrency((totalAvailable - (manualPaidCents ?? 0)) / 100)}
+                color="primary"
+              />
+            )}
             <MetricCard
               icon={Clock}
               label="Pendente"
