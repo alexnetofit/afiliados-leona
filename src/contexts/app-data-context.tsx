@@ -14,6 +14,31 @@ import type {
 } from "@/types";
 
 // ============================================
+// Helpers
+// ============================================
+
+// O Supabase limita cada query a 1000 linhas. Afiliados com mais de 1000
+// transações (ex.: top afiliados) tinham o saldo truncado — paginamos pra
+// somar TODAS as comissões/estornos e bater com o painel admin.
+async function fetchAllPaged<T>(
+  makeQuery: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: T[] | null; error: unknown }>
+): Promise<T[]> {
+  const PAGE = 1000;
+  const out: T[] = [];
+  for (let page = 0; page < 200; page++) {
+    const from = page * PAGE;
+    const { data, error } = await makeQuery(from, from + PAGE - 1);
+    if (error || !data || data.length === 0) break;
+    out.push(...data);
+    if (data.length < PAGE) break;
+  }
+  return out;
+}
+
+// ============================================
 // Types
 // ============================================
 
@@ -159,22 +184,28 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   // Fetch all affiliate data
   const fetchAffiliateData = useCallback(
     async (affiliateId: string) => {
-      const [linksRes, subscriptionsRes, transactionsRes, payoutsRes] = await Promise.all([
+      const [linksRes, subsData, txsDataPaged, payoutsRes] = await Promise.all([
         supabase
           .from("affiliate_links")
           .select("*")
           .eq("affiliate_id", affiliateId)
           .order("created_at", { ascending: false }),
-        supabase
-          .from("subscriptions")
-          .select("*")
-          .eq("affiliate_id", affiliateId)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("transactions")
-          .select("*")
-          .eq("affiliate_id", affiliateId)
-          .order("created_at", { ascending: false }),
+        fetchAllPaged<Subscription>((from, to) =>
+          supabase
+            .from("subscriptions")
+            .select("*")
+            .eq("affiliate_id", affiliateId)
+            .order("created_at", { ascending: false })
+            .range(from, to)
+        ),
+        fetchAllPaged<Transaction>((from, to) =>
+          supabase
+            .from("transactions")
+            .select("*")
+            .eq("affiliate_id", affiliateId)
+            .order("created_at", { ascending: false })
+            .range(from, to)
+        ),
         supabase
           .from("monthly_payouts")
           .select("*")
@@ -198,8 +229,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
 
       const linksData = (linksRes.data || []) as AffiliateLink[];
-      const subsData = (subscriptionsRes.data || []) as Subscription[];
-      const txsData = (transactionsRes.data || []) as Transaction[];
+      const txsData = txsDataPaged;
       const paysData = (payoutsRes.data || []) as MonthlyPayout[];
 
       setLinks(linksData);
