@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAppData } from "@/contexts";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/layout/header";
@@ -37,6 +37,23 @@ export default function PagamentosPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, profile, affiliate, transactions, payouts, subscriptions, withdrawnDateLabels, withdrawBalance, isLoading, isInitialized } = useAppData();
   const isTopAffiliate = isTopAffiliateEmail(user?.email);
+  // Top afiliados são pagos manualmente (Wise + Pix). Buscamos esse total pra
+  // exibir no card "Total recebido" no lugar do saque automático (sempre 0).
+  const [manualPaidCents, setManualPaidCents] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isTopAffiliate) return;
+    let active = true;
+    fetch("/api/affiliate/manual-payments")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (active && d?.applicable) setManualPaidCents(d.usedBrlCents ?? 0);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [isTopAffiliate]);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [withdrawingGroup, setWithdrawingGroup] = useState<string | null>(null);
   const [localWithdrawn, setLocalWithdrawn] = useState<Map<string, { status: string; paid_at: string | null; amount_text: string | null }>>(new Map());
@@ -304,7 +321,9 @@ export default function PagamentosPage() {
             <MetricCard
               icon={CheckCircle}
               label="Total recebido"
-              value={formatCurrency(totalPaid / 100)}
+              value={formatCurrency(
+                (isTopAffiliate && manualPaidCents != null ? manualPaidCents : totalPaid) / 100
+              )}
               color="success"
             />
             <MetricCard

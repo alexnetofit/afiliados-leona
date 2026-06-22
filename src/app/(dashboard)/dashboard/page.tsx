@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAppData } from "@/contexts";
 import { Header } from "@/components/layout/header";
 import { Card, Badge, MetricCard, LoadingScreen } from "@/components/ui/index";
@@ -15,6 +15,22 @@ export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, profile, affiliate, summary, transactions, subscriptions, isLoading, isInitialized } = useAppData();
   const isTopAffiliate = isTopAffiliateEmail(user?.email);
+  // Top afiliados são pagos manualmente (Wise + Pix); buscamos esse total.
+  const [manualPaidCents, setManualPaidCents] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isTopAffiliate) return;
+    let active = true;
+    fetch("/api/affiliate/manual-payments")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (active && d?.applicable) setManualPaidCents(d.usedBrlCents ?? 0);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [isTopAffiliate]);
 
   // Only show loading on first load, not on navigation
   if (isLoading && !isInitialized) {
@@ -106,7 +122,9 @@ export default function DashboardPage() {
             <MetricCard
               icon={Wallet}
               label="Total recebido"
-              value={formatCurrency(paidValue)}
+              value={formatCurrency(
+                isTopAffiliate && manualPaidCents != null ? manualPaidCents / 100 : paidValue
+              )}
               color="primary"
             />
             <Card hover>
