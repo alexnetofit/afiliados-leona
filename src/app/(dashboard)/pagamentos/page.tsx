@@ -44,10 +44,21 @@ export default function PagamentosPage() {
   useEffect(() => {
     if (!isTopAffiliate) return;
     let active = true;
-    fetch("/api/affiliate/manual-payments")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (active && d?.applicable) setManualPaidCents(d.usedBrlCents ?? 0);
+    // Converte Wise (USD) -> BRL no client, igual ao painel admin. A cotação
+    // via awesomeapi falha quando chamada do servidor (Vercel), então o
+    // endpoint devolve o Wise em USD e o Pix em BRL; convertemos aqui.
+    Promise.all([
+      fetch("/api/affiliate/manual-payments").then((r) => (r.ok ? r.json() : null)),
+      fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL")
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ])
+      .then(([d, rate]) => {
+        if (!active || !d?.applicable) return;
+        const ask = parseFloat(rate?.USDBRL?.ask || "0");
+        const wiseBrl =
+          ask > 0 ? Math.round((d.wiseUsdCents || 0) * ask) : d.wiseBrlCents || 0;
+        setManualPaidCents(wiseBrl + (d.pixTotalBrlCents || 0));
       })
       .catch(() => {});
     return () => {
