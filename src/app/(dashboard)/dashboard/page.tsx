@@ -9,10 +9,12 @@ import {
 } from "recharts";
 import { Clock, CheckCircle, Wallet, Trophy, ArrowUpRight, TrendingUp } from "lucide-react";
 import { formatCurrency, cn, formatDate } from "@/lib/utils";
+import { isTopAffiliateEmail } from "@/lib/top-affiliate";
 
 export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { profile, affiliate, summary, transactions, subscriptions, isLoading, isInitialized } = useAppData();
+  const { user, profile, affiliate, summary, transactions, subscriptions, isLoading, isInitialized } = useAppData();
+  const isTopAffiliate = isTopAffiliateEmail(user?.email);
 
   // Only show loading on first load, not on navigation
   if (isLoading && !isInitialized) {
@@ -97,7 +99,7 @@ export default function DashboardPage() {
             />
             <MetricCard
               icon={CheckCircle}
-              label="Saldo disponível"
+              label={isTopAffiliate ? "Comissão acumulada" : "Saldo disponível"}
               value={formatCurrency(availableValue)}
               color="success"
             />

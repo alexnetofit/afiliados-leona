@@ -8,6 +8,7 @@ import {
   getOrderedAsaasAccounts,
 } from "@/lib/asaas-accounts";
 import { formatBrl, getWithdrawBalance } from "@/lib/withdraw-balance";
+import { isTopAffiliateEmail } from "@/lib/top-affiliate";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -185,6 +186,18 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    // Top afiliados são pagos manualmente pela equipe (Wise/Pix), fora deste
+    // fluxo. Bloqueamos o saque automático pra evitar pagamento em duplicidade.
+    if (isTopAffiliateEmail(user.email)) {
+      return NextResponse.json(
+        {
+          error:
+            "Você é um Parceiro Top e seus pagamentos são feitos diretamente pela equipe. Não é necessário solicitar saque por aqui.",
+        },
+        { status: 403 }
+      );
     }
 
     const { affiliateName, amount, amountCents, dateLabel, pixKey, affiliateId } =

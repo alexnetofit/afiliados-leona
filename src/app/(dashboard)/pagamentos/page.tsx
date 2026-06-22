@@ -8,8 +8,9 @@ import {
   Card, Badge, MetricCard, LoadingScreen,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyState,
 } from "@/components/ui/index";
-import { Wallet, Clock, CheckCircle, ChevronDown, ChevronRight, Banknote, AlertCircle, X } from "lucide-react";
+import { Wallet, Clock, CheckCircle, ChevronDown, ChevronRight, Banknote, AlertCircle, X, Star } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
+import { isTopAffiliateEmail } from "@/lib/top-affiliate";
 
 interface PaymentGroup {
   dateKey: string;
@@ -34,7 +35,8 @@ interface WithdrawResult {
 
 export default function PagamentosPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { profile, affiliate, transactions, payouts, subscriptions, withdrawnDateLabels, withdrawBalance, isLoading, isInitialized } = useAppData();
+  const { user, profile, affiliate, transactions, payouts, subscriptions, withdrawnDateLabels, withdrawBalance, isLoading, isInitialized } = useAppData();
+  const isTopAffiliate = isTopAffiliateEmail(user?.email);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [withdrawingGroup, setWithdrawingGroup] = useState<string | null>(null);
   const [localWithdrawn, setLocalWithdrawn] = useState<Map<string, { status: string; paid_at: string | null; amount_text: string | null }>>(new Map());
@@ -307,7 +309,7 @@ export default function PagamentosPage() {
             />
             <MetricCard
               icon={Banknote}
-              label="Disponível para saque"
+              label={isTopAffiliate ? "Comissão acumulada" : "Disponível para saque"}
               value={formatCurrency(totalAvailable / 100)}
               color="warning"
             />
@@ -318,6 +320,20 @@ export default function PagamentosPage() {
               color="default"
             />
           </div>
+
+          {isTopAffiliate && (
+            <div className="rounded-xl border border-purple-200 bg-purple-50 p-4 flex gap-3">
+              <Star className="h-5 w-5 text-purple-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-purple-900 space-y-1">
+                <p className="font-semibold">Você é um Parceiro Top</p>
+                <p>
+                  Seus pagamentos são feitos diretamente pela nossa equipe, não é
+                  necessário solicitar saque por aqui. Os valores abaixo são apenas
+                  o histórico da sua comissão acumulada.
+                </p>
+              </div>
+            </div>
+          )}
 
           {hasAjustePendente && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3">
@@ -387,7 +403,7 @@ export default function PagamentosPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {group.status === "available" && !withdrawnGroups.has(group.dateLabel) && (
+                        {!isTopAffiliate && group.status === "available" && !withdrawnGroups.has(group.dateLabel) && (
                           group.totalCents <= WITHDRAW_FEE_CENTS ? (
                             <span className="px-3 py-1 text-xs font-medium text-zinc-400 bg-zinc-100 rounded-full cursor-not-allowed" title="Valor insuficiente para cobrir a taxa de transferência">
                               Valor insuficiente
@@ -418,7 +434,7 @@ export default function PagamentosPage() {
                             Transferência em andamento
                           </span>
                         )}
-                        {group.status === "available" && withdrawnGroups.get(group.dateLabel)?.status === "failed" && (
+                        {!isTopAffiliate && group.status === "available" && withdrawnGroups.get(group.dateLabel)?.status === "failed" && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
