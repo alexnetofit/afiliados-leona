@@ -130,13 +130,43 @@ export async function GET(request: NextRequest) {
     .eq("id", targetUser.id)
     .single();
 
-  const { data: transactions } = await supabaseAdmin
-    .from("transactions")
-    .select(
-      "id, type, amount_gross_cents, commission_percent, commission_amount_cents, paid_at, available_at, description"
-    )
-    .eq("affiliate_id", affiliate.id)
-    .order("paid_at", { ascending: false });
+  // Paginação manual: o Supabase limita cada query a 1000 linhas. Afiliados com
+  // mais de 1000 transações (muitas vendas + estornos) tinham o cálculo de
+  // "Liberado"/"Saldo" truncado — as transações mais antigas (comissões já
+  // liberadas) ficavam de fora da janela e o saldo aparecia MENOR do que o real,
+  // oscilando pra baixo conforme novas vendas empurravam as antigas pra fora.
+  type TxRow = {
+    id: string;
+    type: string;
+    amount_gross_cents: number;
+    commission_percent: number;
+    commission_amount_cents: number;
+    paid_at: string | null;
+    available_at: string | null;
+    description: string | null;
+  };
+  const transactions: TxRow[] = [];
+  {
+    const PAGE = 1000;
+    for (let page = 0; page < 200; page++) {
+      const fromIdx = page * PAGE;
+      const { data, error } = await supabaseAdmin
+        .from("transactions")
+        .select(
+          "id, type, amount_gross_cents, commission_percent, commission_amount_cents, paid_at, available_at, description"
+        )
+        .eq("affiliate_id", affiliate.id)
+        .order("paid_at", { ascending: false })
+        .range(fromIdx, fromIdx + PAGE - 1);
+      if (error) {
+        console.error("[top-affiliates] erro paginando transactions:", error.message);
+        break;
+      }
+      if (!data || data.length === 0) break;
+      transactions.push(...(data as TxRow[]));
+      if (data.length < PAGE) break;
+    }
+  }
 
   const { data: pixExpensesRaw } = await supabaseAdmin
     .from("top_affiliate_pix_expenses")
@@ -150,7 +180,7 @@ export async function GET(request: NextRequest) {
     0
   );
 
-  const txs = transactions || [];
+  const txs = transactions;
   const now = new Date();
 
   let totalCommissionCents = 0;
