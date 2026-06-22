@@ -5,7 +5,7 @@ import { useAppData } from "@/contexts";
 import type { ManagedSubscription } from "@/contexts/app-data-context";
 import { Header } from "@/components/layout/header";
 import { Card, Badge, LoadingScreen, Select, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyState, Button, Input } from "@/components/ui/index";
-import { AlertTriangle, RefreshCcw, Users, UserCheck, UserX, AlertCircle, Clock, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { AlertTriangle, RefreshCcw, Users, UserCheck, UserX, AlertCircle, Clock, Search, ChevronLeft, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 
 const STATUS_MAP = {
@@ -20,7 +20,7 @@ const ITEMS_PER_PAGE = 10;
 
 export default function AssinaturasPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { profile, subscriptions, managedSubscriptions, isLoading, isInitialized } = useAppData();
+  const { profile, subscriptions, managedSubscriptions, transactions, isLoading, isInitialized } = useAppData();
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -76,6 +76,40 @@ export default function AssinaturasPage() {
     };
   }, [allSubscriptions]);
 
+  // MRR (comissão recorrente) e Churn, calculados sobre as assinaturas DIRETAS
+  // do parceiro. MRR = soma da última comissão de cada assinatura ativa (o
+  // amount_cents da subscription é pouco confiável, então usamos as transações).
+  // Churn = % da base paga que parou de pagar (atrasada/não paga/cancelada),
+  // já que o status "cancelada" praticamente não é usado pelo gateway.
+  const recurring = useMemo(() => {
+    const ownSubs = subscriptions || [];
+
+    const latestCommission = new Map<string, { cents: number; at: number }>();
+    for (const t of transactions || []) {
+      if (t.type !== "commission" || !t.subscription_id) continue;
+      const at = t.paid_at ? new Date(t.paid_at).getTime() : 0;
+      const cur = latestCommission.get(t.subscription_id);
+      if (!cur || at >= cur.at) {
+        latestCommission.set(t.subscription_id, { cents: t.commission_amount_cents, at });
+      }
+    }
+
+    let mrrCommissionCents = 0;
+    for (const s of ownSubs) {
+      if (s.status !== "active") continue;
+      const c = latestCommission.get(s.id);
+      if (c) mrrCommissionCents += c.cents;
+    }
+
+    const lostStatuses = new Set(["past_due", "unpaid", "canceled"]);
+    const paidBaseStatuses = new Set(["active", "past_due", "unpaid", "canceled"]);
+    const lost = ownSubs.filter((s) => lostStatuses.has(s.status)).length;
+    const base = ownSubs.filter((s) => paidBaseStatuses.has(s.status)).length;
+    const churnRate = base > 0 ? (lost / base) * 100 : 0;
+
+    return { mrrCommissionCents, churnRate, lost, base };
+  }, [subscriptions, transactions]);
+
   // Only show loading on first load, not on navigation
   if (isLoading && !isInitialized) {
     return <LoadingScreen message="Carregando assinaturas..." />;
@@ -93,6 +127,49 @@ export default function AssinaturasPage() {
       <div className="flex-1 p-6 lg:p-8">
         <div className="max-w-[1400px] mx-auto space-y-8 animate-fade-in-up">
           
+          {/* MRR e Churn */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Card className="!p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
+                    MRR de comissão
+                  </p>
+                  <p className="text-3xl font-bold text-success-600 mt-1">
+                    {formatCurrency(recurring.mrrCommissionCents / 100)}
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Comissão recorrente das assinaturas ativas
+                  </p>
+                </div>
+                <div className="h-11 w-11 rounded-xl bg-success-100 flex items-center justify-center shrink-0">
+                  <TrendingUp className="h-6 w-6 text-success-600" />
+                </div>
+              </div>
+            </Card>
+            <Card className="!p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
+                    Churn
+                  </p>
+                  <p className={cn(
+                    "text-3xl font-bold mt-1",
+                    recurring.churnRate >= 20 ? "text-error-600" : recurring.churnRate >= 10 ? "text-warning-600" : "text-zinc-900"
+                  )}>
+                    {recurring.churnRate.toFixed(1)}%
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    {recurring.lost} de {recurring.base} pararam de pagar
+                  </p>
+                </div>
+                <div className="h-11 w-11 rounded-xl bg-error-100 flex items-center justify-center shrink-0">
+                  <TrendingDown className="h-6 w-6 text-error-600" />
+                </div>
+              </div>
+            </Card>
+          </div>
+
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
             {[
