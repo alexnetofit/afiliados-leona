@@ -256,12 +256,12 @@ export async function POST(request: NextRequest) {
           linhas.push(
             `• Ajuste de saques antigos sendo compensado: ${formatBrl(balance.ajustePendenteCents)}`,
             "",
-            "Os valores que aparecem como “Disponível” na tela referem-se ao bucket bruto da liberação. Como saques anteriores foram processados antes do recálculo automático da taxa do gateway (~7%), a diferença está sendo descontada do seu saldo agora. Em poucos saques esse ajuste se zera. Se quiser entender o cálculo em detalhe, fala com o suporte."
+            "O valor do período liberado na tela pode ser maior que seu saldo real. Isso pode ocorrer por ajustes de comissão (reatribuição a outro parceiro), estornos ou diferenças de saques anteriores. Se quiser entender o cálculo em detalhe, fala com o suporte."
           );
         } else {
           linhas.push(
             "",
-            "A diferença pode vir de estornos posteriores ou saques anteriores. Se o valor não bater com o que você esperava, fala com o suporte que a gente revisa."
+            "O valor do período liberado na tela pode ser maior que seu saldo real. Isso pode ocorrer por ajustes de comissão (reatribuição a outro parceiro), estornos ou diferenças de saques anteriores. Se o valor não bater com o que você esperava, fala com o suporte que a gente revisa."
           );
         }
 

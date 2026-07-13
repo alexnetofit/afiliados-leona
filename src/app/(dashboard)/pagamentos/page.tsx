@@ -125,13 +125,22 @@ export default function PagamentosPage() {
 
   const WITHDRAW_FEE_CENTS = 200;
 
+  const getWithdrawableCents = (group: PaymentGroup): number => {
+    if (group.status !== "available") return group.totalCents;
+    if (withdrawnGroups.get(group.dateLabel)?.status === "paid") return group.totalCents;
+    const saldo = withdrawBalance?.saldoDisponivelCents;
+    if (saldo == null) return group.totalCents;
+    return Math.min(group.totalCents, Math.max(saldo, 0));
+  };
+
   const handleConfirmWithdraw = async () => {
     if (!confirmGroup || !affiliate) return;
 
     const currentPixKey = affiliate.payout_pix_key;
     if (!currentPixKey) return;
 
-    const netCents = confirmGroup.totalCents - WITHDRAW_FEE_CENTS;
+    const withdrawableCents = getWithdrawableCents(confirmGroup);
+    const netCents = withdrawableCents - WITHDRAW_FEE_CENTS;
     if (netCents <= 0) return;
 
     setWithdrawingGroup(confirmGroup.dateKey);
@@ -144,7 +153,7 @@ export default function PagamentosPage() {
         body: JSON.stringify({
           affiliateId: affiliate.id,
           affiliateName: profile?.full_name || "Afiliado",
-          amount: formatCurrency(confirmGroup.totalCents / 100),
+          amount: formatCurrency(withdrawableCents / 100),
           amountCents: netCents,
           dateLabel: confirmGroup.dateLabel,
           pixKey: currentPixKey,
@@ -159,7 +168,7 @@ export default function PagamentosPage() {
           next.set(confirmGroup.dateLabel, {
             status: "processing",
             paid_at: null,
-            amount_text: formatCurrency(confirmGroup.totalCents / 100),
+            amount_text: formatCurrency(withdrawableCents / 100),
           });
           return next;
         });
@@ -279,12 +288,10 @@ export default function PagamentosPage() {
   // automático da taxa do gateway (~7%). Quando há ajuste pendente, exibimos
   // o líquido real ao invés da soma bruta dos buckets pra evitar o "click
   // frustrante" no botão Solicitar Saque.
-  const ajustePendenteCents = withdrawBalance?.ajustePendenteCents ?? 0;
   const saldoRealCents = withdrawBalance?.saldoDisponivelCents ?? totalAvailableBuckets;
-  const hasAjustePendente = ajustePendenteCents > 0;
-  const totalAvailable = hasAjustePendente
-    ? Math.max(saldoRealCents, 0)
-    : totalAvailableBuckets;
+  const saldoMenorQueBuckets =
+    saldoRealCents + 50 < totalAvailableBuckets && totalAvailableBuckets > 0;
+  const totalAvailable = Math.max(saldoRealCents, 0);
 
   if (isLoading && !isInitialized) {
     return <LoadingScreen message="Carregando pagamentos..." />;
@@ -376,19 +383,19 @@ export default function PagamentosPage() {
             </div>
           )}
 
-          {hasAjustePendente && (
+          {saldoMenorQueBuckets && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3">
               <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-amber-900 space-y-1">
-                <p className="font-semibold">Ajuste de saldo em andamento</p>
+                <p className="font-semibold">Saldo disponível menor que o período liberado</p>
                 <p>
-                  Saques anteriores a 12/03/2026 foram processados sobre o valor bruto e desde então
-                  o sistema passou a contabilizar a comissão líquida (já descontada a taxa do gateway de ~7%).
-                  Por isso, o seu saldo disponível neste momento está {formatCurrency(ajustePendenteCents / 100)} menor
-                  que a soma dos períodos liberados na lista abaixo.
+                  A soma dos períodos liberados na lista é {formatCurrency(totalAvailableBuckets / 100)},
+                  mas seu saldo real para saque é {formatCurrency(totalAvailable / 100)}.
+                  Isso pode ocorrer por ajustes de comissão (reatribuição a outro parceiro),
+                  estornos ou diferenças de saques anteriores.
                 </p>
                 <p className="text-xs text-amber-700 pt-1">
-                  Já estamos compensando isso automaticamente — qualquer dúvida, fala com o suporte.
+                  Ao solicitar saque, usamos automaticamente o valor correto ({formatCurrency(totalAvailable / 100)}).
                 </p>
               </div>
             </div>
@@ -445,7 +452,7 @@ export default function PagamentosPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         {!isTopAffiliate && group.status === "available" && !withdrawnGroups.has(group.dateLabel) && (
-                          group.totalCents <= WITHDRAW_FEE_CENTS ? (
+                          getWithdrawableCents(group) <= WITHDRAW_FEE_CENTS ? (
                             <span className="px-3 py-1 text-xs font-medium text-zinc-400 bg-zinc-100 rounded-full cursor-not-allowed" title="Valor insuficiente para cobrir a taxa de transferência">
                               Valor insuficiente
                             </span>
@@ -502,8 +509,19 @@ export default function PagamentosPage() {
                             : group.status === "available" ? "text-warning-600"
                             : "text-zinc-700"
                         )}>
-                          {formatCurrency(group.totalCents / 100)}
+                          {formatCurrency(
+                            (group.status === "available" && !withdrawnGroups.has(group.dateLabel)
+                              ? getWithdrawableCents(group)
+                              : group.totalCents) / 100
+                          )}
                         </span>
+                        {group.status === "available" &&
+                          !withdrawnGroups.has(group.dateLabel) &&
+                          getWithdrawableCents(group) < group.totalCents && (
+                          <span className="text-[10px] text-amber-600 whitespace-nowrap">
+                            de {formatCurrency(group.totalCents / 100)}
+                          </span>
+                        )}
                         {expandedGroup === group.dateKey ? (
                           <ChevronDown className="h-4 w-4 text-zinc-400" />
                         ) : (
@@ -629,8 +647,9 @@ export default function PagamentosPage() {
       {/* Confirmation Modal */}
       {confirmGroup && (() => {
         const WITHDRAW_FEE_CENTS = 200;
-        const grossCents = confirmGroup.totalCents;
+        const grossCents = getWithdrawableCents(confirmGroup);
         const netCents = grossCents - WITHDRAW_FEE_CENTS;
+        const periodoMaior = grossCents < confirmGroup.totalCents;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -660,6 +679,12 @@ export default function PagamentosPage() {
                     {formatCurrency(grossCents / 100)}
                   </span>
                 </div>
+                {periodoMaior && (
+                  <p className="text-xs text-amber-700">
+                    Período liberado: {formatCurrency(confirmGroup.totalCents / 100)}.
+                    Valor ajustado ao seu saldo disponível.
+                  </p>
+                )}
                 <div className="h-px bg-zinc-200" />
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-zinc-500">Taxa de transferência</span>
