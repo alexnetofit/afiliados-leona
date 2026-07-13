@@ -5,7 +5,7 @@ import { Resend } from "resend";
 import {
   type AsaasAccount,
   getAsaasBaseUrl,
-  getOrderedAsaasAccounts,
+  getWithdrawAsaasAccounts,
 } from "@/lib/asaas-accounts";
 import { formatBrl, getWithdrawBalance } from "@/lib/withdraw-balance";
 import { isTopAffiliateEmail } from "@/lib/top-affiliate";
@@ -136,17 +136,18 @@ async function attemptTransfer(
   };
 }
 
-async function notifyAdminAllAccountsFailed(args: {
+async function notifyAdminWithdrawFailed(args: {
   affiliateName: string;
   affiliateEmail: string | null | undefined;
   amount: string;
   pixKey: string;
+  asaasMessage: string;
   attempts: TransferAttemptErr[];
 }): Promise<void> {
   const lines = args.attempts
     .map(
       (a) =>
-        `<li><strong>${a.account.label}</strong> (tipo ${a.pixType}, HTTP ${a.status}): ${a.message}</li>`
+        `<li>tipo ${a.pixType}, HTTP ${a.status}: ${a.message}</li>`
     )
     .join("");
 
@@ -154,27 +155,34 @@ async function notifyAdminAllAccountsFailed(args: {
     await resend.emails.send({
       from: "Leona Afiliados <noreply@leonaflow.com>",
       to: ADMIN_EMAIL,
-      subject: `[URGENTE] Saque falhou em TODAS as contas Asaas - ${args.affiliateName}`,
+      subject: `[URGENTE] Saque falhou no Asaas - ${args.affiliateName}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 560px;">
-          <h2 style="color: #b91c1c;">Saque sem caixa disponível</h2>
+          <h2 style="color: #b91c1c;">Falha na transferência PIX</h2>
           <p style="color: #3f3f46; font-size: 15px;">
             O afiliado <strong>${args.affiliateName}</strong> tentou sacar
-            <strong>${args.amount}</strong> e a transferência falhou em todas as contas Asaas configuradas.
+            <strong>${args.amount}</strong> e o Asaas recusou a operação.
           </p>
+          <p style="color: #52525b; font-size: 14px;"><strong>Erro Asaas:</strong> ${args.asaasMessage}</p>
           <p style="color: #52525b; font-size: 14px;"><strong>PIX:</strong> ${args.pixKey}</p>
           ${args.affiliateEmail ? `<p style="color: #52525b; font-size: 14px;"><strong>Email:</strong> ${args.affiliateEmail}</p>` : ""}
           <p style="color: #3f3f46; font-size: 14px; margin-top: 12px;"><strong>Tentativas:</strong></p>
           <ul style="color: #52525b; font-size: 13px;">${lines}</ul>
-          <p style="color: #b91c1c; font-size: 14px; font-weight: 600; margin-top: 16px;">
-            Reabasteça a conta primária ou autorize transferências pendentes para liberar caixa.
-          </p>
         </div>
       `,
     });
   } catch (e) {
-    console.error("[WITHDRAW] Falha ao notificar admin de saldo zerado:", e);
+    console.error("[WITHDRAW] Falha ao notificar admin:", e);
   }
+}
+
+/** Erro mais relevante pro afiliado: prioriza a 1ª falha (tipo PIX detectado). */
+function pickAffiliateFacingError(failures: TransferAttemptErr[]): string {
+  if (failures.length === 0) {
+    return "Erro desconhecido ao criar transferência no Asaas";
+  }
+  const nonBalance = failures.find((f) => !isInsufficientBalanceError(f));
+  return (nonBalance ?? failures[0]).message;
 }
 
 export async function POST(request: NextRequest) {
@@ -280,10 +288,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const accounts = getOrderedAsaasAccounts();
+    const accounts = getWithdrawAsaasAccounts();
     if (accounts.length === 0) {
       return NextResponse.json(
-        { error: "Nenhuma conta Asaas configurada no servidor" },
+        { error: "Conta Asaas de pagamentos não configurada no servidor" },
         { status: 500 }
       );
     }
@@ -298,74 +306,61 @@ export async function POST(request: NextRequest) {
 
     let success: TransferAttemptOk | null = null;
     const failures: TransferAttemptErr[] = [];
+    const account = accounts[0];
 
-    accountsLoop: for (const account of accounts) {
-      for (const pixType of typesToTry) {
+    for (const pixType of typesToTry) {
+      console.log(
+        `[WITHDRAW] Tentando ${account.label} (${account.id}) tipo ${pixType} chave ${pixKey}`
+      );
+      const attempt = await attemptTransfer(account, {
+        transferValue,
+        pixKey,
+        pixType,
+        description,
+        externalReference,
+      });
+
+      if (attempt.ok) {
         console.log(
-          `[WITHDRAW] Tentando ${account.label} (${account.id}) tipo ${pixType} chave ${pixKey}`
+          `[WITHDRAW] Sucesso em ${account.label} tipo ${pixType} transferId=${attempt.data.id}`
         );
-        const attempt = await attemptTransfer(account, {
-          transferValue,
-          pixKey,
-          pixType,
-          description,
-          externalReference,
-        });
+        success = attempt;
+        break;
+      }
 
-        if (attempt.ok) {
-          console.log(
-            `[WITHDRAW] Sucesso em ${account.label} tipo ${pixType} transferId=${attempt.data.id}`
-          );
-          success = attempt;
-          break accountsLoop;
-        }
+      console.warn(
+        `[WITHDRAW] Falha em ${account.label} tipo ${pixType}:`,
+        JSON.stringify(attempt.data)
+      );
+      failures.push(attempt);
 
-        console.warn(
-          `[WITHDRAW] Falha em ${account.label} tipo ${pixType}:`,
-          JSON.stringify(attempt.data)
-        );
-        failures.push(attempt);
-
-        // Se foi saldo insuficiente, não adianta tentar outros tipos PIX nessa
-        // conta — pula direto pra próxima conta (failover).
-        if (isInsufficientBalanceError(attempt)) {
-          break;
-        }
+      if (isInsufficientBalanceError(attempt)) {
+        break;
       }
     }
 
     if (!success) {
+      const errorMsg = pickAffiliateFacingError(failures);
       const allInsufficient =
         failures.length > 0 && failures.every(isInsufficientBalanceError);
 
-      if (allInsufficient) {
-        await notifyAdminAllAccountsFailed({
-          affiliateName,
-          affiliateEmail: user.email,
-          amount,
-          pixKey,
-          attempts: failures,
-        });
-        return NextResponse.json(
-          {
-            error:
-              "Saque temporariamente indisponível. Já avisamos a equipe e vamos processar em algumas horas. Tente novamente mais tarde.",
-          },
-          { status: 503 }
-        );
-      }
+      await notifyAdminWithdrawFailed({
+        affiliateName,
+        affiliateEmail: user.email,
+        amount,
+        pixKey,
+        asaasMessage: errorMsg,
+        attempts: failures,
+      });
 
-      const last = failures[failures.length - 1];
-      const errorMsg = last
-        ? last.message
-        : "Erro desconhecido ao criar transferência no Asaas";
       console.error(
-        "[WITHDRAW] Asaas error (todas as contas falharam):",
-        JSON.stringify(failures.map((f) => ({ acc: f.account.id, msg: f.message })))
+        "[WITHDRAW] Asaas error:",
+        JSON.stringify(failures.map((f) => ({ tipo: f.pixType, msg: f.message })))
       );
+
       return NextResponse.json(
-        { error: `Falha na transferência PIX: ${errorMsg}` },
-        { status: 400 }
+        { error: errorMsg },
+        { status: allInsufficient ? 503 : 400 }
       );
     }
 
@@ -388,13 +383,6 @@ export async function POST(request: NextRequest) {
         asaas_account: usedAccount.id,
       });
     }
-
-    const fallbackBadge =
-      usedAccount.id !== accounts[0].id
-        ? `<p style="background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:6px;font-size:13px;margin:12px 0;">
-            ⚠ Failover acionado: a transferência foi processada pela conta secundária <strong>${usedAccount.label}</strong> porque a primária falhou.
-          </p>`
-        : "";
 
     const pixHtml = `<div style="background: #f4f4f5; border-radius: 8px; padding: 12px 16px; margin: 16px 0;">
       <p style="color: #3f3f46; font-size: 14px; margin: 0 0 4px 0; font-weight: 600;">Dados da transferência:</p>
@@ -419,7 +407,6 @@ export async function POST(request: NextRequest) {
             </p>
             ${dateLabel ? `<p style="color: #71717a; font-size: 14px;">Referente à liberação de ${dateLabel}.</p>` : ""}
             <p style="color: #71717a; font-size: 14px;">Email do afiliado: ${user.email}</p>
-            ${fallbackBadge}
             ${pixHtml}
             <p style="color: #ef4444; font-size: 14px; font-weight: 600; margin-top: 16px;">
               ⚠ Autorize esta transferência no app Asaas (${usedAccount.label}).

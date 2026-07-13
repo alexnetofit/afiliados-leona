@@ -4,11 +4,8 @@
  * - 'solucoes' (An Soluções Digitais, CNPJ 56.021.532/0001-60) é a PRIMÁRIA.
  *    Mesmo CNPJ que figura como producer no Guru, então é o titular natural
  *    das vendas.
- * - 'cursos' é a SECUNDÁRIA (conta antiga, usada como fallback de caixa).
- *
- * Ordem de tentativa: primeiro a primária; em caso de falha do Asaas
- * (ex.: saldo insuficiente, chave PIX não encontrada nessa conta),
- * tenta automaticamente a secundária.
+ * - 'cursos' é legado — usada só para validar webhooks de transferência.
+ *   Saques de afiliados usam exclusivamente 'solucoes' (sem failover).
  *
  * Compatibilidade: enquanto o deploy nas envs novas (`_SOLUCOES`/`_CURSOS`)
  * não é concluído, ainda lemos as envs antigas (`ASAAS_API_KEY` /
@@ -39,29 +36,40 @@ function readAccount(
   return { id, label, apiKey, webhookToken };
 }
 
-/**
- * Retorna as contas configuradas, na ordem em que devem ser tentadas:
- * primária primeiro, depois fallbacks.
- */
-export function getOrderedAsaasAccounts(): AsaasAccount[] {
-  const accounts: AsaasAccount[] = [];
-
-  const solucoes = readAccount(
+function readSolucoesAccount(): AsaasAccount | null {
+  return readAccount(
     "solucoes",
     "Asaas An Soluções",
     ["ASAAS_API_KEY_SOLUCOES"],
     ["ASAAS_WEBHOOK_TOKEN_SOLUCOES"]
   );
-  if (solucoes) accounts.push(solucoes);
+}
 
-  const cursos = readAccount(
+function readCursosAccount(): AsaasAccount | null {
+  return readAccount(
     "cursos",
     "Asaas An Cursos",
     ["ASAAS_API_KEY_CURSOS", "ASAAS_API_KEY"],
     ["ASAAS_WEBHOOK_TOKEN_CURSOS", "ASAAS_WEBHOOK_TOKEN"]
   );
-  if (cursos) accounts.push(cursos);
+}
 
+/** Conta usada para pagar comissões de afiliados (somente An Soluções). */
+export function getWithdrawAsaasAccounts(): AsaasAccount[] {
+  const solucoes = readSolucoesAccount();
+  return solucoes ? [solucoes] : [];
+}
+
+/**
+ * Todas as contas com webhook configurado (Soluções + Cursos legado).
+ * Usado pelo endpoint de webhook do Asaas para reconhecer o token.
+ */
+export function getOrderedAsaasAccounts(): AsaasAccount[] {
+  const accounts: AsaasAccount[] = [];
+  const solucoes = readSolucoesAccount();
+  if (solucoes) accounts.push(solucoes);
+  const cursos = readCursosAccount();
+  if (cursos) accounts.push(cursos);
   return accounts;
 }
 
