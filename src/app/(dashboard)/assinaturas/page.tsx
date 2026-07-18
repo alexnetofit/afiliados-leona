@@ -204,15 +204,14 @@ export default function AssinaturasPage() {
               </div>
               
               {/* Filters */}
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="flex-1">
-                  <Input
-                    placeholder="Pesquisar por nome do cliente..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    icon={Search}
-                  />
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_12rem] gap-3 items-center">
+                <Input
+                  placeholder="Pesquisar por nome do cliente..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  icon={Search}
+                  className="min-w-0"
+                />
                 <Select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
