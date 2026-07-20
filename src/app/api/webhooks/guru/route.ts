@@ -330,6 +330,7 @@ async function maybeSyncSubscriptionFromLeona(
     profile: billing.profile,
     guruSubscription: body.subscription ?? null,
     customerNameFromGuru: body.contact?.name ?? null,
+    customerEmailFromGuru: body.contact?.email ?? null,
     amountCentsFromGuru: amountCents,
   });
 }
@@ -527,6 +528,7 @@ async function reprocessExistingGuruTransaction(
     profile: billing.profile,
     guruSubscription: body.subscription ?? null,
     customerNameFromGuru: body.contact?.name ?? null,
+    customerEmailFromGuru: body.contact?.email ?? null,
     amountCentsFromGuru: amountGrossCents,
   });
 
@@ -712,6 +714,7 @@ async function processGuruCommission(
     profile: billing.profile,
     guruSubscription: body.subscription ?? null,
     customerNameFromGuru: body.contact?.name ?? null,
+    customerEmailFromGuru: body.contact?.email ?? null,
     amountCentsFromGuru: amountGrossCents,
   });
 

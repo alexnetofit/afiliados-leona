@@ -29,6 +29,21 @@ export default function VendasPage() {
     return map;
   }, [subscriptions, managedSubscriptions]);
 
+  const subscriptionEmails = useMemo(() => {
+    const map = new Map<string, string>();
+    (subscriptions || []).forEach((sub) => {
+      if (sub.id && sub.customer_email) {
+        map.set(sub.id, sub.customer_email);
+      }
+    });
+    (managedSubscriptions || []).forEach((sub) => {
+      if (sub.id && sub.customer_email) {
+        map.set(sub.id, sub.customer_email);
+      }
+    });
+    return map;
+  }, [subscriptions, managedSubscriptions]);
+
   const invoiceToSubscription = useMemo(() => {
     const map = new Map<string, string>();
     (transactions || []).forEach((tx) => {
@@ -62,6 +77,16 @@ export default function VendasPage() {
     return name;
   }, [subscriptionNames, invoiceToSubscription, transactions]);
 
+  const resolveCustomerEmail = useCallback((tx: Transaction): string | null => {
+    let email = tx.subscription_id ? subscriptionEmails.get(tx.subscription_id) ?? null : null;
+    if (!email && tx.stripe_invoice_id && (tx.type === "refund" || tx.type === "dispute")) {
+      const origKey = tx.stripe_invoice_id.replace(/_refund$/, "");
+      const subId = invoiceToSubscription.get(origKey);
+      if (subId) email = subscriptionEmails.get(subId) ?? null;
+    }
+    return email;
+  }, [subscriptionEmails, invoiceToSubscription]);
+
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -77,8 +102,10 @@ export default function VendasPage() {
       const searchLower = search.toLowerCase();
       result = result.filter((t) => {
         const customerName = resolveCustomerName(t);
+        const customerEmail = resolveCustomerEmail(t);
         return (
           customerName?.toLowerCase().includes(searchLower) ||
+          customerEmail?.toLowerCase().includes(searchLower) ||
           t.description?.toLowerCase().includes(searchLower) ||
           t.paid_at?.toLowerCase().includes(searchLower) ||
           formatCurrency(Math.abs(t.commission_amount_cents) / 100).includes(search)
@@ -87,7 +114,7 @@ export default function VendasPage() {
     }
     
     return result;
-  }, [transactions, typeFilter, search, resolveCustomerName]);
+  }, [transactions, typeFilter, search, resolveCustomerName, resolveCustomerEmail]);
 
   // Pagination
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
@@ -201,6 +228,7 @@ export default function VendasPage() {
                       const avail = tx.available_at ? isDateAvailable(tx.available_at) : false;
                       const isManagerTx = tx.description?.startsWith("Comissão de gerência");
                       const customerName = resolveCustomerName(tx);
+                      const customerEmail = resolveCustomerEmail(tx);
                       const isRefundOrDispute = tx.type === "refund" || tx.type === "dispute";
                       
                       return (
@@ -216,6 +244,9 @@ export default function VendasPage() {
                                 <span className="font-medium text-zinc-900">
                                   {customerName || "Cliente"}
                                 </span>
+                                {customerEmail && (
+                                  <p className="text-xs text-zinc-500">{customerEmail}</p>
+                                )}
                                 {isManagerTx && customerName && (
                                   <p className="text-[10px] text-orange-600 font-medium">
                                     via {customerName}

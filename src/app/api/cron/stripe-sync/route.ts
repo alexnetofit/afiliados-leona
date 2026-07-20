@@ -243,6 +243,7 @@ export async function GET(request: NextRequest) {
         if (!affiliateId) return;
 
         const customerName = customerObj?.name || customerObj?.email || null;
+        const customerEmail = customerObj?.email?.trim()?.toLowerCase() || null;
         const item = subscription.items.data[0];
         const sub = subscription as any;
         const currentPeriodEnd = sub.current_period_end || item?.current_period_end;
@@ -252,6 +253,7 @@ export async function GET(request: NextRequest) {
           stripe_subscription_id: subscription.id,
           stripe_customer_id: customerId,
           customer_name: customerName,
+          customer_email: customerEmail,
           price_id: item?.price.id,
           amount_cents: item?.price.unit_amount || 0,
           status: subscription.status,

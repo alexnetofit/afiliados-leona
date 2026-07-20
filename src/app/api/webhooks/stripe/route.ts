@@ -97,7 +97,12 @@ async function handleSubscriptionCreatedOrUpdated(subscription: Stripe.Subscript
 
   // Get customer name
   const customer = await stripe.customers.retrieve(customerId);
-  const customerName = !customer.deleted ? customer.name || customer.email : null;
+  const customerEmail = !customer.deleted
+    ? customer.email?.trim().toLowerCase() || null
+    : null;
+  const customerName = !customer.deleted
+    ? customer.name?.trim() || null
+    : null;
 
   // Get price info
   const item = subscription.items.data[0];
@@ -118,7 +123,8 @@ async function handleSubscriptionCreatedOrUpdated(subscription: Stripe.Subscript
     affiliate_id: affiliateId,
     stripe_subscription_id: subscription.id,
     stripe_customer_id: customerId,
-    customer_name: customerName,
+    customer_name: customerName || customerEmail,
+    customer_email: customerEmail,
     price_id: priceId,
     amount_cents: amountCents,
     status: status,

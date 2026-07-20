@@ -60,7 +60,9 @@ export async function fetchBillingProfileByEmail(
   }
 
   const url = new URL(`${base}/api/v1/integration/accounts/billing_profile`);
-  url.searchParams.set("email", email);
+  if (email.trim()) {
+    url.searchParams.set("email", email);
+  }
   if (accountId != null && String(accountId).trim() !== "") {
     url.searchParams.set("account_id", String(accountId));
   }

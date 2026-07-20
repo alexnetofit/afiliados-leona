@@ -76,6 +76,7 @@ export interface Subscription {
   guru_subscription_internal_id?: string | null;
   leona_account_id?: string | null;
   customer_name: string | null;
+  customer_email: string | null;
   price_id: string | null;
   amount_cents: number | null;
   status: SubscriptionStatus;

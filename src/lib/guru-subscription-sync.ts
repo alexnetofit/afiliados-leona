@@ -69,6 +69,7 @@ export async function upsertSubscriptionFromLeonaAndGuru(
     profile: LeonaBillingProfile;
     guruSubscription?: GuruSubscriptionPayload | null;
     customerNameFromGuru?: string | null;
+    customerEmailFromGuru?: string | null;
     amountCentsFromGuru?: number | null;
   }
 ): Promise<string | null> {
@@ -118,6 +119,11 @@ export async function upsertSubscriptionFromLeonaAndGuru(
     input.profile.user?.name?.trim() ||
     null;
 
+  const customerEmail =
+    input.customerEmailFromGuru?.trim().toLowerCase() ||
+    input.profile.user?.email?.trim().toLowerCase() ||
+    null;
+
   const trialStart = parseIso(input.guruSubscription?.trial_started_at ?? undefined);
   const trialEnd = parseIso(input.guruSubscription?.trial_finished_at ?? undefined);
   const startedAt = parseIso(input.guruSubscription?.started_at ?? undefined);
@@ -134,6 +140,7 @@ export async function upsertSubscriptionFromLeonaAndGuru(
     status: statusResolved,
     current_period_end: periodEnd,
     customer_name: customerName,
+    customer_email: customerEmail,
     is_trial: isTrial,
     trial_start: trialStart,
     trial_end: trialEnd,

@@ -45,6 +45,7 @@ export default function AssinaturasPage() {
       const searchLower = search.toLowerCase();
       result = result.filter((s) => 
         s.customer_name?.toLowerCase().includes(searchLower) ||
+        s.customer_email?.toLowerCase().includes(searchLower) ||
         s.stripe_customer_id?.toLowerCase().includes(searchLower) ||
         (s.leona_account_id && s.leona_account_id.toLowerCase().includes(searchLower))
       );
@@ -262,6 +263,9 @@ export default function AssinaturasPage() {
                               </div>
                               <div>
                                 <span className="font-semibold text-zinc-900">{sub.customer_name || "Cliente"}</span>
+                                {sub.customer_email && (
+                                  <p className="text-xs text-zinc-500">{sub.customer_email}</p>
+                                )}
                                 {(sub as ManagedSubscription).managed_affiliate_name && (
                                   <p className="text-[10px] text-orange-600 font-medium">
                                     via {(sub as ManagedSubscription).managed_affiliate_name}
