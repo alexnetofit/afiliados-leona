@@ -176,6 +176,56 @@ async function notifyAdminWithdrawFailed(args: {
   }
 }
 
+function isDuplicateAsaasError(attempt: TransferAttemptErr): boolean {
+  if (attempt.status !== 409) return false;
+  const text = attempt.message.toLowerCase();
+  return text.includes("já solicitado") || text.includes("ja solicitado");
+}
+
+async function findExistingWithdraw(
+  affiliateId: string,
+  dateLabel: string
+): Promise<{ asaas_transfer_id: string | null; status: string } | null> {
+  const { data } = await supabaseAdmin
+    .from("withdraw_requests")
+    .select("asaas_transfer_id, status")
+    .eq("affiliate_id", affiliateId)
+    .eq("date_label", dateLabel)
+    .in("status", ["processing", "paid", "pending"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data;
+}
+
+function parseAsaasTransferIdFromError(message: string): string | null {
+  const match = message.match(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+  );
+  return match?.[0] ?? null;
+}
+
+async function resolveDuplicateWithdraw(
+  affiliateId: string,
+  dateLabel: string,
+  failures: TransferAttemptErr[]
+): Promise<{ asaas_transfer_id: string | null; status: string } | null> {
+  let existing = await findExistingWithdraw(affiliateId, dateLabel);
+  if (existing) return existing;
+
+  const transferId = failures
+    .map((f) => parseAsaasTransferIdFromError(f.message))
+    .find(Boolean);
+  if (!transferId) return null;
+
+  const { data } = await supabaseAdmin
+    .from("withdraw_requests")
+    .select("asaas_transfer_id, status")
+    .eq("asaas_transfer_id", transferId)
+    .maybeSingle();
+  return data;
+}
+
 /** Erro mais relevante pro afiliado: prioriza a 1ª falha (tipo PIX detectado). */
 function pickAffiliateFacingError(failures: TransferAttemptErr[]): string {
   if (failures.length === 0) {
@@ -340,18 +390,40 @@ export async function POST(request: NextRequest) {
     }
 
     if (!success) {
+      const duplicateAsaas = failures.some(isDuplicateAsaasError);
+      if (duplicateAsaas && affiliateId && dateLabel) {
+        const existing = await resolveDuplicateWithdraw(
+          affiliateId,
+          dateLabel,
+          failures
+        );
+        if (existing) {
+          console.log(
+            `[WITHDRAW] Asaas 409 duplicado — saque já existe (${existing.status}) affiliate=${affiliateId} period=${dateLabel}`
+          );
+          return NextResponse.json({
+            success: true,
+            duplicate: true,
+            asaasTransferId: existing.asaas_transfer_id,
+          });
+        }
+      }
+
       const errorMsg = pickAffiliateFacingError(failures);
       const allInsufficient =
         failures.length > 0 && failures.every(isInsufficientBalanceError);
+      const skipAdminEmail = duplicateAsaas;
 
-      await notifyAdminWithdrawFailed({
-        affiliateName,
-        affiliateEmail: user.email,
-        amount,
-        pixKey,
-        asaasMessage: errorMsg,
-        attempts: failures,
-      });
+      if (!skipAdminEmail) {
+        await notifyAdminWithdrawFailed({
+          affiliateName,
+          affiliateEmail: user.email,
+          amount,
+          pixKey,
+          asaasMessage: errorMsg,
+          attempts: failures,
+        });
+      }
 
       console.error(
         "[WITHDRAW] Asaas error:",

@@ -77,6 +77,34 @@ export default function PagamentosPage() {
     return merged;
   }, [withdrawnDateLabels, localWithdrawn]);
 
+  const canRequestWithdraw = (dateLabel: string): boolean => {
+    const w = withdrawnGroups.get(dateLabel);
+    if (!w) return true;
+    return w.status === "failed";
+  };
+
+  const syncWithdrawStatus = async () => {
+    if (!affiliate?.id) return;
+    try {
+      const res = await fetch(`/api/withdraw/status?affiliateId=${affiliate.id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const withdraws = data.withdraws || {};
+      setLocalWithdrawn((prev) => {
+        const next = new Map(prev);
+        for (const [label, val] of Object.entries(withdraws)) {
+          next.set(
+            label,
+            val as { status: string; paid_at: string | null; amount_text: string | null }
+          );
+        }
+        return next;
+      });
+    } catch {
+      // silently fail
+    }
+  };
+
   // PIX input modal (first-time setup)
   const [pixModalGroup, setPixModalGroup] = useState<PaymentGroup | null>(null);
   const [pixKey, setPixKey] = useState("");
@@ -166,8 +194,8 @@ export default function PagamentosPage() {
         setLocalWithdrawn(prev => {
           const next = new Map(prev);
           next.set(confirmGroup.dateLabel, {
-            status: "processing",
-            paid_at: null,
+            status: data.duplicate ? (withdrawnGroups.get(confirmGroup.dateLabel)?.status || "processing") : "processing",
+            paid_at: withdrawnGroups.get(confirmGroup.dateLabel)?.paid_at ?? null,
             amount_text: formatCurrency(withdrawableCents / 100),
           });
           return next;
@@ -178,17 +206,20 @@ export default function PagamentosPage() {
           bankName: data.bankName,
         });
       } else {
+        await syncWithdrawStatus();
         setWithdrawResult({
           success: false,
           error: data.error || "Erro ao processar saque",
         });
       }
     } catch {
+      await syncWithdrawStatus();
       setWithdrawResult({
         success: false,
         error: "Erro de conexão. Tente novamente.",
       });
     } finally {
+      await syncWithdrawStatus();
       setWithdrawingGroup(null);
     }
   };
@@ -451,7 +482,7 @@ export default function PagamentosPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {!isTopAffiliate && group.status === "available" && !withdrawnGroups.has(group.dateLabel) && (
+                        {!isTopAffiliate && group.status === "available" && canRequestWithdraw(group.dateLabel) && (
                           getWithdrawableCents(group) <= WITHDRAW_FEE_CENTS ? (
                             <span className="px-3 py-1 text-xs font-medium text-zinc-400 bg-zinc-100 rounded-full cursor-not-allowed" title="Valor insuficiente para cobrir a taxa de transferência">
                               Valor insuficiente
@@ -510,13 +541,13 @@ export default function PagamentosPage() {
                             : "text-zinc-700"
                         )}>
                           {formatCurrency(
-                            (group.status === "available" && !withdrawnGroups.has(group.dateLabel)
+                            (group.status === "available" && canRequestWithdraw(group.dateLabel)
                               ? getWithdrawableCents(group)
                               : group.totalCents) / 100
                           )}
                         </span>
                         {group.status === "available" &&
-                          !withdrawnGroups.has(group.dateLabel) &&
+                          canRequestWithdraw(group.dateLabel) &&
                           getWithdrawableCents(group) < group.totalCents && (
                           <span className="text-[10px] text-amber-600 whitespace-nowrap">
                             de {formatCurrency(group.totalCents / 100)}
