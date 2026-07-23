@@ -92,6 +92,27 @@ export function isDateAvailable(availableAt: string | Date): boolean {
   return available <= now;
 }
 
+/** Quantos meses de histórico de pagamentos o afiliado vê no painel. */
+export const PAYMENT_HISTORY_MONTHS = 6;
+
+/** Data de corte (YYYY-MM-DD, BRT) para exibição do histórico de pagamentos. */
+export function getPaymentHistoryCutoffKey(): string {
+  const now = getNowBRT();
+  const cutoff = new Date(now);
+  cutoff.setMonth(cutoff.getMonth() - PAYMENT_HISTORY_MONTHS);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(cutoff);
+}
+
+/** Períodos de liberação com dateKey YYYY-MM-DD (BRT) dentro da janela visível. */
+export function isWithinPaymentHistoryWindow(dateKey: string): boolean {
+  return dateKey >= getPaymentHistoryCutoffKey();
+}
+
 /**
  * Calculate when a commission becomes available for payout
  * - Payments from day 01-15 → available on day 05 of next month

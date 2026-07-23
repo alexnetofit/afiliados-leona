@@ -9,7 +9,12 @@ import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyState,
 } from "@/components/ui/index";
 import { Wallet, Clock, CheckCircle, ChevronDown, ChevronRight, Banknote, AlertCircle, X, Star } from "lucide-react";
-import { formatCurrency, cn } from "@/lib/utils";
+import {
+  formatCurrency,
+  cn,
+  isWithinPaymentHistoryWindow,
+  PAYMENT_HISTORY_MONTHS,
+} from "@/lib/utils";
 import { isTopAffiliateEmail } from "@/lib/top-affiliate";
 
 interface PaymentGroup {
@@ -153,14 +158,6 @@ export default function PagamentosPage() {
 
   const WITHDRAW_FEE_CENTS = 200;
 
-  const getWithdrawableCents = (group: PaymentGroup): number => {
-    if (group.status !== "available") return group.totalCents;
-    if (withdrawnGroups.get(group.dateLabel)?.status === "paid") return group.totalCents;
-    const saldo = withdrawBalance?.saldoDisponivelCents;
-    if (saldo == null) return group.totalCents;
-    return Math.min(group.totalCents, Math.max(saldo, 0));
-  };
-
   const handleConfirmWithdraw = async () => {
     if (!confirmGroup || !affiliate) return;
 
@@ -303,6 +300,26 @@ export default function PagamentosPage() {
     return Array.from(groups.values()).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
   }, [transactions, paidMonths, subscriptionNames]);
 
+  const visiblePaymentGroups = useMemo(
+    () => paymentGroups.filter((g) => isWithinPaymentHistoryWindow(g.dateKey)),
+    [paymentGroups]
+  );
+
+  const primaryWithdrawGroup = useMemo(() => {
+    return (
+      paymentGroups.find(
+        (g) =>
+          g.status === "available" &&
+          (!withdrawnGroups.has(g.dateLabel) ||
+            withdrawnGroups.get(g.dateLabel)?.status === "failed")
+      ) ?? null
+    );
+  }, [paymentGroups, withdrawnGroups]);
+
+  const primaryWithdrawVisible =
+    !!primaryWithdrawGroup &&
+    isWithinPaymentHistoryWindow(primaryWithdrawGroup.dateKey);
+
   // Summary metrics
   const totalPaid = paymentGroups
     .filter(g => g.status === "paid" || (g.status === "available" && withdrawnGroups.get(g.dateLabel)?.status === "paid"))
@@ -323,6 +340,29 @@ export default function PagamentosPage() {
   const saldoMenorQueBuckets =
     saldoRealCents + 50 < totalAvailableBuckets && totalAvailableBuckets > 0;
   const totalAvailable = Math.max(saldoRealCents, 0);
+
+  const showHiddenBalanceWithdraw =
+    !!primaryWithdrawGroup &&
+    !primaryWithdrawVisible &&
+    !isTopAffiliate &&
+    totalAvailable > WITHDRAW_FEE_CENTS;
+
+  const getWithdrawableCents = (group: PaymentGroup): number => {
+    if (group.status !== "available") return group.totalCents;
+    if (withdrawnGroups.get(group.dateLabel)?.status === "paid") return group.totalCents;
+    const saldo = withdrawBalance?.saldoDisponivelCents;
+    if (saldo == null) return group.totalCents;
+    if (primaryWithdrawGroup?.dateKey === group.dateKey) {
+      return Math.max(saldo, 0);
+    }
+    return Math.min(group.totalCents, Math.max(saldo, 0));
+  };
+
+  const canWithdrawFromGroup = (group: PaymentGroup): boolean => {
+    if (!canRequestWithdraw(group.dateLabel)) return false;
+    if (group.status !== "available") return false;
+    return primaryWithdrawGroup?.dateKey === group.dateKey;
+  };
 
   if (isLoading && !isInitialized) {
     return <LoadingScreen message="Carregando pagamentos..." />;
@@ -436,10 +476,32 @@ export default function PagamentosPage() {
           <Card>
             <div className="mb-4">
               <h3 className="text-sm font-semibold text-zinc-900">Histórico de pagamentos</h3>
-              <p className="text-xs text-zinc-500">{paymentGroups.length} período(s)</p>
+              <p className="text-xs text-zinc-500">
+                {visiblePaymentGroups.length} período(s) · últimos {PAYMENT_HISTORY_MONTHS} meses
+              </p>
             </div>
 
-            {paymentGroups.length === 0 ? (
+            {showHiddenBalanceWithdraw && primaryWithdrawGroup && (
+              <div className="mb-4 rounded-lg border border-purple-200 bg-purple-50 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-purple-900">Saldo disponível para saque</p>
+                  <p className="text-xs text-purple-700">
+                    Inclui liberações anteriores aos últimos {PAYMENT_HISTORY_MONTHS} meses exibidos abaixo.
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleWithdrawClick(primaryWithdrawGroup)}
+                  disabled={withdrawingGroup === primaryWithdrawGroup.dateKey}
+                  className="px-4 py-2 text-xs font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 rounded-full transition-colors whitespace-nowrap"
+                >
+                  {withdrawingGroup === primaryWithdrawGroup.dateKey
+                    ? "Processando..."
+                    : `Solicitar Saque · ${formatCurrency(getWithdrawableCents(primaryWithdrawGroup) / 100)}`}
+                </button>
+              </div>
+            )}
+
+            {visiblePaymentGroups.length === 0 ? (
               <EmptyState
                 icon={Wallet}
                 title="Nenhum pagamento"
@@ -447,7 +509,7 @@ export default function PagamentosPage() {
               />
             ) : (
               <div className="space-y-2">
-                {paymentGroups.map((group) => (
+                {visiblePaymentGroups.map((group) => (
                   <div key={group.dateKey} className="border border-zinc-200 rounded-lg overflow-hidden">
                     {/* Group Header */}
                     <button
@@ -482,7 +544,7 @@ export default function PagamentosPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {!isTopAffiliate && group.status === "available" && canRequestWithdraw(group.dateLabel) && (
+                        {!isTopAffiliate && group.status === "available" && canWithdrawFromGroup(group) && (
                           getWithdrawableCents(group) <= WITHDRAW_FEE_CENTS ? (
                             <span className="px-3 py-1 text-xs font-medium text-zinc-400 bg-zinc-100 rounded-full cursor-not-allowed" title="Valor insuficiente para cobrir a taxa de transferência">
                               Valor insuficiente
@@ -541,13 +603,13 @@ export default function PagamentosPage() {
                             : "text-zinc-700"
                         )}>
                           {formatCurrency(
-                            (group.status === "available" && canRequestWithdraw(group.dateLabel)
+                            (group.status === "available" && canWithdrawFromGroup(group)
                               ? getWithdrawableCents(group)
                               : group.totalCents) / 100
                           )}
                         </span>
                         {group.status === "available" &&
-                          canRequestWithdraw(group.dateLabel) &&
+                          canWithdrawFromGroup(group) &&
                           getWithdrawableCents(group) < group.totalCents && (
                           <span className="text-[10px] text-amber-600 whitespace-nowrap">
                             de {formatCurrency(group.totalCents / 100)}
