@@ -17,9 +17,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const affiliateId = request.nextUrl.searchParams.get("affiliateId");
-    if (!affiliateId) {
-      return NextResponse.json({ dateLabels: [] });
+    // A identidade vem só da sessão. O `affiliateId` da query era usado direto
+    // com a service role, então qualquer afiliado autenticado lia saldo e
+    // histórico de saque de qualquer outro (IDOR).
+    const { data: affiliate } = await supabaseAdmin
+      .from("affiliates")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!affiliate) {
+      return NextResponse.json({ withdraws: {}, balance: null });
+    }
+
+    const affiliateId = affiliate.id as string;
+    const requestedId = request.nextUrl.searchParams.get("affiliateId");
+
+    if (requestedId && requestedId !== affiliateId) {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
     const [{ data }, balance] = await Promise.all([

@@ -40,7 +40,7 @@ interface WithdrawResult {
 
 export default function PagamentosPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, profile, affiliate, transactions, payouts, subscriptions, withdrawnDateLabels, withdrawBalance, isLoading, isInitialized } = useAppData();
+  const { user, affiliate, transactions, payouts, subscriptions, withdrawnDateLabels, withdrawBalance, isLoading, isInitialized } = useAppData();
   const isTopAffiliate = isTopAffiliateEmail(user?.email);
   // Top afiliados são pagos manualmente (Wise + Pix). Buscamos esse total pra
   // exibir no card "Total recebido" no lugar do saque automático (sempre 0).
@@ -175,13 +175,11 @@ export default function PagamentosPage() {
       const res = await fetch("/api/withdraw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // Afiliado, nome e chave PIX são resolvidos pela sessão no servidor.
         body: JSON.stringify({
-          affiliateId: affiliate.id,
-          affiliateName: profile?.full_name || "Afiliado",
           amount: formatCurrency(withdrawableCents / 100),
           amountCents: netCents,
           dateLabel: confirmGroup.dateLabel,
-          pixKey: currentPixKey,
         }),
       });
 

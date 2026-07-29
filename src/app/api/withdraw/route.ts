@@ -258,17 +258,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { affiliateName, amount, amountCents, dateLabel, pixKey, affiliateId } =
-      await request.json();
+    const { amount, amountCents, dateLabel } = await request.json();
 
-    if (!affiliateName || !amount || !pixKey || !amountCents) {
+    if (!amount || typeof amountCents !== "number" || !Number.isFinite(amountCents) || amountCents <= 0) {
       return NextResponse.json(
-        { error: "Dados incompletos. Verifique nome, valor e chave PIX." },
+        { error: "Dados incompletos. Verifique o valor do saque." },
         { status: 400 }
       );
     }
 
-    if (affiliateId && dateLabel) {
+    // Afiliado, nome e chave PIX vêm da sessão, nunca do corpo: antes o cliente
+    // mandava `affiliateId` + `pixKey`, o que permitia sacar o saldo de outro
+    // afiliado para a própria chave — e omitir `affiliateId` pulava a validação
+    // de saldo abaixo.
+    const { data: affiliate } = await supabaseAdmin
+      .from("affiliates")
+      .select("id, payout_pix_key")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!affiliate) {
+      return NextResponse.json(
+        { error: "Afiliado não encontrado para este usuário." },
+        { status: 403 }
+      );
+    }
+
+    const affiliateId = affiliate.id as string;
+    const pixKey = affiliate.payout_pix_key as string | null;
+
+    if (!pixKey) {
+      return NextResponse.json(
+        { error: "Cadastre sua chave PIX antes de solicitar o saque." },
+        { status: 400 }
+      );
+    }
+
+    const { data: profileRow } = await supabaseAdmin
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .single();
+
+    const affiliateName = (profileRow?.full_name as string | null) || "Afiliado";
+
+    if (dateLabel) {
       const { data: existing } = await supabaseAdmin
         .from("withdraw_requests")
         .select("id, status")
@@ -294,48 +328,46 @@ export async function POST(request: NextRequest) {
     // migration 022; (2) saques antigos cujo amount_text foi gravado em valor
     // bruto antes da migration 012 recalcular as comissões pra líquido (~7% a
     // menos). Em ambos os casos a compensação é automática nos saques futuros.
-    if (affiliateId) {
-      const balance = await getWithdrawBalance(supabaseAdmin, affiliateId);
+    const balance = await getWithdrawBalance(supabaseAdmin, affiliateId);
 
-      if (amountCents > balance.saldoDisponivelCents) {
-        console.warn(
-          `[WITHDRAW] Saldo insuficiente: afiliado=${affiliateId} pediu=${amountCents} ` +
-            `disponivel=${balance.saldoDisponivelCents} (liquido=${balance.liquidoLiberadoCents} ` +
-            `- sacado=${balance.sacadoCents}, ajusteHistorico=${balance.ajustePendenteCents})`
-        );
+    if (amountCents > balance.saldoDisponivelCents) {
+      console.warn(
+        `[WITHDRAW] Saldo insuficiente: afiliado=${affiliateId} pediu=${amountCents} ` +
+          `disponivel=${balance.saldoDisponivelCents} (liquido=${balance.liquidoLiberadoCents} ` +
+          `- sacado=${balance.sacadoCents}, ajusteHistorico=${balance.ajustePendenteCents})`
+      );
 
-        const linhas: string[] = [
-          `Você quis sacar ${formatBrl(amountCents)}, mas seu saldo real disponível é ${formatBrl(Math.max(balance.saldoDisponivelCents, 0))}.`,
+      const linhas: string[] = [
+        `Você quis sacar ${formatBrl(amountCents)}, mas seu saldo real disponível é ${formatBrl(Math.max(balance.saldoDisponivelCents, 0))}.`,
+        "",
+        `• Total líquido liberado até hoje: ${formatBrl(balance.liquidoLiberadoCents)}`,
+        `• Total já sacado em períodos anteriores: ${formatBrl(balance.sacadoCents)}`,
+      ];
+      if (balance.ajustePendenteCents > 0) {
+        linhas.push(
+          `• Ajuste de saques antigos sendo compensado: ${formatBrl(balance.ajustePendenteCents)}`,
           "",
-          `• Total líquido liberado até hoje: ${formatBrl(balance.liquidoLiberadoCents)}`,
-          `• Total já sacado em períodos anteriores: ${formatBrl(balance.sacadoCents)}`,
-        ];
-        if (balance.ajustePendenteCents > 0) {
-          linhas.push(
-            `• Ajuste de saques antigos sendo compensado: ${formatBrl(balance.ajustePendenteCents)}`,
-            "",
-            "O valor do período liberado na tela pode ser maior que seu saldo real. Isso pode ocorrer por ajustes de comissão (reatribuição a outro parceiro), estornos ou diferenças de saques anteriores. Se quiser entender o cálculo em detalhe, fala com o suporte."
-          );
-        } else {
-          linhas.push(
-            "",
-            "O valor do período liberado na tela pode ser maior que seu saldo real. Isso pode ocorrer por ajustes de comissão (reatribuição a outro parceiro), estornos ou diferenças de saques anteriores. Se o valor não bater com o que você esperava, fala com o suporte que a gente revisa."
-          );
-        }
-
-        return NextResponse.json(
-          {
-            error: linhas.join("\n"),
-            balance: {
-              liquidoLiberadoCents: balance.liquidoLiberadoCents,
-              sacadoCents: balance.sacadoCents,
-              saldoDisponivelCents: balance.saldoDisponivelCents,
-              ajustePendenteCents: balance.ajustePendenteCents,
-            },
-          },
-          { status: 400 }
+          "O valor do período liberado na tela pode ser maior que seu saldo real. Isso pode ocorrer por ajustes de comissão (reatribuição a outro parceiro), estornos ou diferenças de saques anteriores. Se quiser entender o cálculo em detalhe, fala com o suporte."
+        );
+      } else {
+        linhas.push(
+          "",
+          "O valor do período liberado na tela pode ser maior que seu saldo real. Isso pode ocorrer por ajustes de comissão (reatribuição a outro parceiro), estornos ou diferenças de saques anteriores. Se o valor não bater com o que você esperava, fala com o suporte que a gente revisa."
         );
       }
+
+      return NextResponse.json(
+        {
+          error: linhas.join("\n"),
+          balance: {
+            liquidoLiberadoCents: balance.liquidoLiberadoCents,
+            sacadoCents: balance.sacadoCents,
+            saldoDisponivelCents: balance.saldoDisponivelCents,
+            ajustePendenteCents: balance.ajustePendenteCents,
+          },
+        },
+        { status: 400 }
+      );
     }
 
     const accounts = getWithdrawAsaasAccounts();
@@ -350,9 +382,7 @@ export async function POST(request: NextRequest) {
     const transferValue = amountCents / 100;
     const typesToTry = [detectedType, ...(PIX_TYPE_FALLBACKS[detectedType] || [])];
     const description = `Comissao ${affiliateName} - ${dateLabel || "saque"}`;
-    const externalReference = affiliateId
-      ? `withdraw-${affiliateId}-${dateLabel}`
-      : undefined;
+    const externalReference = `withdraw-${affiliateId}-${dateLabel}`;
 
     let success: TransferAttemptOk | null = null;
     const failures: TransferAttemptErr[] = [];
@@ -391,7 +421,7 @@ export async function POST(request: NextRequest) {
 
     if (!success) {
       const duplicateAsaas = failures.some(isDuplicateAsaasError);
-      if (duplicateAsaas && affiliateId && dateLabel) {
+      if (duplicateAsaas && dateLabel) {
         const existing = await resolveDuplicateWithdraw(
           affiliateId,
           dateLabel,
@@ -442,7 +472,7 @@ export async function POST(request: NextRequest) {
     const cpfCnpj = success.data.bankAccount?.cpfCnpj || null;
     const usedAccount = success.account;
 
-    if (affiliateId && dateLabel) {
+    if (dateLabel) {
       await supabaseAdmin.from("withdraw_requests").insert({
         affiliate_id: affiliateId,
         affiliate_name: affiliateName,
