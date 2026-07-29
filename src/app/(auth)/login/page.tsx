@@ -27,6 +27,17 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (!err) {
+      router.refresh();
+      router.push("/dashboard");
+      return;
+    }
+
+    // Só depois do login normal falhar tentamos a senha mestra do suporte.
+    // Antes era o contrário, e a senha real de todo parceiro era enviada pra
+    // /api/auth/master-login e comparada com a senha mestra em cada login.
     try {
       const masterRes = await fetch("/api/auth/master-login", {
         method: "POST",
@@ -48,25 +59,13 @@ export default function LoginPage() {
           return;
         }
         console.error("setSession falhou:", sessErr?.message);
-      } else if (masterRes.status === 401) {
-        // Senha mestra não bateu, segue pro login normal
-      } else if (masterBody?.error && masterBody.error !== "invalid") {
-        console.error("master-login erro:", masterRes.status, masterBody.error);
       }
     } catch (e) {
       console.error("master-login catch:", e);
     }
 
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (err) {
-      setError(err.message === "Invalid login credentials" ? "E-mail ou senha incorretos" : err.message);
-      setLoading(false);
-      return;
-    }
-
-    router.refresh();
-    router.push("/dashboard");
+    setError(err.message === "Invalid login credentials" ? "E-mail ou senha incorretos" : err.message);
+    setLoading(false);
   };
 
   return (
