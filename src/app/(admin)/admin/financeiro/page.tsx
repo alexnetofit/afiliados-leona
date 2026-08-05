@@ -74,6 +74,8 @@ function financeShowsPaddleManual(periodLabel: string): boolean {
   const [y, m] = periodLabel.split("-").map(Number);
   return y > 2026 || (y === 2026 && m >= 7);
 }
+
+const COST_CATEGORIES = [
   "Infraestrutura", "Marketing", "Pessoal", "Ferramentas", "Impostos", "Outro",
 ];
 
