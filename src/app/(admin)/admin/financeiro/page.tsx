@@ -34,6 +34,7 @@ interface Period {
   stripeRevenueUsdCents: number;
   abacateRevenueCents: number;
   pagarmeRevenueCents: number;
+  paddleRevenueCents: number;
   usdBrlRate: number;
   affiliateCostCents: number;
   manualCosts: ManualCost[];
@@ -46,6 +47,7 @@ interface RevenueCache {
   stripeRevenueUsdCents: number;
   abacateRevenueCents: number;
   pagarmeRevenueCents: number;
+  paddleRevenueCents: number;
   usdBrlRate: number;
 }
 
@@ -67,7 +69,11 @@ function writeRevenueCache(label: string, data: RevenueCache) {
   } catch { /* */ }
 }
 
-const COST_CATEGORIES = [
+/** A partir de Jul/2026: card Paddle manual (Payoneer). */
+function financeShowsPaddleManual(periodLabel: string): boolean {
+  const [y, m] = periodLabel.split("-").map(Number);
+  return y > 2026 || (y === 2026 && m >= 7);
+}
   "Infraestrutura", "Marketing", "Pessoal", "Ferramentas", "Impostos", "Outro",
 ];
 
@@ -149,6 +155,8 @@ export default function FinanceiroPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [editingAbacate, setEditingAbacate] = useState<string | null>(null);
   const [abacateInput, setAbacateInput] = useState("");
+  const [editingPaddle, setEditingPaddle] = useState<string | null>(null);
+  const [paddleInput, setPaddleInput] = useState("");
   const [dolarHoje, setDolarHoje] = useState<number | null>(null);
   const didInit = useRef(false);
 
@@ -204,6 +212,7 @@ export default function FinanceiroPage() {
             stripeRevenueUsdCents: pagarmeOnly ? 0 : data.stripeRevenueUsdCents,
             abacateRevenueCents: keepAbacate ? p.abacateRevenueCents : (pagarmeOnly ? 0 : data.abacateRevenueCents),
             pagarmeRevenueCents: data.pagarmeRevenueCents ?? 0,
+            paddleRevenueCents: p.paddleRevenueCents ?? 0,
             usdBrlRate: pagarmeOnly ? 0 : data.usdBrlRate,
           };
           writeRevenueCache(label, rev);
@@ -353,6 +362,7 @@ export default function FinanceiroPage() {
           stripeRevenueUsdCents: p.stripeRevenueUsdCents,
           abacateRevenueCents: cents,
           pagarmeRevenueCents: p.pagarmeRevenueCents,
+          paddleRevenueCents: p.paddleRevenueCents ?? 0,
           usdBrlRate: p.usdBrlRate,
         });
         return updated;
@@ -368,6 +378,36 @@ export default function FinanceiroPage() {
       });
     } catch (e) {
       console.error("Erro ao persistir AbacatePay:", e);
+    }
+  };
+
+  const handleSavePaddle = async (label: string) => {
+    const cents = Math.round(parseFloat(paddleInput || "0") * 100);
+    setPeriods((prev) =>
+      prev.map((p) => {
+        if (p.label !== label) return p;
+        const updated = { ...p, paddleRevenueCents: cents, revenueCached: true };
+        writeRevenueCache(label, {
+          stripeRevenueBrlCents: p.stripeRevenueBrlCents,
+          stripeRevenueUsdCents: p.stripeRevenueUsdCents,
+          abacateRevenueCents: p.abacateRevenueCents,
+          pagarmeRevenueCents: p.pagarmeRevenueCents,
+          paddleRevenueCents: cents,
+          usdBrlRate: p.usdBrlRate,
+        });
+        return updated;
+      })
+    );
+    setEditingPaddle(null);
+    setPaddleInput("");
+    try {
+      await fetch("/api/admin/financeiro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ period_label: label, paddle_revenue_cents: cents }),
+      });
+    } catch (e) {
+      console.error("Erro ao persistir Paddle:", e);
     }
   };
 
@@ -392,8 +432,9 @@ export default function FinanceiroPage() {
   };
 
   const getPeriodRevenue = (p: Period, stripeBrl: number) => {
-    if (financeUsesPagarmeOnly(p.label)) return p.pagarmeRevenueCents || 0;
-    return stripeBrl + p.abacateRevenueCents + (p.pagarmeRevenueCents || 0);
+    const paddle = p.paddleRevenueCents || 0;
+    if (financeUsesPagarmeOnly(p.label)) return (p.pagarmeRevenueCents || 0) + paddle;
+    return stripeBrl + p.abacateRevenueCents + (p.pagarmeRevenueCents || 0) + paddle;
   };
 
   const getRate = (p: Period) => {
@@ -558,7 +599,9 @@ export default function FinanceiroPage() {
             const stripeBrl = getStripeBrl(period);
             const rate = getRate(period);
             const pagarmeCents = period.pagarmeRevenueCents || 0;
+            const paddleCents = period.paddleRevenueCents || 0;
             const pagarmeOnly = financeUsesPagarmeOnly(period.label);
+            const showPaddle = financeShowsPaddleManual(period.label);
             const totalRevenue = getPeriodRevenue(period, stripeBrl);
             const manualCostsCents = getManualCostsExcludingAutoTax(period);
             const autoTaxCents = getAutoPagarmeTaxCents(period.label, pagarmeCents);
@@ -671,7 +714,11 @@ export default function FinanceiroPage() {
 
                     <div className={cn(
                       "grid grid-cols-1 gap-3",
-                      pagarmeOnly ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-4"
+                      pagarmeOnly
+                        ? showPaddle
+                          ? "sm:grid-cols-3"
+                          : "sm:grid-cols-2"
+                        : "sm:grid-cols-2 lg:grid-cols-4"
                     )}>
                       {!pagarmeOnly && (
                         <>
@@ -755,6 +802,54 @@ export default function FinanceiroPage() {
                           <p className="text-lg font-bold text-zinc-300 mt-1">—</p>
                         )}
                       </div>
+                      {showPaddle && (
+                        <div className={cn("p-3 rounded-lg border relative", hasRevData || paddleCents > 0 ? "bg-sky-50 border-sky-100" : "bg-zinc-50 border-zinc-200")}>
+                          <div className="flex items-center justify-between">
+                            <p className={cn("text-[10px] font-medium uppercase tracking-wider", hasRevData || paddleCents > 0 ? "text-sky-600" : "text-zinc-400")}>
+                              Paddle (Payoneer)
+                            </p>
+                            {editingPaddle !== period.label ? (
+                              <button
+                                onClick={() => {
+                                  setEditingPaddle(period.label);
+                                  setPaddleInput(paddleCents > 0 ? (paddleCents / 100).toFixed(2) : "");
+                                }}
+                                className="p-0.5 rounded hover:bg-sky-100 text-sky-400 hover:text-sky-600 transition-colors"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleSavePaddle(period.label)}
+                                className="p-0.5 rounded hover:bg-sky-100 text-sky-600 transition-colors"
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          {editingPaddle === period.label ? (
+                            <div className="mt-1 flex items-center gap-1">
+                              <span className="text-sm font-bold text-sky-700">R$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={paddleInput}
+                                onChange={(e) => setPaddleInput(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && handleSavePaddle(period.label)}
+                                className="w-full text-lg font-bold text-sky-700 bg-white border border-sky-200 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                                autoFocus
+                              />
+                            </div>
+                          ) : (
+                            <>
+                              <p className={cn("text-lg font-bold mt-1", paddleCents > 0 ? "text-sky-700" : hasRevData ? "text-zinc-300" : "text-zinc-300")}>
+                                {paddleCents > 0 ? formatCurrency(paddleCents / 100) : hasRevData ? "R$ 0,00" : "—"}
+                              </p>
+                              <p className="text-[10px] text-sky-500 mt-0.5">Manual · D+30 Payoneer</p>
+                            </>
+                          )}
+                        </div>
+                      )}
                       <div className="p-3 rounded-lg bg-warning-50 border border-warning-100">
                         <p className="text-[10px] font-medium text-warning-600 uppercase tracking-wider">
                           Afiliados {hasRevData && totalRevenue > 0 ? `(${affiliatePercent}%)` : ""}

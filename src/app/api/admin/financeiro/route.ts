@@ -231,6 +231,7 @@ interface PeriodData {
   stripeRevenueUsdCents: number;
   abacateRevenueCents: number;
   pagarmeRevenueCents: number;
+  paddleRevenueCents: number;
   usdBrlRate: number;
   affiliateCostCents: number;
   manualCosts: Array<{ id: string; category: string; description: string | null; amount_cents: number }>;
@@ -313,7 +314,7 @@ export async function GET(request: NextRequest) {
 
     const { data: existingRevenue } = await supabaseAdmin
       .from("period_revenue")
-      .select("abacate_revenue_cents, pagarme_revenue_cents")
+      .select("abacate_revenue_cents, pagarme_revenue_cents, paddle_revenue_cents")
       .eq("period_label", revenueParam)
       .single();
 
@@ -340,6 +341,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const paddleCents = existingRevenue?.paddle_revenue_cents ?? 0;
+
     // Salva no banco SEMPRE (inclusive período atual). Para o período atual
     // o usuário pode clicar em "Atualizar faturamento" pra forçar refresh,
     // mas o valor mais recente fica persistido pra evitar ter que buscar
@@ -350,6 +353,7 @@ export async function GET(request: NextRequest) {
       stripe_revenue_brl_cents: stripeBrlCents,
       abacate_revenue_cents: abacateCents,
       pagarme_revenue_cents: pagarmeCents,
+      paddle_revenue_cents: paddleCents,
       usd_brl_rate: usdBrlRate,
       cached_at: new Date().toISOString(),
     });
@@ -361,6 +365,7 @@ export async function GET(request: NextRequest) {
       stripeRevenueBrlCents: stripeBrlCents,
       abacateRevenueCents: abacateCents,
       pagarmeRevenueCents: pagarmeCents,
+      paddleRevenueCents: paddleCents,
       usdBrlRate,
     });
   }
@@ -377,7 +382,7 @@ export async function GET(request: NextRequest) {
   const globalStart = allRanges[allRanges.length - 1].start;
   const globalEnd = allRanges[0].end;
 
-  type CachedRev = { period_label: string; stripe_revenue_usd_cents: number; stripe_revenue_brl_cents: number; abacate_revenue_cents: number; pagarme_revenue_cents: number; usd_brl_rate: number };
+  type CachedRev = { period_label: string; stripe_revenue_usd_cents: number; stripe_revenue_brl_cents: number; abacate_revenue_cents: number; pagarme_revenue_cents: number; paddle_revenue_cents: number; usd_brl_rate: number };
 
   // PostgREST tem limite default de 1000 linhas por request. Como esse fetch
   // varre TODAS as transações desde Jan/2026, a partir de ~1k transações
@@ -420,7 +425,7 @@ export async function GET(request: NextRequest) {
     Promise.resolve(
       supabaseAdmin
         .from("period_revenue")
-        .select("period_label, stripe_revenue_usd_cents, stripe_revenue_brl_cents, abacate_revenue_cents, pagarme_revenue_cents, usd_brl_rate")
+        .select("period_label, stripe_revenue_usd_cents, stripe_revenue_brl_cents, abacate_revenue_cents, pagarme_revenue_cents, paddle_revenue_cents, usd_brl_rate")
         .in("period_label", periods)
     ).then((r) => (r.data || []) as CachedRev[])
       .catch(() => [] as CachedRev[]),
@@ -455,6 +460,7 @@ export async function GET(request: NextRequest) {
       stripeRevenueUsdCents: pagarmeOnly ? 0 : (cached ? cached.stripe_revenue_usd_cents : 0),
       abacateRevenueCents: pagarmeOnly ? 0 : (cached ? cached.abacate_revenue_cents : 0),
       pagarmeRevenueCents: cached ? (cached.pagarme_revenue_cents ?? 0) : 0,
+      paddleRevenueCents: cached ? (cached.paddle_revenue_cents ?? 0) : 0,
       usdBrlRate: pagarmeOnly ? 0 : (cached ? Number(cached.usd_brl_rate) : 0),
       affiliateCostCents,
       manualCosts,
@@ -470,9 +476,7 @@ export async function GET(request: NextRequest) {
   });
 }
 
-// PATCH/POST: persiste edições manuais do faturamento (AbacatePay) no DB.
-// Necessário porque a API da AbacatePay nem sempre retorna os saques certos
-// e o admin precisa ajustar manualmente sem perder o valor a cada reload.
+// POST: persiste edições manuais do faturamento (AbacatePay / Paddle) no DB.
 export async function POST(request: NextRequest) {
   if (!(await verifyAdmin())) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -481,9 +485,19 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const periodLabel: string | undefined = body.period_label;
   const abacateCents: number | undefined = body.abacate_revenue_cents;
+  const paddleCents: number | undefined = body.paddle_revenue_cents;
 
-  if (!periodLabel || typeof abacateCents !== "number" || abacateCents < 0) {
-    return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
+  if (!periodLabel) {
+    return NextResponse.json({ error: "Missing period_label" }, { status: 400 });
+  }
+  if (abacateCents === undefined && paddleCents === undefined) {
+    return NextResponse.json({ error: "Missing revenue field" }, { status: 400 });
+  }
+  if (abacateCents !== undefined && (typeof abacateCents !== "number" || abacateCents < 0)) {
+    return NextResponse.json({ error: "Invalid abacate_revenue_cents" }, { status: 400 });
+  }
+  if (paddleCents !== undefined && (typeof paddleCents !== "number" || paddleCents < 0)) {
+    return NextResponse.json({ error: "Invalid paddle_revenue_cents" }, { status: 400 });
   }
 
   const { data: existing } = await supabaseAdmin
@@ -496,8 +510,11 @@ export async function POST(request: NextRequest) {
     period_label: periodLabel,
     stripe_revenue_usd_cents: existing?.stripe_revenue_usd_cents ?? 0,
     stripe_revenue_brl_cents: existing?.stripe_revenue_brl_cents ?? 0,
-    abacate_revenue_cents: Math.round(abacateCents),
+    abacate_revenue_cents:
+      abacateCents !== undefined ? Math.round(abacateCents) : (existing?.abacate_revenue_cents ?? 0),
     pagarme_revenue_cents: existing?.pagarme_revenue_cents ?? 0,
+    paddle_revenue_cents:
+      paddleCents !== undefined ? Math.round(paddleCents) : (existing?.paddle_revenue_cents ?? 0),
     usd_brl_rate: existing?.usd_brl_rate ?? 0,
     cached_at: new Date().toISOString(),
   };
@@ -507,5 +524,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, abacateRevenueCents: row.abacate_revenue_cents });
+  return NextResponse.json({
+    ok: true,
+    abacateRevenueCents: row.abacate_revenue_cents,
+    paddleRevenueCents: row.paddle_revenue_cents,
+  });
 }
