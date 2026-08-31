@@ -7,6 +7,25 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const PAGE_SIZE = 1000;
+
+async function fetchAllPaged<T>(
+  makeQuery: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: T[] | null; error: unknown }>
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let page = 0; page < 200; page++) {
+    const from = page * PAGE_SIZE;
+    const { data, error } = await makeQuery(from, from + PAGE_SIZE - 1);
+    if (error || !data || data.length === 0) break;
+    out.push(...data);
+    if (data.length < PAGE_SIZE) break;
+  }
+  return out;
+}
+
 export async function PATCH(request: Request) {
   try {
     const supabase = await createServerClient();
@@ -87,66 +106,72 @@ export async function GET() {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
-    // Fetch all affiliates
-    const { data: affiliatesData } = await supabaseAdmin
-      .from("affiliates")
-      .select("id, affiliate_code, commission_tier, paid_subscriptions_count, tier_locked, is_active, created_at, user_id")
-      .order("created_at", { ascending: false });
+    // PostgREST corta em 1000 linhas. Sem range a lista do admin parava em 1000
+    // enquanto o banco já passou disso.
+    type AffiliateRow = {
+      id: string;
+      affiliate_code: string;
+      commission_tier: number;
+      paid_subscriptions_count: number;
+      tier_locked: boolean;
+      is_active: boolean;
+      created_at: string;
+      user_id: string;
+    };
+    const affiliatesData = await fetchAllPaged<AffiliateRow>((from, to) =>
+      supabaseAdmin
+        .from("affiliates")
+        .select("id, affiliate_code, commission_tier, paid_subscriptions_count, tier_locked, is_active, created_at, user_id")
+        .order("created_at", { ascending: false })
+        .range(from, to)
+    );
 
-    if (!affiliatesData) {
+    if (!affiliatesData.length) {
       return NextResponse.json({ affiliates: [] });
     }
 
-    // Fetch all profiles in one query
-    const userIds = affiliatesData.map((a) => a.user_id);
-    const { data: profiles } = await supabaseAdmin
-      .from("profiles")
-      .select("id, full_name")
-      .in("id", userIds);
-
-    const profileMap = new Map(
-      (profiles || []).map((p) => [p.id, p.full_name])
+    const profiles = await fetchAllPaged<{ id: string; full_name: string | null }>((from, to) =>
+      supabaseAdmin.from("profiles").select("id, full_name").range(from, to)
     );
+    const profileMap = new Map(profiles.map((p) => [p.id, p.full_name]));
 
-    // Fetch all users emails via admin API (paginated)
     const emailMap = new Map<string, string>();
-    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-    for (const u of users || []) {
-      if (u.email) emailMap.set(u.id, u.email);
+    for (let page = 1; page <= 20; page++) {
+      const { data } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: PAGE_SIZE });
+      const users = data?.users || [];
+      for (const u of users) {
+        if (u.email) emailMap.set(u.id, u.email);
+      }
+      if (users.length < PAGE_SIZE) break;
     }
 
-    // Fetch transactions for all affiliates (paginated to avoid truncation)
-    const affiliateIds = affiliatesData.map((a) => a.id);
     const commissionMap = new Map<string, number>();
-    const PAGE_SIZE = 1000;
-    let from = 0;
-    while (true) {
-      const { data: page } = await supabaseAdmin
+    const commissionRows = await fetchAllPaged<{
+      affiliate_id: string;
+      commission_amount_cents: number;
+    }>((from, to) =>
+      supabaseAdmin
         .from("transactions")
         .select("affiliate_id, commission_amount_cents")
-        .in("affiliate_id", affiliateIds)
         .eq("type", "commission")
-        .range(from, from + PAGE_SIZE - 1);
-      if (!page || page.length === 0) break;
-      for (const tx of page) {
-        commissionMap.set(
-          tx.affiliate_id,
-          (commissionMap.get(tx.affiliate_id) || 0) + tx.commission_amount_cents
-        );
-      }
-      if (page.length < PAGE_SIZE) break;
-      from += PAGE_SIZE;
+        .range(from, to)
+    );
+    for (const tx of commissionRows) {
+      commissionMap.set(
+        tx.affiliate_id,
+        (commissionMap.get(tx.affiliate_id) || 0) + tx.commission_amount_cents
+      );
     }
 
-    // Fetch active subscription counts in one query
-    const { data: activeSubs } = await supabaseAdmin
-      .from("subscriptions")
-      .select("affiliate_id")
-      .in("affiliate_id", affiliateIds)
-      .eq("status", "active");
-
+    const activeSubs = await fetchAllPaged<{ affiliate_id: string }>((from, to) =>
+      supabaseAdmin
+        .from("subscriptions")
+        .select("affiliate_id")
+        .eq("status", "active")
+        .range(from, to)
+    );
     const activeSubMap = new Map<string, number>();
-    for (const sub of activeSubs || []) {
+    for (const sub of activeSubs) {
       activeSubMap.set(
         sub.affiliate_id,
         (activeSubMap.get(sub.affiliate_id) || 0) + 1

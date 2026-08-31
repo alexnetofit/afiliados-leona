@@ -26,26 +26,31 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const [affiliatesRes, subscriptionsRes, transactionsRes, payoutsRes] = await Promise.all([
-          supabase.from("affiliates").select("id, is_active"),
+        const [
+          affiliatesTotalRes,
+          affiliatesActiveRes,
+          subscriptionsRes,
+          transactionsRes,
+          payoutsRes,
+        ] = await Promise.all([
+          supabase.from("affiliates").select("id", { count: "exact", head: true }),
+          supabase.from("affiliates").select("id", { count: "exact", head: true }).eq("is_active", true),
           supabase.from("subscriptions").select("id, status"),
           supabase.from("transactions").select("type, commission_amount_cents"),
           supabase.from("monthly_payouts").select("total_payable_cents, status"),
         ]);
 
-        type AffiliateRow = { id: string; is_active: boolean };
         type SubscriptionRow = { id: string; status: string };
         type TransactionRow = { type: string; commission_amount_cents: number };
         type PayoutRow = { total_payable_cents: number; status: string };
 
-        const affiliates = (affiliatesRes.data || []) as AffiliateRow[];
         const subscriptions = (subscriptionsRes.data || []) as SubscriptionRow[];
         const transactions = (transactionsRes.data || []) as TransactionRow[];
         const payouts = (payoutsRes.data || []) as PayoutRow[];
 
         setStats({
-          totalAffiliates: affiliates.length,
-          activeAffiliates: affiliates.filter((a) => a.is_active).length,
+          totalAffiliates: affiliatesTotalRes.count ?? 0,
+          activeAffiliates: affiliatesActiveRes.count ?? 0,
           totalSubscriptions: subscriptions.length,
           activeSubscriptions: subscriptions.filter((s) => s.status === "active").length,
           totalCommissions: transactions.filter((t) => t.type === "commission").reduce((sum, t) => sum + t.commission_amount_cents, 0),
