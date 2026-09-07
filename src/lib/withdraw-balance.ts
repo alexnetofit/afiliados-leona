@@ -122,6 +122,39 @@ export async function getWithdrawBalance(
   };
 }
 
+/**
+ * Marca como pago os períodos já cobertos por saques anteriores.
+ * O saldo real (líquido − PIX) explica só os buckets mais novos;
+ * o resto "Disponível" é fantasma — o valor já saiu num saque de
+ * outro date_label.
+ */
+export function applyWithdrawCoverage<T extends {
+  dateKey: string;
+  totalCents: number;
+  status: "paid" | "available" | "pending";
+}>(groups: T[], saldoDisponivelCents: number | null | undefined): T[] {
+  if (saldoDisponivelCents == null || !Number.isFinite(saldoDisponivelCents)) {
+    return groups;
+  }
+  const need = Math.max(saldoDisponivelCents, 0);
+  const availableNewestFirst = groups
+    .filter((g) => g.status === "available")
+    .slice()
+    .sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+  const keepAvailable = new Set<string>();
+  let left = need;
+  for (const g of availableNewestFirst) {
+    if (left <= 0) break;
+    keepAvailable.add(g.dateKey);
+    left -= g.totalCents;
+  }
+  return groups.map((g) => {
+    if (g.status !== "available") return g;
+    if (keepAvailable.has(g.dateKey)) return g;
+    return { ...g, status: "paid" as const };
+  });
+}
+
 export function formatBrl(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", {
     style: "currency",

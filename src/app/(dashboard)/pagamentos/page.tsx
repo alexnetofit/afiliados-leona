@@ -16,6 +16,7 @@ import {
   PAYMENT_HISTORY_MONTHS,
 } from "@/lib/utils";
 import { isTopAffiliateEmail } from "@/lib/top-affiliate";
+import { applyWithdrawCoverage } from "@/lib/withdraw-balance";
 
 interface PaymentGroup {
   dateKey: string;
@@ -298,34 +299,39 @@ export default function PagamentosPage() {
     return Array.from(groups.values()).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
   }, [transactions, paidMonths, subscriptionNames]);
 
+  const coveredPaymentGroups = useMemo(
+    () => applyWithdrawCoverage(paymentGroups, withdrawBalance?.saldoDisponivelCents),
+    [paymentGroups, withdrawBalance?.saldoDisponivelCents]
+  );
+
   const visiblePaymentGroups = useMemo(
-    () => paymentGroups.filter((g) => isWithinPaymentHistoryWindow(g.dateKey)),
-    [paymentGroups]
+    () => coveredPaymentGroups.filter((g) => isWithinPaymentHistoryWindow(g.dateKey)),
+    [coveredPaymentGroups]
   );
 
   const primaryWithdrawGroup = useMemo(() => {
     return (
-      paymentGroups.find(
+      coveredPaymentGroups.find(
         (g) =>
           g.status === "available" &&
           (!withdrawnGroups.has(g.dateLabel) ||
             withdrawnGroups.get(g.dateLabel)?.status === "failed")
       ) ?? null
     );
-  }, [paymentGroups, withdrawnGroups]);
+  }, [coveredPaymentGroups, withdrawnGroups]);
 
   const primaryWithdrawVisible =
     !!primaryWithdrawGroup &&
     isWithinPaymentHistoryWindow(primaryWithdrawGroup.dateKey);
 
   // Summary metrics
-  const totalPaid = paymentGroups
+  const totalPaid = coveredPaymentGroups
     .filter(g => g.status === "paid" || (g.status === "available" && withdrawnGroups.get(g.dateLabel)?.status === "paid"))
     .reduce((sum, g) => sum + g.totalCents, 0);
-  const totalAvailableBuckets = paymentGroups
+  const totalAvailableBuckets = coveredPaymentGroups
     .filter(g => g.status === "available" && withdrawnGroups.get(g.dateLabel)?.status !== "paid")
     .reduce((sum, g) => sum + g.totalCents, 0);
-  const totalPending = paymentGroups
+  const totalPending = coveredPaymentGroups
     .filter(g => g.status === "pending")
     .reduce((sum, g) => sum + g.totalCents, 0);
 
