@@ -6,13 +6,15 @@ import {
   wiseConfigured as isWiseConfigured,
   type WiseTransaction,
 } from "@/lib/wise";
+import {
+  resolveTopAffiliate,
+  TOP_AFFILIATE_EMAIL,
+} from "@/lib/top-affiliate";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-
-const TOP_AFFILIATE_EMAIL = "tbnegociodigital@gmail.com";
 
 export async function GET(request: NextRequest) {
   const supabase = await createServerClient();
@@ -30,26 +32,7 @@ export async function GET(request: NextRequest) {
   if (profile?.role !== "admin")
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const { data: users } = await supabaseAdmin.auth.admin.listUsers({
-    page: 1,
-    perPage: 1000,
-  });
-  const targetUser = users?.users?.find(
-    (u) => u.email?.toLowerCase() === TOP_AFFILIATE_EMAIL
-  );
-  if (!targetUser) {
-    return NextResponse.json(
-      { error: "affiliate_not_found" },
-      { status: 404 }
-    );
-  }
-
-  const { data: affiliate } = await supabaseAdmin
-    .from("affiliates")
-    .select("id, affiliate_code, commission_tier, paid_subscriptions_count")
-    .eq("user_id", targetUser.id)
-    .single();
-
+  const affiliate = await resolveTopAffiliate(supabaseAdmin);
   if (!affiliate) {
     return NextResponse.json(
       { error: "affiliate_not_found" },
@@ -60,7 +43,7 @@ export async function GET(request: NextRequest) {
   const { data: profileData } = await supabaseAdmin
     .from("profiles")
     .select("full_name")
-    .eq("id", targetUser.id)
+    .eq("id", affiliate.user_id)
     .single();
 
   // Paginação manual: o Supabase limita cada query a 1000 linhas. Afiliados com
@@ -152,9 +135,14 @@ export async function GET(request: NextRequest) {
   } | null = null;
 
   if (wiseParam === "true") {
-    const startDate = "2026-01-01";
-    const endDate = now.toISOString().split("T")[0];
-    wiseData = await fetchWiseCardSpending(startDate, endDate);
+    try {
+      const startDate = "2026-01-01";
+      const endDate = now.toISOString().split("T")[0];
+      wiseData = await fetchWiseCardSpending(startDate, endDate);
+    } catch (err) {
+      console.error("[top-affiliates] wise:", err);
+      wiseData = null;
+    }
   }
 
   const wiseConfigured = isWiseConfigured();

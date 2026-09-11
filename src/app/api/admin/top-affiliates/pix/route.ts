@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { resolveTopAffiliate } from "@/lib/top-affiliate";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-
-const TOP_AFFILIATE_EMAIL = "tbnegociodigital@gmail.com";
 
 async function verifyAdminAndGetEmail(): Promise<string | null> {
   const supabase = await createServerClient();
@@ -25,21 +24,7 @@ async function verifyAdminAndGetEmail(): Promise<string | null> {
 }
 
 async function resolveTopAffiliateId(): Promise<string | null> {
-  const { data: users } = await supabaseAdmin.auth.admin.listUsers({
-    page: 1,
-    perPage: 1000,
-  });
-  const targetUser = users?.users?.find(
-    (u) => u.email?.toLowerCase() === TOP_AFFILIATE_EMAIL
-  );
-  if (!targetUser) return null;
-
-  const { data: affiliate } = await supabaseAdmin
-    .from("affiliates")
-    .select("id")
-    .eq("user_id", targetUser.id)
-    .single();
-
+  const affiliate = await resolveTopAffiliate(supabaseAdmin);
   return affiliate?.id ?? null;
 }
 

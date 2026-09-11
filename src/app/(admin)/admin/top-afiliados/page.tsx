@@ -95,9 +95,16 @@ export default function TopAfiliadosPage() {
     try {
       const url = `/api/admin/top-affiliates${withWise ? "?wise=true" : ""}`;
       const res = await fetch(url);
-      if (!res.ok) throw new Error("Erro ao carregar dados");
+      if (!res.ok) {
+        if (withWise) {
+          await fetchData(false);
+          return;
+        }
+        throw new Error("Erro ao carregar dados");
+      }
       const json = await res.json();
       setData(json);
+      setError("");
     } catch {
       setError("Erro ao carregar dados do afiliado");
     }
