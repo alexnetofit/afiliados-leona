@@ -724,6 +724,33 @@ async function processGuruCommission(
   const paidAt = paidAtFromPayload(body);
   const availableAt = calculateAvailableAtBRT(paidAt);
 
+  if (subscriptionId && /^pagou:pagarme:(ch_|or_)/i.test(guruId)) {
+    const start = new Date(paidAt.getTime() - 5000).toISOString();
+    const end = new Date(paidAt.getTime() + 5000).toISOString();
+    const { data: twins } = await supabase
+      .from("transactions")
+      .select("id, guru_transaction_id")
+      .eq("subscription_id", subscriptionId)
+      .eq("affiliate_id", affiliateId)
+      .eq("type", "commission")
+      .eq("amount_gross_cents", amountGrossCents)
+      .gte("paid_at", start)
+      .lte("paid_at", end)
+      .like("guru_transaction_id", "pagou:pagarme:%");
+    const twin = (twins || []).find(
+      (row) => row.guru_transaction_id && row.guru_transaction_id !== guruId
+    );
+    if (twin) {
+      console.log(
+        `[GURU WEBHOOK] comissão Pagarme duplicada tx=${guruId} já coberta por ${twin.guru_transaction_id}`
+      );
+      return {
+        response: NextResponse.json({ received: true, status: "already_processed" }),
+        subscriptionSynced: true,
+      };
+    }
+  }
+
   const marketplaceId = body.payment?.marketplace_id;
   const chargeId =
     marketplaceId != null && String(marketplaceId).trim() !== ""
