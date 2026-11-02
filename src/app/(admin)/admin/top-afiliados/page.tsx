@@ -15,6 +15,8 @@ interface WiseTx {
   date: string;
   description: string;
   amount: number;
+  amountBrl: number;
+  usdBrlRate: number | null;
   currency: string;
   type: string;
   runningBalance: number;
@@ -55,6 +57,7 @@ interface TopAffiliateData {
   };
   wise: {
     totalSpentCents: number;
+    totalSpentBrlCents: number;
     transactions: WiseTx[];
   } | null;
   wiseConfigured: boolean;
@@ -68,7 +71,6 @@ export default function TopAfiliadosPage() {
   const [loading, setLoading] = useState(true);
   const [wiseLoading, setWiseLoading] = useState(false);
   const [error, setError] = useState("");
-  const [usdRate, setUsdRate] = useState(0);
   const didInit = useRef(false);
 
   const todayBrt = () =>
@@ -80,16 +82,6 @@ export default function TopAfiliadosPage() {
   const [pixDescription, setPixDescription] = useState("");
   const [pixSubmitting, setPixSubmitting] = useState(false);
   const [pixError, setPixError] = useState("");
-
-  const fetchUsdRate = useCallback(async () => {
-    try {
-      const res = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL");
-      if (res.ok) {
-        const json = await res.json();
-        setUsdRate(parseFloat(json.USDBRL?.ask || "0"));
-      }
-    } catch { /* silently fail */ }
-  }, []);
 
   const fetchData = useCallback(async (withWise = false) => {
     try {
@@ -114,8 +106,8 @@ export default function TopAfiliadosPage() {
     if (didInit.current) return;
     didInit.current = true;
     setLoading(true);
-    Promise.all([fetchData(true), fetchUsdRate()]).finally(() => setLoading(false));
-  }, [fetchData, fetchUsdRate]);
+    fetchData(true).finally(() => setLoading(false));
+  }, [fetchData]);
 
   const handleRefreshWise = async () => {
     setWiseLoading(true);
@@ -193,8 +185,8 @@ export default function TopAfiliadosPage() {
   const { affiliate, commission, wise, wiseConfigured, pixExpenses, pixTotalBrlCents, transactions } = data;
   const tierName = affiliate.tier === 3 ? "Ouro" : affiliate.tier === 2 ? "Prata" : "Bronze";
   const wiseUsdCents = wise?.totalSpentCents || 0;
-  // Wise vem em USD; converte pra BRL pelo câmbio atual. Pix já está em BRL.
-  const wiseBrlCents = usdRate > 0 ? Math.round(wiseUsdCents * usdRate) : 0;
+  // Cada gasto Wise já veio convertido pelo PTAX do dia em que saiu.
+  const wiseBrlCents = wise?.totalSpentBrlCents || 0;
   const usedBrlCents = wiseBrlCents + pixTotalBrlCents;
   // Ganho (liberado) já está em BRL, então o saldo é só Liberado − Usado.
   const availableBrlCents = commission.releasedCents - usedBrlCents;
@@ -307,7 +299,8 @@ export default function TopAfiliadosPage() {
               <div className="mt-1 space-y-0.5">
                 <p className="text-xs text-zinc-400">
                   Wise {formatCurrency(wiseBrlCents / 100)}
-                  {usdRate > 0 && ` (${formatCurrency(wiseUsdCents / 100, "USD")} × ${usdRate.toFixed(2)})`}
+                  {wiseUsdCents > 0 &&
+                    ` (${formatCurrency(wiseUsdCents / 100, "USD")}, PTAX do dia)`}
                 </p>
                 {pixTotalBrlCents > 0 && (
                   <p className="text-xs text-zinc-400">
@@ -478,7 +471,9 @@ export default function TopAfiliadosPage() {
                 <TableRow>
                   <TableHead>Data</TableHead>
                   <TableHead>Descrição</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="text-right">USD</TableHead>
+                  <TableHead className="text-right">PTAX</TableHead>
+                  <TableHead className="text-right">BRL</TableHead>
                   <TableHead className="text-right">Saldo</TableHead>
                 </TableRow>
               </TableHeader>
@@ -498,8 +493,14 @@ export default function TopAfiliadosPage() {
                     <TableCell className="text-sm text-zinc-900 font-medium">
                       {tx.description}
                     </TableCell>
-                    <TableCell className="text-right text-sm font-semibold text-red-600">
+                    <TableCell className="text-right text-sm text-zinc-600">
                       {formatCurrency(Math.abs(tx.amount), "USD")}
+                    </TableCell>
+                    <TableCell className="text-right text-sm text-zinc-500">
+                      {tx.usdBrlRate != null ? tx.usdBrlRate.toFixed(4) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-semibold text-red-600">
+                      {tx.amountBrl > 0 ? formatCurrency(tx.amountBrl) : "—"}
                     </TableCell>
                     <TableCell className="text-right text-sm text-zinc-500">
                       {formatCurrency(tx.runningBalance, "USD")}

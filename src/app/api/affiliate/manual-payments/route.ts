@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { fetchWiseCardSpending, fetchUsdBrlRate } from "@/lib/wise";
+import { fetchWiseCardSpending } from "@/lib/wise";
 import { isTopAffiliateEmail } from "@/lib/top-affiliate";
 
 const supabaseAdmin = createClient(
@@ -48,13 +48,11 @@ export async function GET() {
 
   const startDate = "2026-01-01";
   const endDate = new Date().toISOString().split("T")[0];
-  const [wise, usdRate] = await Promise.all([
-    fetchWiseCardSpending(startDate, endDate),
-    fetchUsdBrlRate(),
-  ]);
+  const wise = await fetchWiseCardSpending(startDate, endDate);
 
   const wiseUsdCents = wise ? Math.round(wise.totalSpent * 100) : 0;
-  const wiseBrlCents = usdRate > 0 ? Math.round(wiseUsdCents * usdRate) : 0;
+  // Cada gasto Wise vira BRL pelo PTAX do dia em que saiu, não pelo câmbio de hoje.
+  const wiseBrlCents = wise ? Math.round(wise.totalSpentBrl * 100) : 0;
   const usedBrlCents = wiseBrlCents + pixTotalBrlCents;
 
   return NextResponse.json({
@@ -63,6 +61,5 @@ export async function GET() {
     wiseBrlCents,
     wiseUsdCents,
     pixTotalBrlCents,
-    usdRate,
   });
 }

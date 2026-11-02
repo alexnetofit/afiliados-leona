@@ -132,6 +132,7 @@ export async function GET(request: NextRequest) {
   let wiseData: {
     transactions: WiseTransaction[];
     totalSpent: number;
+    totalSpentBrl: number;
   } | null = null;
 
   if (wiseParam === "true") {
@@ -165,6 +166,7 @@ export async function GET(request: NextRequest) {
     wise: wiseData
       ? {
           totalSpentCents: Math.round(wiseData.totalSpent * 100),
+          totalSpentBrlCents: Math.round(wiseData.totalSpentBrl * 100),
           transactions: wiseData.transactions,
         }
       : null,
