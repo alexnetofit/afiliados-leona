@@ -1,3 +1,5 @@
+import { toBrtDay, usdToBrlPtax } from "@/lib/ptax";
+
 const WISE_API_TOKEN = process.env.WISE_API_TOKEN;
 const WISE_PROFILE_ID = process.env.WISE_PROFILE_ID;
 const WISE_BALANCE_ID = process.env.WISE_BALANCE_ID;
@@ -12,15 +14,23 @@ export interface WiseTransaction {
   date: string;
   description: string;
   amount: number;
+  amountBrl: number;
+  usdBrlRate: number | null;
   currency: string;
   type: string;
   runningBalance: number;
 }
 
+export type WiseCardSpending = {
+  transactions: WiseTransaction[];
+  totalSpent: number;
+  totalSpentBrl: number;
+};
+
 export async function fetchWiseCardSpending(
   startDate: string,
   endDate: string
-): Promise<{ transactions: WiseTransaction[]; totalSpent: number } | null> {
+): Promise<WiseCardSpending | null> {
   if (!WISE_API_TOKEN || !WISE_PROFILE_ID || !WISE_BALANCE_ID) {
     return null;
   }
@@ -61,6 +71,8 @@ export async function fetchWiseCardSpending(
         description:
           t.details?.description || t.details?.merchant?.name || "Transação",
         amount: amt,
+        amountBrl: 0,
+        usdBrlRate: null,
         currency: cur,
         type: t.type,
         runningBalance: t.runningBalance?.value || 0,
@@ -69,7 +81,21 @@ export async function fetchWiseCardSpending(
       totalSpent += Math.abs(amt);
     }
 
-    return { transactions: txs, totalSpent };
+    const days = [
+      ...new Set(txs.map((tx) => toBrtDay(tx.date)).filter(Boolean)),
+    ];
+    await Promise.all(days.map((day) => usdToBrlPtax(day)));
+
+    let totalSpentBrl = 0;
+    for (const tx of txs) {
+      const day = toBrtDay(tx.date);
+      const rate = day ? await usdToBrlPtax(day) : null;
+      tx.usdBrlRate = rate;
+      tx.amountBrl = rate ? Math.abs(tx.amount) * rate : 0;
+      totalSpentBrl += tx.amountBrl;
+    }
+
+    return { transactions: txs, totalSpent, totalSpentBrl };
   } catch (err) {
     console.error("[Wise] Fetch error:", err);
     return null;
