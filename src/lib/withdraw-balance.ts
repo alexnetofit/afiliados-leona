@@ -1,4 +1,4 @@
-import { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface WithdrawBalance {
   liquidoLiberadoCents: number;
@@ -153,6 +153,32 @@ export function applyWithdrawCoverage<T extends {
     if (keepAvailable.has(g.dateKey)) return g;
     return { ...g, status: "paid" as const };
   });
+}
+
+export type PartnerWithdrawLabel =
+  | "pendente"
+  | "aprovado"
+  | "pago"
+  | "disponivel"
+  | "aguardando_liberacao"
+  | "falhou";
+
+/**
+ * O saque criado no Asaas fica PENDING até o Alex autorizar no app.
+ * Nesse intervalo o saldo já foi reservado e a cobertura marca o período
+ * como pago — a tela não pode acompanhar isso. Pendente enquanto o Asaas
+ * não confirmar; aprovado só depois do webhook TRANSFER_DONE.
+ */
+export function partnerWithdrawLabel(
+  groupStatus: "paid" | "available" | "pending",
+  withdrawStatus: string | null | undefined
+): PartnerWithdrawLabel {
+  if (withdrawStatus === "processing" || withdrawStatus === "pending") return "pendente";
+  if (withdrawStatus === "failed" || withdrawStatus === "rejected") return "falhou";
+  if (withdrawStatus === "paid") return "aprovado";
+  if (groupStatus === "paid") return "pago";
+  if (groupStatus === "available") return "disponivel";
+  return "aguardando_liberacao";
 }
 
 export function formatBrl(cents: number): string {

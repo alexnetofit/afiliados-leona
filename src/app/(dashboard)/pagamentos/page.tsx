@@ -16,7 +16,7 @@ import {
   PAYMENT_HISTORY_MONTHS,
 } from "@/lib/utils";
 import { isTopAffiliateEmail } from "@/lib/top-affiliate";
-import { applyWithdrawCoverage } from "@/lib/withdraw-balance";
+import { applyWithdrawCoverage, partnerWithdrawLabel } from "@/lib/withdraw-balance";
 
 interface PaymentGroup {
   dateKey: string;
@@ -315,14 +315,19 @@ export default function PagamentosPage() {
     isWithinPaymentHistoryWindow(primaryWithdrawGroup.dateKey);
 
   // Summary metrics
+  const labelOf = (g: PaymentGroup) =>
+    partnerWithdrawLabel(g.status, withdrawnGroups.get(g.dateLabel)?.status);
   const totalPaid = coveredPaymentGroups
-    .filter(g => g.status === "paid" || (g.status === "available" && withdrawnGroups.get(g.dateLabel)?.status === "paid"))
+    .filter((g) => {
+      const label = labelOf(g);
+      return label === "aprovado" || label === "pago";
+    })
     .reduce((sum, g) => sum + g.totalCents, 0);
   const totalAvailableBuckets = coveredPaymentGroups
-    .filter(g => g.status === "available" && withdrawnGroups.get(g.dateLabel)?.status !== "paid")
+    .filter((g) => labelOf(g) === "disponivel")
     .reduce((sum, g) => sum + g.totalCents, 0);
   const totalPending = coveredPaymentGroups
-    .filter(g => g.status === "pending")
+    .filter((g) => labelOf(g) === "pendente" || labelOf(g) === "aguardando_liberacao")
     .reduce((sum, g) => sum + g.totalCents, 0);
 
   // Saldo "real": vem do backend (líquido liberado - sacado) e desconta saques
@@ -516,14 +521,14 @@ export default function PagamentosPage() {
                     >
                       <div className="flex items-center gap-3">
                         {(() => {
-                          const w = withdrawnGroups.get(group.dateLabel);
-                          if (group.status === "available" && w?.status === "paid") {
+                          const label = partnerWithdrawLabel(group.status, withdrawnGroups.get(group.dateLabel)?.status);
+                          if (label === "aprovado" || label === "pago") {
                             return <CheckCircle className="h-4 w-4 text-success-600" />;
                           }
-                          if (group.status === "available" && w?.status === "processing") {
-                            return <Clock className="h-4 w-4 text-blue-500" />;
+                          if (label === "pendente") {
+                            return <Clock className="h-4 w-4 text-amber-500" />;
                           }
-                          if (group.status === "available" && w?.status === "failed") {
+                          if (label === "falhou") {
                             return <AlertCircle className="h-4 w-4 text-red-500" />;
                           }
                           return getStatusIcon(group.status);
@@ -556,17 +561,17 @@ export default function PagamentosPage() {
                             </button>
                           )
                         )}
-                        {group.status === "available" && withdrawnGroups.has(group.dateLabel) && withdrawnGroups.get(group.dateLabel)?.status === "paid" && (
+                        {partnerWithdrawLabel(group.status, withdrawnGroups.get(group.dateLabel)?.status) === "aprovado" && (
                           <Badge variant="success" size="sm">
-                            Pago em {withdrawnGroups.get(group.dateLabel)?.paid_at
-                              ? new Date(withdrawnGroups.get(group.dateLabel)!.paid_at!).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" })
+                            Aprovado{withdrawnGroups.get(group.dateLabel)?.paid_at
+                              ? ` em ${new Date(withdrawnGroups.get(group.dateLabel)!.paid_at!).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" })}`
                               : ""}
                           </Badge>
                         )}
-                        {group.status === "available" && withdrawnGroups.get(group.dateLabel)?.status === "processing" && (
-                          <span className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-blue-700 bg-blue-50 rounded-full">
+                        {partnerWithdrawLabel(group.status, withdrawnGroups.get(group.dateLabel)?.status) === "pendente" && (
+                          <span className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-amber-700 bg-amber-50 rounded-full">
                             <Clock className="h-3 w-3" />
-                            Transferência em andamento
+                            Pendente
                           </span>
                         )}
                         {!isTopAffiliate && group.status === "available" && withdrawnGroups.get(group.dateLabel)?.status === "failed" && (
@@ -581,17 +586,17 @@ export default function PagamentosPage() {
                             Falhou - Tentar novamente
                           </button>
                         )}
-                        {group.status === "available" && withdrawnGroups.has(group.dateLabel) && withdrawnGroups.get(group.dateLabel)?.status === "pending" && (
-                          <span className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-amber-700 bg-amber-50 rounded-full">
-                            <Clock className="h-3 w-3" />
-                            Saque solicitado
-                          </span>
-                        )}
-                        {!(group.status === "available" && withdrawnGroups.get(group.dateLabel)?.status === "paid") && getStatusBadge(group.status)}
+                        {(() => {
+                          const label = partnerWithdrawLabel(group.status, withdrawnGroups.get(group.dateLabel)?.status);
+                          if (label === "pendente" || label === "aprovado" || label === "falhou") return null;
+                          return getStatusBadge(group.status);
+                        })()}
                         <span className={cn(
                           "text-sm font-semibold",
-                          group.status === "available" && withdrawnGroups.get(group.dateLabel)?.status === "paid"
+                          partnerWithdrawLabel(group.status, withdrawnGroups.get(group.dateLabel)?.status) === "aprovado"
                             ? "text-success-600"
+                            : partnerWithdrawLabel(group.status, withdrawnGroups.get(group.dateLabel)?.status) === "pendente"
+                            ? "text-amber-600"
                             : group.status === "paid" ? "text-success-600"
                             : group.status === "available" ? "text-warning-600"
                             : "text-zinc-700"

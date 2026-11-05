@@ -155,8 +155,8 @@ export default function PagamentosPage() {
                 options={[
                   { value: "all", label: "Todos" },
                   { value: "pending", label: "Pendentes" },
-                  { value: "processing", label: "Processando" },
-                  { value: "paid", label: "Pagos" },
+                  { value: "processing", label: "Pendentes no Asaas" },
+                  { value: "paid", label: "Aprovados" },
                   { value: "failed", label: "Falhou" },
                 ]}
                 value={statusFilter}
@@ -185,7 +185,7 @@ export default function PagamentosPage() {
                     <TableHead>PIX</TableHead>
                     <TableHead>Wise</TableHead>
                     <TableHead>Solicitado em</TableHead>
-                    <TableHead>Pago em</TableHead>
+                    <TableHead>Aprovado em</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Ação</TableHead>
                   </TableRow>
@@ -229,15 +229,15 @@ export default function PagamentosPage() {
                         <Badge
                           variant={
                             req.status === "paid" ? "success"
-                            : req.status === "processing" ? "primary"
+                            : req.status === "processing" ? "warning"
                             : req.status === "failed" ? "default"
                             : req.status === "rejected" ? "default"
                             : "warning"
                           }
                           dot
                         >
-                          {req.status === "paid" ? "Pago"
-                           : req.status === "processing" ? "Processando"
+                          {req.status === "paid" ? "Aprovado"
+                           : req.status === "processing" ? "Pendente"
                            : req.status === "failed" ? "Falhou"
                            : req.status === "rejected" ? "Rejeitado"
                            : "Pendente"}
@@ -255,7 +255,7 @@ export default function PagamentosPage() {
                             Pago
                           </Button>
                         ) : req.status === "processing" ? (
-                          <span className="text-xs text-blue-600 font-medium">Aguardando Asaas</span>
+                          <span className="text-xs text-amber-700 font-medium">Aguardando sua aprovação</span>
                         ) : req.status === "paid" ? (
                           <Button
                             size="sm"
