@@ -138,7 +138,9 @@ export async function GET(request: NextRequest) {
   if (wiseParam === "true") {
     try {
       const startDate = "2026-01-01";
-      const endDate = now.toISOString().split("T")[0];
+      const endDate = now.toLocaleDateString("en-CA", {
+        timeZone: "America/Sao_Paulo",
+      });
       wiseData = await fetchWiseCardSpending(startDate, endDate);
     } catch (err) {
       console.error("[top-affiliates] wise:", err);

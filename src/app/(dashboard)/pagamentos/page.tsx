@@ -427,7 +427,12 @@ export default function PagamentosPage() {
               <MetricCard
                 icon={Wallet}
                 label="Saldo disponível"
-                value={formatCurrency((totalAvailable - (manualPaidCents ?? 0)) / 100)}
+                value={
+                  manualPaidCents == null
+                    ? "—"
+                    : formatCurrency((totalAvailable - manualPaidCents) / 100)
+                }
+                description="Wise pelo PTAX do dia de cada gasto"
                 color="primary"
               />
             )}
