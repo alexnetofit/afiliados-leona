@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Corrida do Milhão | Leona Pay</title>
+<meta name="description" content="Leona Million Challenge: durante 3 meses, clientes Leona Pay disputam o topo do ranking de faturamento. O 1º lugar leva um iPhone 18 Pro Max.">
+<meta property="og:title" content="Corrida do Milhão | Leona Pay">
+<meta property="og:description" content="Passe de R$ 1 milhão, lidere o ranking e leve um iPhone 18 Pro Max. Ranking aberto até 19/01/2027.">
+<meta property="og:image" content="https://leonapay.com.br/images/link-preview.jpg">
+<meta name="theme-color" content="#0b0233">
+<link rel="icon" href="assets/favicon.ico">
+<script>if ('IntersectionObserver' in window) document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0233;
+    --bg-2: #10044a;
+    --text: #f5f2ff;
+    --muted: #b8b0e2;
+    --line: rgba(255, 255, 255, .12);
+    --card: rgba(255, 255, 255, .045);
+    --teal: #2ee6d6;
+    --cyan: #22d3ee;
+    --purple: #8b2cf5;
+    --violet: #6d5cf3;
+    --grad: linear-gradient(90deg, #8b2cf5 0%, #6d5cf3 45%, #22d3d3 100%);
+    --radius: 28px;
+    --max: 1200px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  img { display: block; max-width: 100%; height: auto; }
+  .wrap { width: min(var(--max), 100% - 40px); margin: 0 auto; }
+  .accent { background: linear-gradient(90deg, var(--teal), var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 14px;
+    height: 60px; padding: 0 30px; border-radius: 999px;
+    font-weight: 700; font-size: 17px; letter-spacing: .3px; white-space: nowrap;
+    transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+  }
+  .btn svg { width: 22px; height: 22px; flex: none; transition: transform .2s ease; }
+  .btn-primary {
+    color: #fff; background: var(--grad);
+    box-shadow: 0 0 34px rgba(34, 211, 211, .35), 0 0 60px rgba(139, 44, 245, .3), inset 0 1px 0 rgba(255, 255, 255, .25);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 44px rgba(34, 211, 211, .5), 0 0 80px rgba(139, 44, 245, .4), inset 0 1px 0 rgba(255, 255, 255, .25); }
+  .btn-primary:hover svg { transform: translateX(4px); }
+  .btn-ghost { color: var(--text); border: 1.5px solid rgba(190, 170, 255, .35); background: rgba(255, 255, 255, .03); }
+  .btn-ghost:hover { background: rgba(255, 255, 255, .08); }
+  .btn-sm { height: 44px; padding: 0 20px; font-size: 15px; }
+
+  /* topo */
+  .top {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(11, 2, 51, .72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid rgba(255, 255, 255, .06);
+  }
+  .top .wrap { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+  .top img { height: 34px; width: auto; }
+  .top nav { display: flex; align-items: center; gap: 28px; font-weight: 600; font-size: 15px; color: var(--muted); }
+  .top nav a:not(.btn):hover { color: #fff; }
+  .top nav .link { display: none; }
+
+  /* hero */
+  .hero { position: relative; padding: 48px 0 40px; overflow: hidden; }
+  .hero::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(700px 500px at 78% 40%, rgba(110, 40, 230, .45), transparent 70%),
+      radial-gradient(500px 420px at 95% 70%, rgba(34, 211, 238, .18), transparent 70%),
+      radial-gradient(600px 400px at 0% 0%, rgba(124, 58, 237, .25), transparent 70%);
+  }
+  .hero-grid { position: relative; display: grid; gap: 28px; align-items: center; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 18px 8px 12px; border-radius: 999px;
+    border: 1.5px solid rgba(167, 139, 250, .5); background: rgba(76, 29, 149, .35);
+    color: #e9e3ff; font-weight: 700; font-size: 13px; letter-spacing: 2.5px;
+  }
+  .pill svg { width: 20px; height: 20px; }
+  .hero h1 {
+    margin-top: 18px; font-weight: 800; font-size: clamp(46px, 11vw, 92px); line-height: .95; letter-spacing: -1.5px;
+    text-transform: uppercase;
+  }
+  .hero h1 .accent { filter: drop-shadow(0 0 22px rgba(45, 212, 191, .35)); }
+  .hero .lead { margin-top: 20px; font-size: clamp(17px, 2.2vw, 20px); color: #ddd7fb; max-width: 560px; }
+  .hero .lead b { color: #fff; }
+  .actions { margin-top: 28px; display: grid; gap: 12px; }
+  .countdown { width: 100%; }
+
+  .countdown {
+    margin-top: 30px; display: inline-flex; flex-direction: column; gap: 12px;
+    padding: 18px 22px; border-radius: 22px; background: var(--card); border: 1px solid var(--line);
+  }
+  .countdown small { font-size: 12px; letter-spacing: 2.5px; font-weight: 700; color: var(--teal); text-transform: uppercase; }
+  .cd { display: flex; gap: 10px; }
+  .cd div { min-width: 64px; text-align: center; padding: 10px 6px 8px; border-radius: 14px; background: rgba(255, 255, 255, .06); }
+  .cd b { display: block; font-size: 28px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  .cd span { display: block; margin-top: 6px; font-size: 11px; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; }
+  .cd-end { font-size: 13px; color: var(--muted); }
+
+  .stage { position: relative; display: flex; justify-content: center; padding: 20px 0 30px; }
+  .stage .halo {
+    position: absolute; left: 50%; top: 50%; width: 520px; height: 520px; transform: translate(-50%, -50%);
+    border-radius: 50%; filter: blur(50px); pointer-events: none;
+    background: radial-gradient(closest-side at 40% 50%, rgba(160, 70, 255, .85), transparent 75%),
+                radial-gradient(closest-side at 70% 55%, rgba(34, 225, 238, .55), transparent 75%);
+  }
+  .stage .ring {
+    position: absolute; left: 50%; top: 50%; width: 500px; height: 500px; transform: translate(-50%, -46%);
+    border-radius: 50%; border: 2px solid rgba(167, 139, 250, .22); pointer-events: none;
+  }
+  .phones { position: relative; width: min(400px, 78vw); filter: drop-shadow(0 30px 40px rgba(5, 0, 30, .7)); animation: float 7s ease-in-out infinite; }
+  .floor {
+    position: absolute; left: 50%; bottom: 14px; width: 360px; height: 50px; transform: translateX(-50%);
+    border-radius: 50%; filter: blur(16px);
+    background: radial-gradient(closest-side, rgba(170, 120, 255, .8), rgba(46, 230, 214, .3) 60%, transparent);
+  }
+  .prize {
+    position: absolute; left: 0; bottom: 70px; z-index: 2;
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 22px 12px 12px; border-radius: 22px;
+    background: linear-gradient(135deg, rgba(40, 14, 110, .82), rgba(20, 8, 70, .78));
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border: 1.5px solid rgba(190, 170, 255, .38);
+    box-shadow: 0 16px 40px rgba(5, 0, 30, .6), inset 0 1px 0 rgba(255, 255, 255, .12);
+  }
+  .medal {
+    width: 52px; height: 52px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
+    background: var(--grad); box-shadow: 0 0 20px rgba(46, 230, 214, .45), inset 0 1px 0 rgba(255, 255, 255, .35);
+  }
+  .medal svg { width: 28px; height: 28px; }
+  .prize small { display: block; font-size: 11px; font-weight: 800; letter-spacing: 2.5px; color: #5eead4; }
+  .prize strong { display: block; font-size: 19px; font-weight: 800; letter-spacing: -.2px; white-space: nowrap; }
+  .spark { position: absolute; width: 26px; height: 26px; filter: drop-shadow(0 0 8px #fff) drop-shadow(0 0 16px rgba(46, 230, 214, .8)); animation: twinkle 3.2s ease-in-out infinite; }
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+  @keyframes twinkle { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.75); } }
+
+  /* seções */
+  section { position: relative; }
+  .sec { padding: 72px 0; }
+  .eyebrow { font-size: 13px; font-weight: 800; letter-spacing: 3px; color: var(--teal); text-transform: uppercase; }
+  .sec h2 { margin-top: 10px; font-size: clamp(32px, 5vw, 48px); line-height: 1.05; font-weight: 800; letter-spacing: -1px; }
+  .sec .intro { margin-top: 14px; color: var(--muted); font-size: 18px; max-width: 620px; }
+
+  .facts { display: grid; gap: 14px; grid-template-columns: repeat(2, 1fr); margin-top: 8px; }
+  .fact { padding: 22px 20px; border-radius: 22px; background: var(--card); border: 1px solid var(--line); }
+  .fact b { display: block; font-size: clamp(24px, 3.4vw, 34px); font-weight: 800; letter-spacing: -.5px; line-height: 1.1; }
+  .fact span { display: block; margin-top: 8px; font-size: 14px; color: var(--muted); }
+
+  .steps { display: grid; gap: 16px; margin-top: 36px; }
+  .step {
+    position: relative; padding: 28px 26px; border-radius: var(--radius);
+    background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02)); border: 1px solid var(--line);
+  }
+  .step .n {
+    width: 48px; height: 48px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 20px; background: var(--grad); box-shadow: 0 8px 24px rgba(109, 92, 243, .45);
+  }
+  .step h3 { margin-top: 18px; font-size: 22px; font-weight: 800; letter-spacing: -.3px; }
+  .step p { margin-top: 8px; color: var(--muted); }
+  .step a.inline { color: var(--teal); font-weight: 700; }
+
+  .quote { padding: 90px 0; text-align: center; overflow: hidden; }
+  .quote::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(600px 300px at 50% 50%, rgba(124, 58, 237, .28), transparent 70%);
+  }
+  .quote .streaks { position: absolute; inset: 0; pointer-events: none; opacity: .7; }
+  .quote .streaks i { position: absolute; height: 3px; border-radius: 3px; filter: blur(1px); }
+  .quote p { position: relative; font-size: clamp(28px, 5vw, 54px); font-weight: 800; line-height: 1.12; letter-spacing: -1px; max-width: 980px; margin: 0 auto; }
+  .quote p .muted { color: var(--muted); font-weight: 700; }
+
+  .rules-grid { display: grid; gap: 22px; margin-top: 36px; }
+  .rules { list-style: none; display: grid; gap: 14px; counter-reset: r; }
+  .rules li {
+    counter-increment: r; display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: start;
+    padding: 20px 22px; border-radius: 22px; background: var(--card); border: 1px solid var(--line); font-size: 17px;
+  }
+  .rules li::before {
+    content: counter(r, decimal-leading-zero); width: 44px; height: 44px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: var(--teal);
+    background: rgba(46, 230, 214, .1); border: 1px solid rgba(46, 230, 214, .3);
+  }
+  .rules li b { color: #fff; }
+  .period {
+    padding: 28px 26px; border-radius: var(--radius); align-self: start;
+    background: linear-gradient(160deg, rgba(139, 44, 245, .22), rgba(34, 211, 211, .1)); border: 1px solid rgba(190, 170, 255, .3);
+  }
+  .period h3 { font-size: 13px; font-weight: 800; letter-spacing: 3px; color: var(--teal); text-transform: uppercase; }
+  .dates { display: flex; justify-content: space-between; gap: 12px; margin-top: 18px; }
+  .dates small { display: block; font-size: 13px; color: var(--muted); }
+  .dates b { display: block; font-size: 24px; font-weight: 800; letter-spacing: -.3px; }
+  .dates div:last-child { text-align: right; }
+  .track { position: relative; margin-top: 22px; height: 12px; border-radius: 99px; background: rgba(255, 255, 255, .1); }
+  .track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; background: var(--grad); box-shadow: 0 0 16px rgba(46, 230, 214, .6); }
+  .track em { position: absolute; top: 50%; width: 22px; height: 22px; border-radius: 50%; transform: translate(-50%, -50%); background: #fff; border: 4px solid var(--teal); box-shadow: 0 0 16px rgba(46, 230, 214, .8); }
+  .track-label { margin-top: 14px; font-size: 14px; color: var(--muted); }
+  .track-label b { color: #fff; }
+  .period .prize-line { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 14px; }
+  .period .prize-line small { display: block; font-size: 12px; font-weight: 800; letter-spacing: 2.5px; color: #5eead4; }
+  .period .prize-line strong { display: block; font-size: 20px; font-weight: 800; }
+
+  .faq-layout { display: grid; gap: 0; }
+  .faq { margin-top: 36px; display: grid; gap: 12px; }
+  .faq details { border-radius: 20px; background: var(--card); border: 1px solid var(--line); overflow: hidden; }
+  .faq summary {
+    list-style: none; cursor: pointer; padding: 22px 24px; font-weight: 700; font-size: 18px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: "+"; font-size: 26px; font-weight: 500; color: var(--teal); transition: transform .2s ease; }
+  .faq details[open] summary::after { transform: rotate(45deg); }
+  .faq details p { padding: 0 24px 22px; color: var(--muted); }
+
+  .final { padding: 40px 0 110px; }
+  .final .box {
+    position: relative; overflow: hidden; text-align: center; padding: 64px 24px; border-radius: 36px;
+    background:
+      radial-gradient(500px 260px at 15% 0%, rgba(139, 44, 245, .55), transparent 70%),
+      radial-gradient(500px 260px at 85% 100%, rgba(34, 211, 211, .35), transparent 70%),
+      linear-gradient(180deg, #1a0760, #10044a);
+    border: 1px solid rgba(190, 170, 255, .3);
+  }
+  .final h2 { font-size: clamp(32px, 5.4vw, 56px); font-weight: 800; line-height: 1.05; letter-spacing: -1px; }
+  .final p { margin: 16px auto 0; max-width: 560px; color: #ddd7fb; font-size: 18px; }
+  .final .btn { margin-top: 30px; height: auto; min-height: 62px; padding: 14px 26px; font-size: 16px; white-space: normal; width: 100%; max-width: 440px; }
+  .final .note { margin-top: 18px; font-size: 14px; color: var(--muted); }
+
+  footer { border-top: 1px solid rgba(255, 255, 255, .07); padding: 36px 0 120px; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-direction: column; gap: 18px; }
+  footer img { height: 30px; width: auto; align-self: flex-start; }
+  footer .links { display: flex; flex-wrap: wrap; gap: 20px; }
+  footer .links a:hover { color: #fff; }
+  footer .legal { font-size: 12px; opacity: .8; }
+
+  .sticky-cta {
+    position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 60;
+    transform: translateY(140%); transition: transform .3s ease;
+  }
+  .sticky-cta.show { transform: none; }
+  .sticky-cta .btn { width: 100%; height: 58px; }
+
+  .js .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
+  .js .reveal.in { opacity: 1; transform: none; }
+
+  @media (min-width: 720px) {
+    .actions { display: flex; flex-wrap: wrap; gap: 14px; }
+    .countdown { width: auto; }
+    .facts { grid-template-columns: repeat(4, 1fr); }
+    .steps { grid-template-columns: repeat(3, 1fr); }
+    .top nav .link { display: inline; }
+  }
+  @media (min-width: 980px) {
+    .hero { padding: 70px 0 60px; }
+    .hero-grid { grid-template-columns: 1.1fr .9fr; gap: 20px; }
+    .stage { padding: 0; }
+    .phones { width: 430px; }
+    .prize { left: -30px; bottom: 90px; }
+    .rules-grid { grid-template-columns: 1.35fr 1fr; }
+    .final .btn { width: auto; max-width: none; min-height: 66px; padding: 0 36px; font-size: 18px; white-space: nowrap; }
+    .faq-layout { grid-template-columns: .8fr 1.2fr; gap: 60px; align-items: start; }
+    .faq-layout .faq { margin-top: 0; }
+    .faq-layout .head { position: sticky; top: 110px; }
+    .sticky-cta { display: none; }
+    footer { padding-bottom: 40px; }
+    footer .wrap { flex-direction: row; align-items: center; justify-content: space-between; }
+  }
+  @media (max-width: 420px) {
+    .cd div { min-width: 56px; }
+    .cd b { font-size: 24px; }
+    .prize { left: -4px; bottom: 50px; padding: 10px 16px 10px 10px; }
+    .prize strong { font-size: 16px; }
+    .medal { width: 44px; height: 44px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .phones, .spark { animation: none; }
+    .js .reveal { opacity: 1; transform: none; transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a href="https://leonapay.com.br" aria-label="Leona Pay"><img src="assets/logo-white.png" alt="Leona Pay" width="128" height="34"></a>
+    <nav>
+      <a class="link" href="#como-funciona">Como funciona</a>
+      <a class="link" href="#regras">Regras</a>
+      <a class="btn btn-primary btn-sm" href="https://client.leonapay.com.br/registro">Criar conta</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#2ee6d6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>
+          LEONA MILLION CHALLENGE
+        </span>
+        <h1>Corrida do<br><span class="accent">Milhão.</span></h1>
+        <p class="lead">Durante 3 meses, os clientes Leona Pay disputam o topo do ranking de faturamento. Quem faturar mais leva um <b>iPhone 18 Pro Max</b>.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="https://client.leonapay.com.br/registro">Quero participar
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6"/></svg>
+          </a>
+          <a class="btn btn-ghost" href="#regras">Ver regras</a>
+        </div>
+        <div class="countdown" id="countdown">
+          <small id="cd-title">A corrida termina em</small>
+          <div class="cd" role="timer" aria-live="off">
+            <div><b id="cd-d">--</b><span>dias</span></div>
+            <div><b id="cd-h">--</b><span>horas</span></div>
+            <div><b id="cd-m">--</b><span>min</span></div>
+            <div><b id="cd-s">--</b><span>seg</span></div>
+          </div>
+          <div class="cd-end">Encerramento: 19/01/2027</div>
+        </div>
+      </div>
+
+      <div class="stage" aria-hidden="false">
+        <div class="halo"></div>
+        <div class="ring"></div>
+        <div class="floor"></div>
+        <img class="phones" src="assets/phones.webp" alt="iPhone 18 Pro Max roxo, frente e verso, com a tela da Corrida do Milhão" width="1230" height="1712">
+        <svg class="spark" style="left: 22%; top: 2%;" viewBox="0 0 56 56" aria-hidden="true"><path d="M28 0C29.5 20 36 26.5 56 28 36 29.5 29.5 36 28 56 26.5 36 20 29.5 0 28 20 26.5 26.5 20 28 0Z" fill="#fff"/></svg>
+        <svg class="spark" style="right: 12%; top: 12%; width: 18px; height: 18px; animation-delay: 1.4s;" viewBox="0 0 56 56" aria-hidden="true"><path d="M28 0C29.5 20 36 26.5 56 28 36 29.5 29.5 36 28 56 26.5 36 20 29.5 0 28 20 26.5 26.5 20 28 0Z" fill="#e6fffc"/></svg>
+        <div class="prize">
+          <div class="medal"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg></div>
+          <div><small>PRÊMIO 1º LUGAR</small><strong>iPhone 18 Pro Max</strong></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" style="padding-top: 24px;">
+    <div class="wrap">
+      <div class="facts">
+        <div class="fact reveal"><b>3 meses</b><span>de disputa, de 19/10/2026 a 19/01/2027</span></div>
+        <div class="fact reveal"><b class="accent">R$ 1 milhão</b><span>de faturamento mínimo para concorrer</span></div>
+        <div class="fact reveal"><b>1º lugar</b><span>leva um iPhone 18 Pro Max</span></div>
+        <div class="fact reveal"><b>Bruto aprovado</b><span>descontados estornos e cancelamentos</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="como-funciona">
+    <div class="wrap">
+      <div class="eyebrow">Como funciona</div>
+      <h2>Três passos até o topo do ranking</h2>
+      <div class="steps">
+        <div class="step reveal">
+          <div class="n">1</div>
+          <h3>Crie sua conta</h3>
+          <p>Faça seu cadastro no <a class="inline" href="https://client.leonapay.com.br/registro">Leona Pay</a> e configure sua operação.</p>
+        </div>
+        <div class="step reveal">
+          <div class="n">2</div>
+          <h3>Venda com o Leona Pay</h3>
+          <p>Receba de clientes em diferentes países, em uma só plataforma. Cada venda aprovada no período soma no seu faturamento.</p>
+        </div>
+        <div class="step reveal">
+          <div class="n">3</div>
+          <h3>Lidere o ranking</h3>
+          <p>Passe de R$ 1 milhão até 19/01/2027 e termine com o maior faturamento para levar o iPhone 18 Pro Max.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="quote">
+    <div class="streaks" aria-hidden="true">
+      <i style="left: -5%; top: 22%; width: 40%; background: linear-gradient(90deg, transparent, #a78bfa);"></i>
+      <i style="right: -5%; top: 38%; width: 34%; background: linear-gradient(270deg, transparent, #2ee6d6);"></i>
+      <i style="left: -5%; top: 70%; width: 30%; background: linear-gradient(90deg, transparent, #2ee6d6);"></i>
+      <i style="right: -5%; top: 82%; width: 42%; background: linear-gradient(270deg, transparent, #a78bfa);"></i>
+    </div>
+    <div class="wrap reveal">
+      <p><span class="muted">A pergunta não é quem vai chegar ao milhão primeiro.</span><br>É quem vai faturar <span class="accent">mais que todos os outros.</span></p>
+    </div>
+  </section>
+
+  <section class="sec" id="regras">
+    <div class="wrap">
+      <div class="eyebrow">Regulamento</div>
+      <h2>Regras da competição</h2>
+      <div class="rules-grid">
+        <ol class="rules">
+          <li class="reveal"><div>O vencedor será o participante com o <b>maior faturamento acumulado</b> durante a competição.</div></li>
+          <li class="reveal"><div>Para concorrer ao prêmio, é necessário atingir um <b>faturamento mínimo de <span style="white-space: nowrap">R$ 1.000.000,00</span></b> no período.</div></li>
+          <li class="reveal"><div>Será considerado o <b>faturamento bruto aprovado</b>, descontados estornos e cancelamentos.</div></li>
+          <li class="reveal"><div>Apenas transações realizadas <b>dentro do período oficial</b> serão contabilizadas.</div></li>
+        </ol>
+        <aside class="period reveal">
+          <h3>Período da competição</h3>
+          <div class="dates">
+            <div><small>Início</small><b>19/10/2026</b></div>
+            <div><small>Encerramento</small><b>19/01/2027</b></div>
+          </div>
+          <div class="track" aria-hidden="true"><i id="track-fill" style="width: 0%"></i><em id="track-dot" style="left: 0%"></em></div>
+          <div class="track-label" id="track-label">&nbsp;</div>
+          <div class="prize-line">
+            <div class="medal"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg></div>
+            <div><small>PREMIAÇÃO</small><strong>1º lugar: iPhone 18 Pro Max</strong></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" style="padding-top: 20px;">
+    <div class="wrap">
+      <div class="faq-layout">
+      <div class="head">
+        <div class="eyebrow">Dúvidas</div>
+        <h2>Perguntas frequentes</h2>
+        <p class="intro">Tudo o que você precisa saber para entrar na corrida.</p>
+      </div>
+      <div class="faq">
+        <details class="reveal">
+          <summary>Quem pode participar?</summary>
+          <p>Clientes Leona Pay. Crie sua conta e venda pelo Leona Pay durante o período da competição.</p>
+        </details>
+        <details class="reveal">
+          <summary>Ainda dá tempo de entrar?</summary>
+          <p>Sim. A corrida vai até 19/01/2027, e contam todas as transações aprovadas feitas dentro do período oficial.</p>
+        </details>
+        <details class="reveal">
+          <summary>O que conta como faturamento?</summary>
+          <p>O faturamento bruto aprovado no período, descontados estornos e cancelamentos.</p>
+        </details>
+        <details class="reveal">
+          <summary>Existe um valor mínimo para ganhar?</summary>
+          <p>Sim. Para concorrer ao prêmio, é preciso faturar pelo menos R$ 1.000.000,00 no período da competição.</p>
+        </details>
+        <details class="reveal">
+          <summary>Como o vencedor é definido?</summary>
+          <p>Vence o participante com o maior faturamento acumulado entre 19/10/2026 e 19/01/2027, desde que tenha atingido o mínimo de R$ 1 milhão.</p>
+        </details>
+      </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <div class="box reveal">
+        <h2>Sua corrida começa<br>no <span class="accent">cadastro.</span></h2>
+        <p>Crie sua conta no Leona Pay, venda para o mundo e dispute o iPhone 18 Pro Max.</p>
+        <a class="btn btn-primary" href="https://client.leonapay.com.br/registro">Criar minha conta
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6"/></svg>
+        </a>
+        <div class="note">Ranking aberto até 19/01/2027.</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <img src="assets/logo-white.png" alt="Leona Pay" width="113" height="30">
+    <div class="links">
+      <a href="https://leonapay.com.br">leonapay.com.br</a>
+      <a href="https://docs.leonapay.com.br/docs">Documentação</a>
+      <a href="https://client.leonapay.com.br/login">Entrar</a>
+    </div>
+    <div class="legal">Leona Pay — a API sem fronteiras. Imagens meramente ilustrativas. iPhone é marca registrada da Apple Inc.</div>
+  </div>
+</footer>
+
+<div class="sticky-cta" id="sticky-cta">
+  <a class="btn btn-primary" href="https://client.leonapay.com.br/registro">Quero participar
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6"/></svg>
+  </a>
+</div>
+
+<script>
+  (function () {
+    var START = new Date('2026-10-19T00:00:00-03:00').getTime();
+    var END = new Date('2027-01-19T23:59:59-03:00').getTime();
+    var $ = function (id) { return document.getElementById(id); };
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+
+    function tick() {
+      var now = Date.now();
+      var target = now < START ? START : END;
+      var diff = Math.max(0, target - now);
+      $('cd-title').textContent = now < START ? 'A corrida começa em' : (now > END ? 'Competição encerrada' : 'A corrida termina em');
+      $('cd-d').textContent = Math.floor(diff / 86400000);
+      $('cd-h').textContent = pad(Math.floor(diff / 3600000) % 24);
+      $('cd-m').textContent = pad(Math.floor(diff / 60000) % 60);
+      $('cd-s').textContent = pad(Math.floor(diff / 1000) % 60);
+
+      var pct = Math.min(100, Math.max(0, (now - START) / (END - START) * 100));
+      $('track-fill').style.width = pct + '%';
+      $('track-dot').style.left = pct + '%';
+      var totalDays = Math.round((END - START) / 86400000);
+      var left = Math.max(0, Math.ceil((END - now) / 86400000));
+      $('track-label').innerHTML = now > END
+        ? '<b>Competição encerrada.</b>'
+        : now < START
+          ? 'Começa em <b>19/10/2026</b>.'
+          : '<b>' + Math.round(pct) + '%</b> da corrida concluída · faltam <b>' + left + ' de ' + totalDays + ' dias</b>';
+    }
+    tick();
+    setInterval(tick, 1000);
+
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { threshold: .15 });
+    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+
+    var sticky = $('sticky-cta');
+    var hero = document.querySelector('.hero .actions');
+    var final = document.querySelector('.final');
+    var heroGone = false, finalIn = false;
+    new IntersectionObserver(function (e) { heroGone = !e[0].isIntersecting && e[0].boundingClientRect.top < 0; update(); }).observe(hero);
+    new IntersectionObserver(function (e) { finalIn = e[0].isIntersecting; update(); }).observe(final);
+    function update() { sticky.classList.toggle('show', heroGone && !finalIn); }
+  })();
+</script>
+</body>
+</html>
