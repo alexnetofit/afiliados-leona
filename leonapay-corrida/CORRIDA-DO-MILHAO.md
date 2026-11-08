@@ -61,13 +61,13 @@ Todo botão de conversão aponta para o mesmo lugar, em nova aba ou na mesma, se
 | Arquivo | Uso |
 |---|---|
 | `assets/logo-white.png` | Logo oficial. Origem: `https://leonapay.com.br/brand/logo-white.png`. Altura 34px no topo e 30px no rodapé. |
-| `assets/phones.webp` | Dois iPhones roxos, frente e verso, fundo transparente. A tela da frente mostra a campanha (troféu, “Corrida do Milhão”, “META DA CORRIDA”, “R$ 1M”, gráfico “Rumo ao milhão” e card “1º / SUA POSIÇÃO / Líder do ranking”). Sem logo da Apple na traseira. |
+| `assets/phones.webp` | Dois iPhones pretos, frente e verso, fundo transparente. A tela da frente mostra a campanha (troféu, “Corrida do Milhão”, “META DA CORRIDA”, “R$ 1M”, gráfico “Rumo ao milhão” e card “1º / SUA POSIÇÃO / Líder do ranking”). Sem logo da Apple na traseira. |
 | `assets/favicon.ico` | Favicon do Leona Pay. |
 
 Halo roxo e turquesa atrás dos aparelhos, dois brilhos pequenos e um selo sobre o aparelho de trás:
 
 - selo: “PRÊMIO 1º LUGAR” / “iPhone 18 Pro Max”
-- alt da imagem: `iPhone 18 Pro Max roxo, frente e verso, com a tela da Corrida do Milhão`
+- alt da imagem: `iPhone 18 Pro Max preto, frente e verso, com a tela da Corrida do Milhão`
 
 No rodapé, a linha legal: `Leona Pay — a API sem fronteiras. Imagens meramente ilustrativas. iPhone é marca registrada da Apple Inc.`
 
