@@ -7,11 +7,12 @@ import { Header } from "@/components/layout/header";
 import { Card, Badge, LoadingScreen, Select, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, EmptyState, Button, Input } from "@/components/ui/index";
 import { AlertTriangle, RefreshCcw, Users, UserCheck, UserX, AlertCircle, Clock, Search, ChevronLeft, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { activityStatusForSubscriptions, lastKeptPayment } from "@/lib/subscription-activity";
 
 const STATUS_MAP = {
   trialing: { label: "Trial", variant: "info" as const, icon: Clock },
   active: { label: "Ativa", variant: "success" as const, icon: UserCheck },
-  past_due: { label: "Atrasada", variant: "warning" as const, icon: AlertCircle },
+  past_due: { label: "Vencida", variant: "warning" as const, icon: AlertCircle },
   canceled: { label: "Cancelada", variant: "default" as const, icon: UserX },
   unpaid: { label: "Não paga", variant: "error" as const, icon: AlertTriangle },
 };
@@ -26,11 +27,15 @@ export default function AssinaturasPage() {
   const [currentPage, setCurrentPage] = useState(1);
 
   const allSubscriptions: ManagedSubscription[] = useMemo(() => {
-    const own: ManagedSubscription[] = (subscriptions || []).map((s) => ({ ...s }));
+    const statusById = activityStatusForSubscriptions(subscriptions || [], transactions || []);
+    const own: ManagedSubscription[] = (subscriptions || []).map((s) => ({
+      ...s,
+      status: statusById.get(s.id) || "canceled",
+    }));
     return [...own, ...managedSubscriptions].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-  }, [subscriptions, managedSubscriptions]);
+  }, [subscriptions, managedSubscriptions, transactions]);
 
   const filtered = useMemo(() => {
     let result: ManagedSubscription[] = allSubscriptions;
@@ -71,6 +76,7 @@ export default function AssinaturasPage() {
     return {
       trialing: subs.filter(s => s.status === "trialing").length,
       active: subs.filter(s => s.status === "active").length,
+      pastDue: subs.filter(s => s.status === "past_due").length,
       canceled: subs.filter(s => s.status === "canceled").length,
       refund: subs.filter(s => s.has_refund).length,
       dispute: subs.filter(s => s.has_dispute).length,
@@ -78,38 +84,27 @@ export default function AssinaturasPage() {
   }, [allSubscriptions]);
 
   // MRR (comissão recorrente) e Churn, calculados sobre as assinaturas DIRETAS
-  // do parceiro. MRR = soma da última comissão de cada assinatura ativa (o
-  // amount_cents da subscription é pouco confiável, então usamos as transações).
-  // Churn = % da base paga que parou de pagar (atrasada/não paga/cancelada),
-  // já que o status "cancelada" praticamente não é usado pelo gateway.
+  // do parceiro. MRR = soma da última comissão de cada assinatura ativa.
+  // Ativa = pagou e não estornou nos últimos 31 dias. Churn = quem passou
+  // disso (vencida ou cancelada) sobre a base que já pagou.
   const recurring = useMemo(() => {
-    const ownSubs = subscriptions || [];
+    const ownSubs = allSubscriptions.filter((s) => !s.managed_affiliate_name);
 
-    const latestCommission = new Map<string, { cents: number; at: number }>();
-    for (const t of transactions || []) {
-      if (t.type !== "commission" || !t.subscription_id) continue;
-      const at = t.paid_at ? new Date(t.paid_at).getTime() : 0;
-      const cur = latestCommission.get(t.subscription_id);
-      if (!cur || at >= cur.at) {
-        latestCommission.set(t.subscription_id, { cents: t.commission_amount_cents, at });
-      }
-    }
-
+    const txs = transactions || [];
     let mrrCommissionCents = 0;
+    let lost = 0;
+    let base = 0;
     for (const s of ownSubs) {
-      if (s.status !== "active") continue;
-      const c = latestCommission.get(s.id);
-      if (c) mrrCommissionCents += c.cents;
+      const kept = lastKeptPayment(s.id, txs);
+      if (!kept) continue;
+      base += 1;
+      if (s.status !== "active") lost += 1;
+      if (s.status === "active") mrrCommissionCents += kept.commission_amount_cents;
     }
-
-    const lostStatuses = new Set(["past_due", "unpaid", "canceled"]);
-    const paidBaseStatuses = new Set(["active", "past_due", "unpaid", "canceled"]);
-    const lost = ownSubs.filter((s) => lostStatuses.has(s.status)).length;
-    const base = ownSubs.filter((s) => paidBaseStatuses.has(s.status)).length;
     const churnRate = base > 0 ? (lost / base) * 100 : 0;
 
     return { mrrCommissionCents, churnRate, lost, base };
-  }, [subscriptions, transactions]);
+  }, [allSubscriptions, transactions]);
 
   // Only show loading on first load, not on navigation
   if (isLoading && !isInitialized) {
@@ -172,10 +167,11 @@ export default function AssinaturasPage() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             {[
               { label: "Trial", value: stats.trialing, icon: Clock, color: "text-info-600", bg: "bg-info-100" },
               { label: "Ativas", value: stats.active, icon: UserCheck, color: "text-success-600", bg: "bg-success-100" },
+              { label: "Vencidas", value: stats.pastDue, icon: AlertCircle, color: "text-warning-600", bg: "bg-warning-100" },
               { label: "Canceladas", value: stats.canceled, icon: UserX, color: "text-zinc-500", bg: "bg-zinc-100" },
               { label: "Refunds", value: stats.refund, icon: RefreshCcw, color: "text-warning-600", bg: "bg-warning-100" },
               { label: "Disputas", value: stats.dispute, icon: AlertTriangle, color: "text-error-600", bg: "bg-error-100" },
@@ -201,6 +197,9 @@ export default function AssinaturasPage() {
                 <div>
                   <h3 className="text-lg font-bold text-zinc-900">Lista de assinaturas</h3>
                   <p className="text-sm text-zinc-500">{filtered.length} assinaturas encontradas</p>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    Ativa: pagou nos últimos 31 dias e o pagamento não foi estornado. De 32 a 35 dias fica vencida. Depois, cancelada.
+                  </p>
                 </div>
               </div>
               
@@ -220,9 +219,8 @@ export default function AssinaturasPage() {
                     { value: "all", label: "Todos os status" },
                     { value: "trialing", label: "Trial" },
                     { value: "active", label: "Ativa" },
-                    { value: "past_due", label: "Atrasada" },
+                    { value: "past_due", label: "Vencida" },
                     { value: "canceled", label: "Cancelada" },
-                    { value: "unpaid", label: "Não paga" },
                   ]}
                   className="w-full sm:w-48"
                 />

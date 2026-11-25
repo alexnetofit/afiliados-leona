@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import {
+  activityStatusForSubscriptions,
+  fetchAllPages,
+  type ActivityPayment,
+  type ActivitySubscription,
+} from "@/lib/subscription-activity";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -51,26 +57,37 @@ export async function GET() {
 
     const affiliateIds = managed.map((m: { affiliate_id: string }) => m.affiliate_id);
 
-    const [affiliatesRes, profilesRes, transactionsRes, subscriptionsRes] = await Promise.all([
+    const [affiliatesRes, profilesRes, subscriptions] = await Promise.all([
       supabaseAdmin
         .from("affiliates")
         .select("id, user_id, affiliate_code, commission_tier, created_at")
         .in("id", affiliateIds),
       supabaseAdmin.from("profiles").select("id, full_name"),
+      fetchAllPages<ActivitySubscription & { affiliate_id: string }>((from, to) =>
+        supabaseAdmin
+          .from("subscriptions")
+          .select("id, affiliate_id, status, is_trial, trial_end")
+          .in("affiliate_id", affiliateIds)
+          .order("id", { ascending: true })
+          .range(from, to)
+      ),
+    ]);
+    const transactions = await fetchAllPages<
+      ActivityPayment & { affiliate_id: string; commission_amount_cents: number }
+    >((from, to) =>
       supabaseAdmin
         .from("transactions")
-        .select("affiliate_id, type, commission_amount_cents")
-        .in("affiliate_id", affiliateIds),
-      supabaseAdmin
-        .from("subscriptions")
-        .select("affiliate_id, status")
-        .in("affiliate_id", affiliateIds),
-    ]);
+        .select(
+          "affiliate_id, subscription_id, type, paid_at, guru_transaction_id, stripe_invoice_id, commission_amount_cents"
+        )
+        .in("affiliate_id", affiliateIds)
+        .order("id", { ascending: true })
+        .range(from, to)
+    );
 
     const affiliates = affiliatesRes.data || [];
     const allProfiles = profilesRes.data || [];
-    const transactions = transactionsRes.data || [];
-    const subscriptions = subscriptionsRes.data || [];
+    const statusById = activityStatusForSubscriptions(subscriptions, transactions);
 
     const userIds = affiliates.map((a: { user_id: string }) => a.user_id);
     const profiles = allProfiles.filter((p: { id: string }) => userIds.includes(p.id));
@@ -102,7 +119,7 @@ export async function GET() {
           0
         );
         const activeSubs = affSubs.filter(
-          (s: { status: string }) => s.status === "active"
+          (s) => statusById.get(s.id) === "active"
         ).length;
 
         return {
