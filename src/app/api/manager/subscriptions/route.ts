@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import {
+  activityStatusForSubscriptions,
+  fetchAllPages,
+  type ActivityPayment,
+} from "@/lib/subscription-activity";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,22 +44,40 @@ export async function GET() {
 
     const affiliateIds = managed.map((m: { affiliate_id: string }) => m.affiliate_id);
 
-    const [subsRes, affiliatesRes, profilesRes] = await Promise.all([
-      supabaseAdmin
-        .from("subscriptions")
-        .select("*")
-        .in("affiliate_id", affiliateIds)
-        .order("created_at", { ascending: false }),
+    const [subs, affiliatesRes, profilesRes] = await Promise.all([
+      fetchAllPages<Record<string, unknown>>((from, to) =>
+        supabaseAdmin
+          .from("subscriptions")
+          .select("*")
+          .in("affiliate_id", affiliateIds)
+          .order("id", { ascending: true })
+          .range(from, to)
+      ),
       supabaseAdmin
         .from("affiliates")
         .select("id, user_id")
         .in("id", affiliateIds),
       supabaseAdmin.from("profiles").select("id, full_name"),
     ]);
-
-    const subs = subsRes.data || [];
     const affiliates = affiliatesRes.data || [];
     const profiles = profilesRes.data || [];
+    const payments = await fetchAllPages<ActivityPayment>((from, to) =>
+      supabaseAdmin
+        .from("transactions")
+        .select("subscription_id, type, paid_at, guru_transaction_id, stripe_invoice_id")
+        .in("affiliate_id", affiliateIds)
+        .order("id", { ascending: true })
+        .range(from, to)
+    );
+    const statusById = activityStatusForSubscriptions(
+      subs.map((sub) => ({
+        id: String(sub.id),
+        status: sub.status == null ? null : String(sub.status),
+        is_trial: Boolean(sub.is_trial),
+        trial_end: sub.trial_end == null ? null : String(sub.trial_end),
+      })),
+      payments
+    );
 
     const result = subs.map((sub: Record<string, unknown>) => {
       const aff = affiliates.find(
@@ -66,6 +89,7 @@ export async function GET() {
 
       return {
         ...sub,
+        status: statusById.get(String(sub.id)) || "canceled",
         managed_affiliate_name: (prof as { full_name?: string } | null)?.full_name || "—",
       };
     });
