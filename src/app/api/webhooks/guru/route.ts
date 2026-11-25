@@ -8,6 +8,7 @@ import {
 } from "@/lib/leona-billing";
 import { resolveAffiliateIdByCode } from "@/lib/resolve-affiliate-code";
 import {
+  attachSubscriptionToUnlinkedSale,
   type GuruSubscriptionPayload,
   upsertSubscriptionFromLeonaAndGuru,
 } from "@/lib/guru-subscription-sync";
@@ -744,6 +745,11 @@ async function processGuruCommission(
       console.log(
         `[GURU WEBHOOK] comissão Pagarme duplicada tx=${guruId} já coberta por ${twin.guru_transaction_id}`
       );
+      await attachSubscriptionToUnlinkedSale(
+        supabase,
+        twin.guru_transaction_id,
+        subscriptionId
+      );
       return {
         response: NextResponse.json({ received: true, status: "already_processed" }),
         subscriptionSynced: true,
@@ -774,6 +780,7 @@ async function processGuruCommission(
 
   if (insertErr) {
     if (insertErr.code === "23505") {
+      await attachSubscriptionToUnlinkedSale(supabase, guruId, subscriptionId);
       return {
         response: NextResponse.json({ received: true, status: "already_processed" }),
         subscriptionSynced: true,
