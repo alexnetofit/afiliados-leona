@@ -83,28 +83,15 @@ export async function upsertSubscriptionFromLeonaAndGuru(
     return null;
   }
 
-  let rowId: string | null = null;
-
-  if (guruInternal) {
-    const { data } = await supabase
-      .from("subscriptions")
-      .select("id, stripe_subscription_id")
-      .eq("guru_subscription_internal_id", guruInternal)
-      .maybeSingle();
-    if (data && !data.stripe_subscription_id) {
-      rowId = data.id;
-    }
-  }
-
-  if (!rowId && leonaKey) {
-    const { data } = await supabase
-      .from("subscriptions")
-      .select("id, stripe_subscription_id")
-      .eq("leona_account_id", leonaKey)
-      .maybeSingle();
-    if (data && !data.stripe_subscription_id) {
-      rowId = data.id;
-    }
+  // charge.paid e order.paid chegam juntos. Os dois tentam criar a mesma
+  // assinatura; o que perde o índice único não pode devolver null, senão a
+  // comissão grava sem subscription_id e o painel ignora o pagamento.
+  const match = await findSubscriptionForSale(supabase, {
+    guruInternal,
+    leonaKey,
+  });
+  if (match?.stripe_subscription_id) {
+    return match.id;
   }
 
   const fromLeona = mapToSubscriptionStatus(input.profile.subscription_status);
@@ -160,13 +147,12 @@ export async function upsertSubscriptionFromLeonaAndGuru(
     basePatch.canceled_at = canceledAt;
   }
 
-  if (rowId) {
-    const { error } = await supabase.from("subscriptions").update(basePatch).eq("id", rowId);
+  if (match) {
+    const { error } = await supabase.from("subscriptions").update(basePatch).eq("id", match.id);
     if (error) {
       console.error("[Guru sync] update subscription:", error);
-      return null;
     }
-    return rowId;
+    return match.id;
   }
 
   const insertRow = {
@@ -186,9 +172,82 @@ export async function upsertSubscriptionFromLeonaAndGuru(
     .single();
 
   if (insErr) {
+    if (insErr.code === "23505") {
+      const recovered = await findSubscriptionForSale(supabase, {
+        guruInternal,
+        leonaKey,
+      });
+      if (recovered) {
+        if (!recovered.stripe_subscription_id) {
+          const { error } = await supabase
+            .from("subscriptions")
+            .update(basePatch)
+            .eq("id", recovered.id);
+          if (error) console.error("[Guru sync] update subscription:", error);
+        }
+        return recovered.id;
+      }
+    }
     console.error("[Guru sync] insert subscription:", insErr);
     return null;
   }
 
   return inserted?.id ?? null;
+}
+
+type SaleSubscriptionRow = {
+  id: string;
+  stripe_subscription_id: string | null;
+};
+
+async function findSubscriptionForSale(
+  supabase: SupabaseClient,
+  keys: { guruInternal: string | null; leonaKey: string | null }
+): Promise<SaleSubscriptionRow | null> {
+  if (keys.guruInternal) {
+    const { data } = await supabase
+      .from("subscriptions")
+      .select("id, stripe_subscription_id")
+      .eq("guru_subscription_internal_id", keys.guruInternal)
+      .maybeSingle();
+    if (data?.id) return data;
+  }
+
+  if (keys.leonaKey) {
+    const { data } = await supabase
+      .from("subscriptions")
+      .select("id, stripe_subscription_id")
+      .eq("leona_account_id", keys.leonaKey)
+      .maybeSingle();
+    if (data?.id) return data;
+  }
+
+  return null;
+}
+
+/**
+ * O webhook que perde a corrida grava a comissão com subscription_id nulo
+ * e o outro recebe 23505. No reenvio, pendura a venda (e a comissão do
+ * gerente) na assinatura que já existe.
+ */
+export async function attachSubscriptionToUnlinkedSale(
+  supabase: SupabaseClient,
+  guruId: string,
+  subscriptionId: string | null
+): Promise<void> {
+  if (!subscriptionId || !guruId) return;
+
+  const { error } = await supabase
+    .from("transactions")
+    .update({ subscription_id: subscriptionId })
+    .eq("guru_transaction_id", guruId)
+    .is("subscription_id", null);
+  if (error) console.error("[Guru sync] link commission:", error);
+
+  const { error: mgrErr } = await supabase
+    .from("transactions")
+    .update({ subscription_id: subscriptionId })
+    .eq("stripe_invoice_id", `guru:${guruId}_mgr`)
+    .is("subscription_id", null);
+  if (mgrErr) console.error("[Guru sync] link manager commission:", mgrErr);
 }
