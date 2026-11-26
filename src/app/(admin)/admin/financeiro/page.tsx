@@ -104,7 +104,13 @@ function getProfitShares(periodLabel: string): ProfitShare[] {
     { name: "Fabiano", percent: 20 },
     { name: "Ericson", percent: 20 },
   ];
-  if (y > 2026 || (y === 2026 && m >= 6)) {
+  if (y > 2026 || (y === 2026 && m >= 10)) {
+    return [
+      { name: "Parceiro Adailton", percent: 2.2, isCost: true },
+      ...partnersAprilPlus,
+    ];
+  }
+  if (y === 2026 && m >= 6) {
     return [
       { name: "Parceiro Adailton", percent: 2.5, isCost: true },
       { name: "Suporte Nível 2", percent: 2.5, isCost: true },
