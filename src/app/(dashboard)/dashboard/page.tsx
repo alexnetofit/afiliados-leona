@@ -118,6 +118,13 @@ export default function DashboardPage() {
               icon={CheckCircle}
               label={isTopAffiliate ? "Comissão acumulada" : "Saldo disponível"}
               value={formatCurrency(availableValue)}
+              description={
+                isTopAffiliate
+                  ? manualPaidCents == null
+                    ? "Saldo disponível calculando o PTAX de cada gasto"
+                    : `Saldo disponível ${formatCurrency(availableValue - manualPaidCents / 100)}`
+                  : undefined
+              }
               color="success"
             />
             <MetricCard

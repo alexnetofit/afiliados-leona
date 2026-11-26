@@ -1,4 +1,4 @@
-import { toBrtDay, usdToBrlPtax } from "@/lib/ptax";
+import { sumWiseBrl, toBrtDay, usdToBrlPtax } from "@/lib/ptax";
 
 const WISE_API_TOKEN = process.env.WISE_API_TOKEN;
 const WISE_PROFILE_ID = process.env.WISE_PROFILE_ID;
@@ -84,15 +84,27 @@ export async function fetchWiseCardSpending(
     const days = [
       ...new Set(txs.map((tx) => toBrtDay(tx.date)).filter(Boolean)),
     ];
-    await Promise.all(days.map((day) => usdToBrlPtax(day)));
+    const rateByDay = new Map<string, number>();
+    for (const day of days) {
+      const rate = await usdToBrlPtax(day);
+      if (rate == null || !(rate > 0)) {
+        console.error("[Wise] sem PTAX do dia", day);
+        return null;
+      }
+      rateByDay.set(day, rate);
+    }
 
-    let totalSpentBrl = 0;
+    const totalSpentBrl = sumWiseBrl(
+      txs.map((tx) => ({ amountUsd: tx.amount, day: toBrtDay(tx.date) })),
+      (day) => rateByDay.get(day) ?? null
+    );
+    if (totalSpentBrl == null) return null;
+
     for (const tx of txs) {
       const day = toBrtDay(tx.date);
-      const rate = day ? await usdToBrlPtax(day) : null;
+      const rate = rateByDay.get(day) ?? null;
       tx.usdBrlRate = rate;
       tx.amountBrl = rate ? Math.abs(tx.amount) * rate : 0;
-      totalSpentBrl += tx.amountBrl;
     }
 
     return { transactions: txs, totalSpent, totalSpentBrl };

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { fetchWiseCardSpending } from "@/lib/wise";
+import { fetchWiseCardSpending, wiseConfigured } from "@/lib/wise";
 import { isTopAffiliateEmail } from "@/lib/top-affiliate";
 
 const supabaseAdmin = createClient(
@@ -47,11 +47,16 @@ export async function GET() {
   );
 
   const startDate = "2026-01-01";
-  const endDate = new Date().toISOString().split("T")[0];
+  const endDate = new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/Sao_Paulo",
+  });
   const wise = await fetchWiseCardSpending(startDate, endDate);
+  // Sem a cotação do dia, não devolve Wise como zero: isso zerava o saldo dela.
+  if (wiseConfigured() && !wise) {
+    return NextResponse.json({ error: "cotacao_indisponivel" }, { status: 503 });
+  }
 
   const wiseUsdCents = wise ? Math.round(wise.totalSpent * 100) : 0;
-  // Cada gasto Wise vira BRL pelo PTAX do dia em que saiu, não pelo câmbio de hoje.
   const wiseBrlCents = wise ? Math.round(wise.totalSpentBrl * 100) : 0;
   const usedBrlCents = wiseBrlCents + pixTotalBrlCents;
 
