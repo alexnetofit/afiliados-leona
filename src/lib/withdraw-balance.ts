@@ -6,11 +6,13 @@ export interface WithdrawBalance {
   saldoDisponivelCents: number;
   ajustePendenteCents: number;
   compensacaoCents: number;
+  /** Saques já pagos. Não inclui o que ainda está em processamento. */
+  recebidoCents: number;
 }
 
 const PAGE = 1000;
 
-function parseBrlToCents(t: string | null): number {
+export function parseBrlToCents(t: string | null): number {
   if (!t) return 0;
   const cleaned = t.replace(/[^0-9,]/g, "").replace(",", ".");
   const n = parseFloat(cleaned);
@@ -88,6 +90,7 @@ export async function getWithdrawBalance(
   liquidoLiberadoCents += compensacaoCents;
 
   let sacadoCents = 0;
+  let recebidoCents = 0;
   let ajustePendenteCents = 0;
   (prevWithdraws || []).forEach(
     (w: {
@@ -97,6 +100,7 @@ export async function getWithdrawBalance(
     }) => {
       const sacadoBruto = parseBrlToCents(w.amount_text);
       sacadoCents += sacadoBruto;
+      if (w.status === "paid") recebidoCents += sacadoBruto;
       // Se o bucket atual de transactions desse `date_label` é menor que o
       // sacado, a diferença é o "ajuste histórico" (migration 012 reduziu as
       // transactions em 7%, mas o amount_text foi salvo em bruto).
@@ -119,6 +123,36 @@ export async function getWithdrawBalance(
     saldoDisponivelCents: liquidoLiberadoCents - sacadoCents,
     ajustePendenteCents: ajustePendenteRestante,
     compensacaoCents,
+    recebidoCents,
+  };
+}
+
+/**
+ * Saldo que o painel deve mostrar.
+ * Um saque leva o saldo real e fica carimbado na data do botão. Essa data
+ * pode ser menor que o valor sacado, porque inclui períodos anteriores que
+ * não tinham saque próprio. Descontar só o grupo da data deixa esse pedaço
+ * aparecendo de novo como disponível.
+ */
+export function panelCashCents(
+  releasedCents: number,
+  withdraws: Array<{ status: string; amount_text: string | null }>,
+  adjustmentsCents = 0
+): { availableCents: number; receivedCents: number } {
+  let reserved = 0;
+  let received = 0;
+  for (const withdraw of withdraws) {
+    const cents = parseBrlToCents(withdraw.amount_text);
+    if (withdraw.status === "paid") {
+      reserved += cents;
+      received += cents;
+    } else if (withdraw.status === "processing") {
+      reserved += cents;
+    }
+  }
+  return {
+    availableCents: releasedCents + adjustmentsCents - reserved,
+    receivedCents: received,
   };
 }
 
