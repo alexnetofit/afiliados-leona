@@ -8,6 +8,7 @@ import { Card, Badge, LoadingScreen, Select, Table, TableHeader, TableBody, Tabl
 import { AlertTriangle, RefreshCcw, Users, UserCheck, UserX, AlertCircle, Clock, Search, ChevronLeft, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { activityStatusForSubscriptions, lastKeptPayment } from "@/lib/subscription-activity";
+import { activePlanMrrCents } from "@/lib/plan-price";
 
 const STATUS_MAP = {
   trialing: { label: "Trial", variant: "info" as const, icon: Clock },
@@ -21,7 +22,7 @@ const ITEMS_PER_PAGE = 10;
 
 export default function AssinaturasPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { profile, subscriptions, managedSubscriptions, transactions, isLoading, isInitialized } = useAppData();
+  const { profile, affiliate, subscriptions, managedSubscriptions, transactions, isLoading, isInitialized } = useAppData();
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -83,15 +84,12 @@ export default function AssinaturasPage() {
     };
   }, [allSubscriptions]);
 
-  // MRR (comissão recorrente) e Churn, calculados sobre as assinaturas DIRETAS
-  // do parceiro. MRR = soma da última comissão de cada assinatura ativa.
-  // Ativa = pagou e não estornou nos últimos 31 dias. Churn = quem passou
-  // disso (vencida ou cancelada) sobre a base que já pagou.
+  // MRR e churn das assinaturas diretas. Ativa = pagou nos últimos 31 dias.
+  // MRR usa a mensalidade cheia do plano (instâncias), não o último pagamento,
+  // porque um upgrade pró-rata é menor que a assinatura.
   const recurring = useMemo(() => {
     const ownSubs = allSubscriptions.filter((s) => !s.managed_affiliate_name);
-
     const txs = transactions || [];
-    let mrrCommissionCents = 0;
     let lost = 0;
     let base = 0;
     for (const s of ownSubs) {
@@ -99,12 +97,16 @@ export default function AssinaturasPage() {
       if (!kept) continue;
       base += 1;
       if (s.status !== "active") lost += 1;
-      if (s.status === "active") mrrCommissionCents += kept.commission_amount_cents;
     }
+    const mrrCommissionCents = activePlanMrrCents(
+      ownSubs,
+      (id) => lastKeptPayment(id, txs)?.commission_amount_cents || 0,
+      affiliate?.commission_tier || 1
+    );
     const churnRate = base > 0 ? (lost / base) * 100 : 0;
 
     return { mrrCommissionCents, churnRate, lost, base };
-  }, [allSubscriptions, transactions]);
+  }, [allSubscriptions, transactions, affiliate?.commission_tier]);
 
   // Only show loading on first load, not on navigation
   if (isLoading && !isInitialized) {
@@ -135,7 +137,7 @@ export default function AssinaturasPage() {
                     {formatCurrency(recurring.mrrCommissionCents / 100)}
                   </p>
                   <p className="text-xs text-zinc-500 mt-1">
-                    Comissão recorrente das assinaturas ativas
+                    Plano de quem está ativo, não o último pagamento
                   </p>
                 </div>
                 <div className="h-11 w-11 rounded-xl bg-success-100 flex items-center justify-center shrink-0">
@@ -276,7 +278,11 @@ export default function AssinaturasPage() {
                             <Badge variant={st.variant} dot>{st.label}</Badge>
                           </TableCell>
                           <TableCell className="font-medium">
-                            {sub.amount_cents ? formatCurrency(sub.amount_cents / 100) : "-"}
+                            {sub.plan_monthly_cents != null
+                              ? formatCurrency(sub.plan_monthly_cents / 100)
+                              : sub.amount_cents
+                                ? formatCurrency(sub.amount_cents / 100)
+                                : "-"}
                           </TableCell>
                           <TableCell className="text-zinc-500">
                             {sub.started_at ? formatDate(sub.started_at) : "-"}

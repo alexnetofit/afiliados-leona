@@ -14,6 +14,7 @@ type BillingProfileJson = {
   subscription_status?: string | null;
   current_period_end?: string | null;
   rewardful_referral?: string | null;
+  starter_instances?: number | string | null;
   user?: { name?: string | null; email?: string | null } | null;
 };
 
@@ -21,6 +22,12 @@ type ConflictResponseJson = {
   error?: string;
   account_ids?: Array<string | number>;
 };
+
+function parseInstanceCount(value: number | string | null | undefined): number | null {
+  if (value == null || value === "") return null;
+  const qty = Number(value);
+  return Number.isInteger(qty) && qty >= 0 ? qty : null;
+}
 
 function normalizeProfile(json: BillingProfileJson): LeonaBillingProfile {
   const ref = json.rewardful_referral;
@@ -36,6 +43,7 @@ function normalizeProfile(json: BillingProfileJson): LeonaBillingProfile {
         : String(json.current_period_end).trim(),
     rewardful_referral:
       ref == null || ref === "" ? null : String(ref).trim() || null,
+    starter_instances: parseInstanceCount(json.starter_instances),
     user: json.user ?? null,
   };
 }

@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SubscriptionStatus } from "@/types";
+import { monthlyPlanCents } from "./plan-price.ts";
 
 export type LeonaBillingProfile = {
   account_id: string | number | null;
   subscription_status: string | null;
   current_period_end: string | null;
   rewardful_referral: string | null;
+  starter_instances?: number | null;
   user?: { name?: string | null; email?: string | null } | null;
 };
 
@@ -90,7 +92,12 @@ export async function upsertSubscriptionFromLeonaAndGuru(
     guruInternal,
     leonaKey,
   });
+  const plan = planColumns(input.profile.starter_instances);
+
   if (match?.stripe_subscription_id) {
+    if (plan) {
+      await supabase.from("subscriptions").update(plan).eq("id", match.id);
+    }
     return match.id;
   }
 
@@ -139,6 +146,7 @@ export async function upsertSubscriptionFromLeonaAndGuru(
   if (input.amountCentsFromGuru != null && input.amountCentsFromGuru > 0) {
     basePatch.amount_cents = input.amountCentsFromGuru;
   }
+  if (plan) Object.assign(basePatch, plan);
 
   if (guruInternal) basePatch.guru_subscription_internal_id = guruInternal;
   if (leonaKey) basePatch.leona_account_id = leonaKey;
@@ -193,6 +201,14 @@ export async function upsertSubscriptionFromLeonaAndGuru(
   }
 
   return inserted?.id ?? null;
+}
+
+function planColumns(instances: number | null | undefined): Record<string, number> | null {
+  if (instances == null || !Number.isInteger(instances) || instances < 0) return null;
+  return {
+    plan_instances: instances,
+    plan_monthly_cents: monthlyPlanCents(instances),
+  };
 }
 
 type SaleSubscriptionRow = {
