@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { panelCashCents } from "@/lib/withdraw-balance";
 import type { User } from "@supabase/supabase-js";
 import type {
   Profile,
@@ -52,6 +53,7 @@ export interface WithdrawBalanceClient {
   saldoDisponivelCents: number;
   ajustePendenteCents: number;
   compensacaoCents: number;
+  recebidoCents: number;
 }
 
 interface AppData {
@@ -141,38 +143,28 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         .filter((t) => t.available_at && new Date(t.available_at) > now)
         .reduce((sum, t) => sum + t.commission_amount_cents, 0);
 
-      const availableTxs = txs.filter((t) => t.available_at && new Date(t.available_at) <= now);
-      const totalAvailableCents = availableTxs.reduce((sum, t) => sum + t.commission_amount_cents, 0);
+      const releasedCents = txs
+        .filter((t) => t.available_at && new Date(t.available_at) <= now)
+        .reduce((sum, t) => sum + t.commission_amount_cents, 0);
 
-      // Group available txs by dateLabel to match with withdraw requests
-      const centsByDateLabel = new Map<string, number>();
-      availableTxs.forEach((t) => {
-        const dateLabel = new Date(t.available_at!).toLocaleDateString("pt-BR", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          timeZone: "America/Sao_Paulo",
-        });
-        centsByDateLabel.set(dateLabel, (centsByDateLabel.get(dateLabel) || 0) + t.commission_amount_cents);
-      });
-
-      let withdrawPaidCents = 0;
-      wLabels.forEach((val, dateLabel) => {
-        if (val.status === "paid" && centsByDateLabel.has(dateLabel)) {
-          withdrawPaidCents += centsByDateLabel.get(dateLabel)!;
-        }
-      });
+      // O saque debita o valor que saiu, não o grupo da data do botão.
+      // Esse grupo pode ser menor: o PIX também leva períodos anteriores.
+      const cash = panelCashCents(
+        releasedCents,
+        [...wLabels.values()].map((val) => ({
+          status: val.status,
+          amount_text: val.amount_text,
+        }))
+      );
 
       const monthlyPaidCents = pays
         .filter((p) => p.status === "paid")
         .reduce((sum, p) => sum + p.total_payable_cents, 0);
 
-      const totalPaidCents = monthlyPaidCents + withdrawPaidCents;
-
       return {
         pending_cents: pendingCents,
-        available_cents: Math.max(totalAvailableCents - totalPaidCents, 0),
-        paid_cents: totalPaidCents,
+        available_cents: Math.max(cash.availableCents - monthlyPaidCents, 0),
+        paid_cents: cash.receivedCents + monthlyPaidCents,
         total_trials: subs.filter((s) => s.is_trial || s.status === "trialing").length,
         total_subscriptions: subs.length,
         active_subscriptions: subs.filter((s) => s.status === "active").length,
@@ -236,7 +228,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setSubscriptions(subsData);
       setTransactions(txsData);
       setPayouts(paysData);
-      setSummary(calculateSummary(txsData, paysData, subsData, wLabels));
+      const baseSummary = calculateSummary(txsData, paysData, subsData, wLabels);
+      setSummary(
+        wBalance
+          ? {
+              ...baseSummary,
+              available_cents: Math.max(wBalance.saldoDisponivelCents, 0),
+              paid_cents: Math.max(wBalance.recebidoCents ?? baseSummary.paid_cents, 0),
+            }
+          : baseSummary
+      );
       setWithdrawnDateLabels(wLabels);
       setWithdrawBalance(wBalance);
     },
