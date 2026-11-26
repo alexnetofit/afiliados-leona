@@ -79,6 +79,8 @@ export interface Subscription {
   customer_email: string | null;
   price_id: string | null;
   amount_cents: number | null;
+  plan_instances?: number | null;
+  plan_monthly_cents?: number | null;
   status: SubscriptionStatus;
   is_trial: boolean;
   trial_start: string | null;
